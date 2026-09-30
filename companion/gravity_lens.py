@@ -833,6 +833,7 @@ class Handler(BaseHTTPRequestHandler):
     lens: Lens
     auth: DaemonAuth
     files: Optional[FileBrowser] = None
+    display_override: Optional[List[Dict[str, Any]]] = None
     server_version = f"GravityLens/{VERSION}"
 
     def log_message(self, fmt: str, *args: Any) -> None:  # quiet: paths carry no secrets, but keep logs small
@@ -912,6 +913,8 @@ class Handler(BaseHTTPRequestHandler):
         body: Any = None
         if parts == ["v1", "overview"]:
             body = self.lens.overview()
+        elif parts == ["v1", "displays"]:
+            body = {"displays": self.display_override if self.display_override is not None else displays()}
         elif parts == ["v1", "feed"]:
             body = self.lens.feed(limit)
         elif len(parts) == 4 and parts[:2] == ["v1", "bots"] and parts[3] == "turns":
@@ -941,6 +944,60 @@ class Handler(BaseHTTPRequestHandler):
             self.send_json(200, body)
 
 
+def displays() -> List[Dict[str, Any]]:
+    """Where each display sits, in points, as macOS arranges them.
+
+    Screen Sharing sends every display as one picture; the phone uses this to
+    cut it back into screens. Read-only, and needs no permission.
+    """
+    import ctypes
+
+    class CGRect(ctypes.Structure):
+        _fields_ = [("x", ctypes.c_double), ("y", ctypes.c_double), ("w", ctypes.c_double), ("h", ctypes.c_double)]
+
+    try:
+        cg = ctypes.CDLL("/System/Library/Frameworks/CoreGraphics.framework/CoreGraphics")
+    except OSError:
+        return []
+    cg.CGDisplayBounds.restype = CGRect
+    cg.CGDisplayBounds.argtypes = [ctypes.c_uint32]
+    cg.CGMainDisplayID.restype = ctypes.c_uint32
+    cg.CGDisplayPixelsWide.restype = ctypes.c_size_t
+    cg.CGDisplayPixelsHigh.restype = ctypes.c_size_t
+    ids = (ctypes.c_uint32 * 16)()
+    count = ctypes.c_uint32(0)
+    if cg.CGGetActiveDisplayList(16, ids, ctypes.byref(count)) != 0:
+        return []
+    main = cg.CGMainDisplayID()
+    rows = []
+    for display in ids[:count.value]:
+        bounds = cg.CGDisplayBounds(display)
+        rows.append({"id": int(display), "main": display == main,
+                     "x": bounds.x, "y": bounds.y, "width": bounds.w, "height": bounds.h,
+                     "pixels_wide": int(cg.CGDisplayPixelsWide(display)),
+                     "pixels_high": int(cg.CGDisplayPixelsHigh(display))})
+    rows.sort(key=lambda row: (row["x"], row["y"]))
+    return rows
+
+
+def ask_for_folders(files: FileBrowser) -> None:
+    """Touch the folders macOS guards so it asks for access now, while
+    someone is at the Mac, rather than when the phone first opens them."""
+    home = os.path.expanduser("~")
+    for name in ("Desktop", "Documents", "Downloads"):
+        path = os.path.join(home, name)
+        if any(path == root or path.startswith(root.rstrip(os.sep) + os.sep) or root == home
+               for root in files.roots):
+            try:
+                os.listdir(path)
+                sys.stderr.write(f"access to ~/{name}: allowed\n")
+            except PermissionError:
+                sys.stderr.write(f"access to ~/{name}: not allowed (System Settings → Privacy & Security → "
+                                 "Files and Folders → Gravity Lens)\n")
+            except OSError:
+                pass
+
+
 def daemon_binds(gravity_home: str) -> List[str]:
     """The addresses gravityd serves on, from gravityd.toml, so both stay in step."""
     try:
@@ -968,7 +1025,10 @@ def main() -> None:
     parser.add_argument("--files-root", action="append",
                         help="share this folder for file browsing (repeatable; default: config file)")
     parser.add_argument("--config", default=os.path.join(home, ".gravity-lens", "config.json"))
+    parser.add_argument("--displays-json", help="report this display layout instead of the Mac's (demos)")
     args = parser.parse_args()
+    if args.displays_json:
+        Handler.display_override = json.loads(args.displays_json)
 
     roots = args.files_root
     if roots is None:
@@ -982,6 +1042,7 @@ def main() -> None:
     if roots:
         Handler.files = FileBrowser(roots)
         sys.stderr.write("file browsing on for: %s\n" % ", ".join(Handler.files.roots))
+        threading.Thread(target=ask_for_folders, args=(Handler.files,), daemon=True).start()
 
     Handler.lens = Lens(args.gravity_home, args.workspace_home or args.gravity_home, args.claude_projects)
     Handler.auth = DaemonAuth(args.gravity_home, args.daemon_port)

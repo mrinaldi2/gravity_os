@@ -6,8 +6,11 @@ Mac does (security type 30: Diffie-Hellman, then the user name and password
 under AES-128). Clicking "Allow" on the fake permission prompt dismisses it,
 so taps can be checked end to end. Keys, clicks and clipboard text are logged.
 
-    uv run --with cryptography --with pillow demo/fake_screen.py
+    uv run --with cryptography --with pillow demo/fake_screen.py [--dual]
     # sign in as demo / demo on 127.0.0.1:5901
+
+With --dual a second display (a browser sign-in page) sits to the right, sent
+as one wide picture the way macOS sends two displays.
 
 Not a real VNC server. Development only.
 """
@@ -67,7 +70,7 @@ class Session:
         x0, y0, x1, y1 = ALERT_BOX
         for y in range(y0, y1):
             for x in range(x0, x1):
-                t = x / desktop.width * 0.5 + y / desktop.height * 0.5
+                t = x / 1920 * 0.5 + y / 1200 * 0.5  # the first display's wallpaper
                 pixels[x, y] = (int(40 + 60 * t), int(30 + 40 * (1 - t)), int(90 + 80 * t))
         return clean
 
@@ -183,8 +186,15 @@ def main() -> None:
     parser.add_argument("--user", default="demo")
     parser.add_argument("--password", default="demo")
     parser.add_argument("--scale", type=float, default=0.75, help="served size relative to desktop.png")
+    parser.add_argument("--dual", action="store_true", help="add a second display to the right")
     args = parser.parse_args()
-    desktop = Image.open(os.path.join(HERE, "assets", "desktop.png"))
+    desktop = Image.open(os.path.join(HERE, "assets", "desktop.png")).convert("RGB")
+    if args.dual:
+        second = Image.open(os.path.join(HERE, "assets", "desktop-browser.png")).convert("RGB")
+        both = Image.new("RGB", (desktop.width + second.width, max(desktop.height, second.height)))
+        both.paste(desktop, (0, 0))
+        both.paste(second, (desktop.width, 0))
+        desktop = both
     server = socket.create_server(("127.0.0.1", args.port))
     print(f"fake Screen Sharing on 127.0.0.1:{args.port} (user {args.user!r})", flush=True)
     while True:

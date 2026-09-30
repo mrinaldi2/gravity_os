@@ -4,6 +4,7 @@ import UIKit
 /// The Mac's screen, live: pinch to zoom, drag to pan, tap to click.
 struct ScreenView: View {
     @Environment(AppStore.self) private var store
+    @Environment(LensStore.self) private var lens
     @State private var session = ScreenSession()
     @State private var canvas = CanvasController()
     @State private var sendItem: SendItem?
@@ -21,7 +22,12 @@ struct ScreenView: View {
                     placeholder
                 }
             }
-            .overlay(alignment: .top) { clipboardBanner }
+            .overlay(alignment: .top) {
+                VStack(spacing: 0) {
+                    displayPicker
+                    clipboardBanner
+                }
+            }
             if case .live = session.phase { KeyRow(session: session, canvas: canvas, keyboard: $showingKeyboard) }
         }
         .toolbar {
@@ -29,6 +35,11 @@ struct ScreenView: View {
         }
         .onAppear { if session.phase == .idle { session.connect(settings) } }
         .onDisappear { session.disconnect() }
+        .task(id: session.phase) {
+            guard case .live = session.phase else { return }
+            if let layout = try? await lens.displays() { session.layout = layout }
+        }
+        .onChange(of: session.displays.count) { _, _ in session.chooseDefaultFocus() }
         .sheet(item: $sendItem) { SendToBotSheet(text: $0.text) }
         .animation(.snappy, value: session.macClipboard)
     }
@@ -70,6 +81,24 @@ struct ScreenView: View {
             Image(systemName: "exclamationmark.triangle").foregroundStyle(.orange)
         default:
             ProgressView()
+        }
+    }
+
+    /// Both screens, or one at a time filling the phone.
+    @ViewBuilder private var displayPicker: some View {
+        let names = session.displayNames
+        if names.count > 1 {
+            Picker("Display", selection: Binding(get: { session.focus ?? -1 },
+                                                 set: { session.focus = $0 < 0 ? nil : $0 })) {
+                ForEach(Array(names.enumerated()), id: \.offset) { index, name in Text(name).tag(index) }
+                Text(names.count == 2 ? "Both" : "All").tag(-1)
+            }
+            .pickerStyle(.segmented)
+            .frame(maxWidth: 260)
+            .padding(6)
+            .background(.ultraThinMaterial, in: Capsule())
+            .environment(\.colorScheme, .dark)
+            .padding(.top, 8)
         }
     }
 
@@ -123,7 +152,7 @@ private struct ScreenCanvas: UIViewRepresentable {
     }
 
     func updateUIView(_ view: ScreenCanvasView, context: Context) {
-        view.show(session.image, tap: session.lastTap)
+        view.show(session.image, tap: session.lastTap, focus: session.focusRect)
     }
 }
 
@@ -134,6 +163,8 @@ final class ScreenCanvasView: UIView, UIScrollViewDelegate {
     private let marker = CAShapeLayer()
     private let keys = KeyCaptureView()
     private var shownSize = CGSize.zero
+    /// Where the part on screen starts within the Mac's whole picture.
+    private var offset = CGPoint.zero
 
     init(session: ScreenSession) {
         self.session = session
@@ -190,17 +221,21 @@ final class ScreenCanvasView: UIView, UIScrollViewDelegate {
         scroll.minimumZoomScale = min(bounds.width / shownSize.width, bounds.height / shownSize.height)
     }
 
-    func show(_ image: CGImage?, tap: CGPoint?) {
+    func show(_ image: CGImage?, tap: CGPoint?, focus: CGRect?) {
         guard let image else { return }
-        screen.image = UIImage(cgImage: image)
-        let size = CGSize(width: image.width, height: image.height)
+        let whole = CGRect(x: 0, y: 0, width: image.width, height: image.height)
+        let area = focus?.intersection(whole) ?? whole
+        let shown = area == whole ? image : (image.cropping(to: area) ?? image)
+        offset = area == whole ? .zero : area.origin
+        screen.image = UIImage(cgImage: shown)
+        let size = CGSize(width: shown.width, height: shown.height)
         if size != shownSize {
             shownSize = size
             screen.frame = CGRect(origin: .zero, size: size)
             scroll.contentSize = size
             fit(animated: false)
         }
-        if let tap { flash(at: tap) }
+        if let tap { flash(at: CGPoint(x: tap.x - offset.x, y: tap.y - offset.y)) }
     }
 
     func fit(animated: Bool) {
@@ -246,22 +281,28 @@ final class ScreenCanvasView: UIView, UIScrollViewDelegate {
 
     // MARK: Gestures
 
+    /// A touch on the phone, as a point on the Mac's whole picture.
+    private func mac(_ gesture: UIGestureRecognizer) -> CGPoint {
+        let point = gesture.location(in: screen)
+        return CGPoint(x: point.x + offset.x, y: point.y + offset.y)
+    }
+
     @objc private func tapped(_ gesture: UITapGestureRecognizer) {
-        session.click(at: gesture.location(in: screen))
+        session.click(at: mac(gesture))
     }
 
     @objc private func doubleTapped(_ gesture: UITapGestureRecognizer) {
-        session.click(at: gesture.location(in: screen), count: 2)
+        session.click(at: mac(gesture), count: 2)
     }
 
     @objc private func rightTapped(_ gesture: UITapGestureRecognizer) {
-        session.click(at: gesture.location(in: screen), button: 4)
+        session.click(at: mac(gesture), button: 4)
     }
 
     @objc private func pressed(_ gesture: UILongPressGestureRecognizer) {
         guard gesture.state == .began else { return }
         UIImpactFeedbackGenerator(style: .medium).impactOccurred()
-        session.click(at: gesture.location(in: screen), button: 4)
+        session.click(at: mac(gesture), button: 4)
     }
 }
 

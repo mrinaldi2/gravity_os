@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>CFBundleIdentifier</key><string>io.github.gravitios.lens</string>
+	<key>CFBundleName</key><string>Gravity Lens</string>
+	<key>CFBundleDisplayName</key><string>Gravity Lens</string>
+	<key>CFBundleExecutable</key><string>GravityLens</string>
+	<key>CFBundlePackageType</key><string>APPL</string>
+	<key>CFBundleShortVersionString</key><string>0.2.0</string>
+	<key>CFBundleVersion</key><string>2</string>
+	<key>LSUIElement</key><true/>
+	<key>LSMinimumSystemVersion</key><string>12.0</string>
+	<key>NSDesktopFolderUsageDescription</key>
+	<string>Gravity Lens shows your Desktop in the GravitiOS file browser on your iPhone.</string>
+	<key>NSDocumentsFolderUsageDescription</key>
+	<string>Gravity Lens shows your Documents in the GravitiOS file browser on your iPhone.</string>
+	<key>NSDownloadsFolderUsageDescription</key>
+	<string>Gravity Lens shows your Downloads in the GravitiOS file browser on your iPhone.</string>
+	<key>NSRemovableVolumesUsageDescription</key>
+	<string>Gravity Lens shows external drives in the GravitiOS file browser on your iPhone.</string>
+	<key>NSNetworkVolumesUsageDescription</key>
+	<string>Gravity Lens shows network drives in the GravitiOS file browser on your iPhone.</string>
+</dict>
+</plist>

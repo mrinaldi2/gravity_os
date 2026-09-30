@@ -21,8 +21,24 @@ if [ "${1:-}" = "uninstall" ]; then
     exit 0
 fi
 
+SOURCE="$(cd "$(dirname "$0")" && pwd)"
+APP="$HOME_DIR/Gravity Lens.app"
 mkdir -p "$HOME_DIR" "$HOME/Library/LaunchAgents"
-cp "$(dirname "$0")/gravity_lens.py" "$(dirname "$0")/gravity_files.py" "$HOME_DIR/"
+cp "$SOURCE/gravity_lens.py" "$SOURCE/gravity_files.py" "$HOME_DIR/"
+
+# A small app runs the script, so macOS asks for folder access as
+# "Gravity Lens" and lists it by that name in Privacy & Security.
+# Permissions belong to the exact binary: rebuild only when the source changes.
+STAMP="$(cat "$SOURCE/launcher/launcher.c" "$SOURCE/launcher/Info.plist" | shasum -a 256 | cut -c1-16)"
+if [ ! -x "$APP/Contents/MacOS/GravityLens" ] || [ "$(cat "$APP/Contents/.stamp" 2>/dev/null)" != "$STAMP" ]; then
+    rm -rf "$APP"
+    mkdir -p "$APP/Contents/MacOS"
+    cp "$SOURCE/launcher/Info.plist" "$APP/Contents/Info.plist"
+    clang -O2 -o "$APP/Contents/MacOS/GravityLens" "$SOURCE/launcher/launcher.c"
+    codesign --force --sign - --identifier io.github.gravitios.lens "$APP" >/dev/null
+    echo "$STAMP" > "$APP/Contents/.stamp"
+    echo "Built Gravity Lens.app. If you had allowed folder access before, macOS may ask once more."
+fi
 
 case "${1:-}" in
     --with-files)
@@ -41,8 +57,7 @@ cat > "$PLIST" <<EOF
     <key>Label</key><string>$LABEL</string>
     <key>ProgramArguments</key>
     <array>
-        <string>/usr/bin/python3</string>
-        <string>$HOME_DIR/gravity_lens.py</string>
+        <string>$APP/Contents/MacOS/GravityLens</string>
     </array>
     <key>RunAtLoad</key><true/>
     <!-- Restarts it if it exits, e.g. when Tailscale was not up yet at login. -->

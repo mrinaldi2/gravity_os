@@ -85,11 +85,66 @@ final class ScreenSession {
     var macClipboard: String?
     /// Where the last tap landed, in screen pixels.
     var lastTap: CGPoint?
+    /// How macOS arranges the displays, from Gravity Lens.
+    var layout: [MacDisplay] = []
+    /// Which display fills the phone; nil shows them all.
+    var focus: Int? = UserDefaults.standard.object(forKey: "screenFocus") as? Int {
+        didSet { UserDefaults.standard.set(focus, forKey: "screenFocus") }
+    }
 
     @ObservationIgnored private var client: RFBClient?
     @ObservationIgnored private var pointer = CGPoint.zero
 
     var size: CGSize { image.map { CGSize(width: $0.width, height: $0.height) } ?? .zero }
+
+    /// Each display's rectangle within the shared picture, left to right.
+    /// Screen Sharing sends every display as one image covering their
+    /// combined bounds.
+    var displays: [CGRect] {
+        guard size.width > 0 else { return [] }
+        if layout.count > 1 {
+            let union = layout.map(\.frame).reduce(CGRect.null) { $0.union($1) }
+            let scale = size.width / union.width
+            return layout.map { display in
+                CGRect(x: (display.x - union.minX) * scale, y: (display.y - union.minY) * scale,
+                       width: display.width * scale, height: display.height * scale).integral
+            }
+        }
+        // Without Gravity Lens: a picture far wider than any one screen is
+        // most likely two side by side.
+        if layout.isEmpty, size.width / size.height > 2.5 {
+            let half = (size.width / 2).rounded()
+            return [CGRect(x: 0, y: 0, width: half, height: size.height),
+                    CGRect(x: half, y: 0, width: size.width - half, height: size.height)]
+        }
+        return []
+    }
+
+    /// Short names for the display switch: Left and Right, or numbers.
+    var displayNames: [String] {
+        let rects = displays
+        guard rects.count > 1 else { return [] }
+        if rects.count == 2 {
+            let (a, b) = (rects[0], rects[1])
+            if abs(a.midY - b.midY) < abs(a.midX - b.midX) {
+                return a.midX < b.midX ? ["Left", "Right"] : ["Right", "Left"]
+            }
+            return a.midY < b.midY ? ["Top", "Bottom"] : ["Bottom", "Top"]
+        }
+        return rects.indices.map { String($0 + 1) }
+    }
+
+    /// The part of the picture on the phone.
+    var focusRect: CGRect? {
+        guard let focus, displays.indices.contains(focus) else { return nil }
+        return displays[focus]
+    }
+
+    /// The main display when there is more than one and nothing is chosen yet.
+    func chooseDefaultFocus() {
+        guard UserDefaults.standard.object(forKey: "screenFocus") == nil, displays.count > 1 else { return }
+        focus = layout.firstIndex(where: \.main) ?? 0
+    }
 
     func connect(_ settings: ScreenSettings) {
         disconnect()

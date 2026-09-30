@@ -547,7 +547,9 @@ def main() -> None:
     write_home(mac_home)
     lens = subprocess.Popen([sys.executable, LENS, "--port", str(args.lens_port), "--bind", "127.0.0.1",
                              "--gravity-home", home, "--claude-projects", claude, "--daemon-port", str(args.port),
-                             "--files-root", mac_home])
+                             "--files-root", mac_home, "--displays-json", json.dumps([
+                                 {"id": 1, "main": True, "x": 0, "y": 0, "width": 1920, "height": 1200},
+                                 {"id": 2, "main": False, "x": 1920, "y": 0, "width": 1920, "height": 1200}])])
     print(f"  Gravity Lens: 127.0.0.1:{args.lens_port}\nServing. Ctrl-C stops both.")
     try:
         daemon.wait()

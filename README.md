@@ -42,7 +42,7 @@
 - **Live terminal.** The bot's real Claude Code terminal ([SwiftTerm](https://github.com/migueldeicaza/SwiftTerm)) with a message box and a key row (esc, return, arrows, 1/2/3, tab, ^C) for permission prompts.
 - **Messages, routines and bot details.** The bot's message thread, its routines (enable, run now) and its charter.
 - **Create projects and bots** with a name, a charter and one of Gravity's twenty avatars.
-- **Control the Mac's screen.** macOS's own Screen Sharing, built into the app: tap to click, long-press or two-finger tap to right-click, double-tap to double-click, pinch to zoom. Type with the iOS keyboard; ⌘ ⌥ ⌃ ⇧ latch for the next key; one-tap shortcuts (copy, paste, Spotlight, switch app, Finder's *Copy as pathname*). What the Mac copies pops up on the phone, ready to send to a bot.
+- **Control the Mac's screen.** macOS's own Screen Sharing, built into the app. With two or more displays, switch between **Left · Right · Both**: each screen fills the phone on its own. Then: tap to click, long-press or two-finger tap to right-click, double-tap to double-click, pinch to zoom. Type with the iOS keyboard; ⌘ ⌥ ⌃ ⇧ latch for the next key; one-tap shortcuts (copy, paste, Spotlight, switch app, Finder's *Copy as pathname*). What the Mac copies pops up on the phone, ready to send to a bot.
 - **Browse the Mac's files.** Folders, image thumbnails, previews (markdown rendered, code in monospace, PDFs and images in Quick Look), share or save to the phone, and **Copy path** or **Send to a bot**, either typed into its terminal or as a message.
 - **Resilient.** Reconnects by itself and resumes the terminal from where it left off. The device token stays in the Keychain.
 
@@ -142,7 +142,7 @@ Open GravitiOS and enter the Mac's Tailscale address, port `49777` and the devic
 ./companion/install.sh --with-files
 ```
 
-Secret places are never served, even inside the shared folder: `.ssh`, `.gnupg`, `.aws`, `.kube`, `.docker`, Keychains, cookies, `*.token`, `*.pem`, `*.key` and similar. Browsing needs a device with the `control` grant. To share other folders, edit `roots` in `~/.gravity-lens/config.json`; `--without-files` turns it off. macOS may ask you to allow `python3` into Desktop, Documents and Downloads the first time; for everything, give `python3` Full Disk Access.
+Secret places are never served, even inside the shared folder: `.ssh`, `.gnupg`, `.aws`, `.kube`, `.docker`, Keychains, cookies, `*.token`, `*.pem`, `*.key` and similar. Browsing needs a device with the `control` grant. To share other folders, edit `roots` in `~/.gravity-lens/config.json`; `--without-files` turns it off. The companion runs as a small app, **Gravity Lens**, so macOS asks by that name: allow it into Desktop, Documents and Downloads when prompted after installing. For every folder (external drives, other apps' data), add it under **Privacy & Security → Full Disk Access** with **+** (it lives in `~/.gravity-lens/Gravity Lens.app`; press ⇧⌘. to see hidden folders in the file picker).
 
 ## Try it without your own bots
 
@@ -185,7 +185,7 @@ See [SECURITY.md](SECURITY.md) to report a vulnerability.
 | The terminal looks narrow on the Mac | The terminal is shared: opening it on the phone resizes it for every client until the Mac resizes it again. |
 | The Mac tab says it can't reach Screen Sharing | Turn it on in System Settings → General → Sharing, and check the address in Settings → Mac screen (empty means the daemon's address). |
 | "The Mac refused the user name or password" | Use the Mac account's short name and its login password, and allow that user under Screen Sharing's ⓘ. |
-| Files: "macOS blocked Gravity Lens from this folder" | Allow `python3` in System Settings → Privacy & Security → Files and Folders, or give it Full Disk Access. |
+| Files: "macOS blocked Gravity Lens from this folder" | System Settings → Privacy & Security → Files and Folders → **Gravity Lens**, or add `~/.gravity-lens/Gravity Lens.app` to Full Disk Access. Reinstalling only rebuilds the app when its launcher changes, so a grant survives updates. |
 | No notifications in the background | iOS suspends the app; alerts fire only while it is open or just backgrounded. There is no push server. |
 
 ## Project layout

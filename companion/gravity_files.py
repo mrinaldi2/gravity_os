@@ -90,7 +90,8 @@ class FileBrowser:
         except PermissionError:
             raise FileError(403, "blocked_by_macos",
                             "macOS blocked Gravity Lens from this folder. Allow it on the Mac in "
-                            "System Settings → Privacy & Security → Files and Folders (python3).")
+                            "System Settings → Privacy & Security → Files and Folders → Gravity Lens, "
+                            "or add Gravity Lens to Full Disk Access.")
         entries: List[Dict[str, Any]] = []
         for name in names:
             if not hidden and name.startswith("."):

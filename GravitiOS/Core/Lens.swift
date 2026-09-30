@@ -158,6 +158,19 @@ struct MacFolder: Decodable {
     func absolute(_ file: MacFile) -> String { (absolute as NSString).appendingPathComponent(file.name) }
 }
 
+/// One of the Mac's displays, in points, as macOS arranges them.
+struct MacDisplay: Decodable, Hashable {
+    let id: Int
+    let main: Bool
+    let x: Double
+    let y: Double
+    let width: Double
+    let height: Double
+
+    var frame: CGRect { CGRect(x: x, y: y, width: width, height: height) }
+}
+
+private struct DisplaysReply: Decodable { let displays: [MacDisplay] }
 private struct ArtifactsReply: Decodable { let artifacts: [LensArtifact] }
 private struct ServerMessage: Decodable { let message: String? }
 private struct ArtifactReply: Decodable { let text: String }
@@ -324,6 +337,13 @@ final class LensStore {
         }
         imageCache.setObject(image, forKey: cacheKey)
         return image
+    }
+
+    // MARK: Displays
+
+    func displays() async throws -> [MacDisplay] {
+        let reply: DisplaysReply = try await get("/v1/displays")
+        return reply.displays
     }
 
     // MARK: Files
