@@ -1,0 +1,13 @@
+// Signing for GravitiOS.
+//
+// Put your own values in Config/Local.xcconfig (git-ignored), for example:
+//
+//   DEVELOPMENT_TEAM = ABCDE12345
+//   PRODUCT_BUNDLE_IDENTIFIER = com.yourname.gravitios
+//
+// The simulator builds without either.
+
+PRODUCT_BUNDLE_IDENTIFIER = com.example.gravitios
+DEVELOPMENT_TEAM =
+
+#include? "Local.xcconfig"

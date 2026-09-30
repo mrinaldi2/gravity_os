@@ -1,0 +1,5 @@
+blank_issues_enabled: true
+contact_links:
+  - name: Gravity itself (the Mac app and daemon)
+    url: https://github.com/ahilles107/gravity/issues
+    about: Problems with Gravity rather than this iPhone client belong there.

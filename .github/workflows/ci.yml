@@ -1,0 +1,33 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  lens:
+    name: Gravity Lens
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python: ["3.9", "3.12"]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python }}
+      - run: python -m py_compile companion/gravity_lens.py demo/make_demo.py
+      - run: python -m unittest discover tests -v
+
+  app:
+    name: iOS app
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build for the simulator
+        run: |
+          xcodebuild -project GravitiOS.xcodeproj -scheme GravitiOS \
+            -destination 'generic/platform=iOS Simulator' \
+            -derivedDataPath build CODE_SIGNING_ALLOWED=NO build | tail -20
+          test ${PIPESTATUS[0]} -eq 0

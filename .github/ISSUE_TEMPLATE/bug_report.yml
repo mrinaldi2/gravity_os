@@ -1,0 +1,25 @@
+name: Bug report
+description: Something in GravitiOS or Gravity Lens does not work
+labels: [bug]
+body:
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened, and what did you expect?
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      description: If you can, reproduce it in the demo world (python3 demo/make_demo.py --serve).
+  - type: input
+    id: versions
+    attributes:
+      label: Versions
+      placeholder: iOS 18.2, Gravity 0.13.0, GravitiOS commit abc1234
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logs or screenshots
+      description: Remove tokens, Tailscale addresses and anything from your real bots first. ~/.gravity-lens/lens.log helps for Lens problems.
