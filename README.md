@@ -144,6 +144,16 @@ Open GravitiOS and enter the Mac's Tailscale address, port `49777` and the devic
 
 Secret places are never served, even inside the shared folder: `.ssh`, `.gnupg`, `.aws`, `.kube`, `.docker`, Keychains, cookies, `*.token`, `*.pem`, `*.key` and similar. Browsing needs a device with the `control` grant. To share other folders, edit `roots` in `~/.gravity-lens/config.json`; `--without-files` turns it off. The companion runs as a small app, **Gravity Lens**, so macOS asks by that name: allow it into Desktop, Documents and Downloads when prompted after installing. For every folder (external drives, other apps' data), add it under **Privacy & Security → Full Disk Access** with **+** (it lives in `~/.gravity-lens/Gravity Lens.app`; press ⇧⌘. to see hidden folders in the file picker).
 
+### 7. Optional: start everything after a restart
+
+```bash
+./companion/install.sh --with-autostart
+```
+
+Adds a login agent that waits for Tailscale, writes the Mac's current Tailscale address into `bind` in `gravityd.toml` (keeping a `.bak-autostart` copy), and restarts gravityd, and with it the bots, and Gravity Lens only if they are not answering on that address. It checks again every 5 minutes and changes nothing when all is up; its log is `~/.gravity-lens/autostart.log`. Without it, a Mac that starts gravityd before Tailscale is up keeps retrying until Tailscale is, and a changed Tailscale address stops the daemon for good.
+
+Also make sure Tailscale starts at login (Tailscale menu → Settings → *Launch at login*). With FileVault on, nothing starts until someone logs in at the Mac after a restart; for a planned restart, `sudo fdesetup authrestart` unlocks the disk once so the Mac comes back on its own.
+
 ## Try it without your own bots
 
 The screenshots above come from a demo world: a fictional team building a notes app, with projects, bots, decisions, activity, reports and images. You can run it too. It starts a throwaway daemon with Gravity's test runtime, so no Claude sessions run and no tokens are spent:
@@ -181,7 +191,7 @@ See [SECURITY.md](SECURITY.md) to report a vulnerability.
 | The app keeps retrying | The daemon is not listening on the Tailscale address: check `bind` and restart it. From the Mac, `curl http://100.x.y.z:49777/health` must answer. |
 | "Token rejected" | The token was mistyped, revoked, or copied incompletely. Forget the daemon in Settings and paste it again. |
 | Activity says "Gravity Lens not reachable" | Run `./companion/install.sh`, then `curl http://100.x.y.z:49778/health`. Its log is `~/.gravity-lens/lens.log`. |
-| Lens stops after a reboot | It needs the Tailscale address to exist; launchd restarts it every 15 s until Tailscale is up. |
+| Nothing answers after a reboot | Log in at the Mac once if FileVault is on. With `--with-autostart`, check `~/.gravity-lens/autostart.log`; without it, see step 7. |
 | The terminal looks narrow on the Mac | The terminal is shared: opening it on the phone resizes it for every client until the Mac resizes it again. |
 | The Mac tab says it can't reach Screen Sharing | Turn it on in System Settings → General → Sharing, and check the address in Settings → Mac screen (empty means the daemon's address). |
 | "The Mac refused the user name or password" | Use the Mac account's short name and its login password, and allow that user under Screen Sharing's ⓘ. |
@@ -195,7 +205,7 @@ GravitiOS/            the SwiftUI app
   Core/               daemon client (WebSocket), Lens client, state, Keychain
   UI/                 screens
   Core/RFB/            the Screen Sharing (VNC) client
-companion/            Gravity Lens (gravity_lens.py, gravity_files.py) and its installer
+companion/            Gravity Lens (gravity_lens.py, gravity_files.py), gravity_autostart.py and the installer
 demo/                 the demo world, a fake Screen Sharing server, and their images
 tests/                Lens tests (python3 -m unittest discover tests)
 Config/               Info.plist, Signing.xcconfig (+ your git-ignored Local.xcconfig)
