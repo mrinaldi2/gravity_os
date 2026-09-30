@@ -23,10 +23,11 @@ import secrets
 import socket
 import struct
 import threading
+import time
 import zlib
 
 from cryptography.hazmat.primitives.ciphers import Cipher, algorithms, modes
-from PIL import Image
+from PIL import Image, ImageDraw, ImageFont
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 # RFC 2409 group 2, as a Mac uses for this sign-in.
@@ -64,6 +65,8 @@ class Session:
         self.bpp = 32
         self.buttons = 0
         self.sent_bytes = 0
+        self.drop_idle = False
+        self.lock = threading.Lock()
 
     @staticmethod
     def without_alert(desktop: Image.Image) -> Image.Image:
@@ -139,16 +142,33 @@ class Session:
         x1, y1 = min(x + w, rx + rw), min(y + h, ry + rh)
         return (x0, y0, x1 - x0, y1 - y0) if x1 > x0 and y1 > y0 else None
 
+    def tick_clock(self) -> None:
+        """A seconds clock in the menu bar, so there is always something changing."""
+        font = ImageFont.truetype("/System/Library/Fonts/Menlo.ttc", int(18 * self.scale))
+        while True:
+            time.sleep(1)
+            with self.lock:
+                box = (int(1600 * self.scale), 0, int(1910 * self.scale), int(30 * self.scale))
+                for image in {id(self.frame): self.frame, id(self.clean): self.clean}.values():
+                    draw = ImageDraw.Draw(image)
+                    draw.rectangle(box, fill=(236, 236, 242))
+                    draw.text((box[0] + 6, box[1] + 3), time.strftime("%H:%M:%S"), font=font, fill=(20, 20, 28))
+                self.dirty.append((box[0], box[1], box[2] - box[0], box[3] - box[1]))
+
     def send_update(self) -> None:
         if not self.pending_request:
             return
         rects = list(dict.fromkeys(r for r in (self.clip(rect) for rect in self.dirty) if r))
         if not rects:
+            if self.drop_idle:
+                # What macOS does: a request with nothing to send is forgotten.
+                self.pending_request = False
             return
         # Changes outside the requested region wait for a request that covers them.
         self.dirty = [rect for rect in self.dirty if not self.clip(rect)]
         self.pending_request = False
-        body = b"".join(self.zrle(*rect) for rect in rects)
+        with self.lock:
+            body = b"".join(self.zrle(*rect) for rect in rects)
         self.sent_bytes += len(body)
         print(f"sent {len(rects)} rect(s) {rects[0]}… {len(body) / 1024:.0f} KB at {self.bpp} bpp", flush=True)
         self.sock.sendall(struct.pack(">BxH", 0, len(rects)) + body)
@@ -168,6 +188,7 @@ class Session:
 
     def run(self) -> None:
         self.handshake()
+        threading.Thread(target=self.tick_clock, daemon=True).start()
         while True:
             kind = recv_exact(self.sock, 1)[0]
             if kind == 0:
@@ -209,6 +230,8 @@ def main() -> None:
     parser.add_argument("--password", default="demo")
     parser.add_argument("--scale", type=float, default=0.75, help="served size relative to desktop.png")
     parser.add_argument("--dual", action="store_true", help="add a second display to the right")
+    parser.add_argument("--drop-idle", action="store_true",
+                        help="forget update requests when nothing changed, as macOS does")
     args = parser.parse_args()
     desktop = Image.open(os.path.join(HERE, "assets", "desktop.png")).convert("RGB")
     if args.dual:
@@ -222,6 +245,7 @@ def main() -> None:
     while True:
         sock, _ = server.accept()
         session = Session(sock, desktop, args.user, args.password, args.scale)
+        session.drop_idle = args.drop_idle
 
         def serve(session: Session = session) -> None:
             try:

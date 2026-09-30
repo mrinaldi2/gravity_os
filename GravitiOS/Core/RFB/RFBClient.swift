@@ -53,6 +53,18 @@ final class RFBClient: @unchecked Sendable {
     /// Set once the pixel format and encodings are sent; asking for pictures
     /// before that would get them in the Mac's own format.
     private var ready = false
+    private var lastRequest = Date.distantPast
+    private var lastPublish = Date.distantPast
+    /// The framebuffer changed since the last picture handed to the phone.
+    private var unpublished = false
+
+    /// How often to ask the Mac for changes. macOS drops a request when
+    /// nothing has changed at that moment instead of holding it, so asking
+    /// once and waiting would freeze the picture.
+    private static let pollInterval: TimeInterval = 0.07
+    /// At most this often a new picture is copied out for the phone; the
+    /// newest one always wins, so nothing queues up behind the screen.
+    private static let publishInterval: TimeInterval = 0.04
 
     // Encodings, in the order the Mac should prefer them.
     private static let encodings: [Int32] = [16, 5, 1, 0, -223]  // ZRLE, Hextile, CopyRect, Raw, DesktopSize
@@ -128,6 +140,13 @@ final class RFBClient: @unchecked Sendable {
             try await sendFormatAndEncodings()
             lock.lock(); ready = true; lock.unlock()
             requestUpdate(incremental: false)
+            let ticker = Task.detached(priority: .userInitiated) { [weak self] in
+                while !Task.isCancelled {
+                    try? await Task.sleep(for: .milliseconds(35))
+                    self?.tick()
+                }
+            }
+            defer { ticker.cancel() }
             try await messageLoop()
         } catch is CancellationError {
             await report(.closed)
@@ -240,12 +259,14 @@ final class RFBClient: @unchecked Sendable {
             switch try await u8() {
             case 0:
                 try await framebufferUpdate()
-                lock.lock(); waitingForUpdate = false; lock.unlock()
-                if stats.firstPicture == nil { stats.firstPicture = Date().timeIntervalSince(started) }
-                let snapshot = stats
-                await MainActor.run { [onStats] in onStats?(snapshot) }
+                lock.lock(); waitingForUpdate = false; unpublished = true; lock.unlock()
+                if stats.firstPicture == nil {
+                    stats.firstPicture = Date().timeIntervalSince(started)
+                    let snapshot = stats
+                    await MainActor.run { [onStats] in onStats?(snapshot) }
+                }
                 if !paused {
-                    publish()
+                    publishIfDue()
                     requestUpdate(incremental: true)
                 }
             case 1:
@@ -352,12 +373,36 @@ final class RFBClient: @unchecked Sendable {
         send([6, 0, 0, 0] + be32(UInt32(bytes.count)) + bytes)
     }
 
-    /// Asks for the region in view. Only one request is outstanding at a time,
-    /// so the phone never queues up more pictures than it can show.
-    private func requestUpdate(incremental: Bool) {
+    /// Runs every few milliseconds: keeps asking for changes and hands over
+    /// any picture that was held back.
+    private func tick() {
         lock.lock()
-        let busy = incremental && waitingForUpdate
+        let active = ready && !_paused
+        let due = Date().timeIntervalSince(lastRequest) >= Self.pollInterval
+        lock.unlock()
+        guard active else { return }
+        if due { requestUpdate(incremental: true, force: true) }
+        publishIfDue()
+    }
+
+    private func publishIfDue() {
+        lock.lock()
+        let due = unpublished && Date().timeIntervalSince(lastPublish) >= Self.publishInterval
+        if due {
+            unpublished = false
+            lastPublish = Date()
+        }
+        lock.unlock()
+        if due { publish() }
+    }
+
+    /// Asks for the region in view. `force` sends even with a request
+    /// already out, since the Mac may have dropped it.
+    private func requestUpdate(incremental: Bool, force: Bool = false) {
+        lock.lock()
+        let busy = incremental && waitingForUpdate && !force
         waitingForUpdate = true
+        if !busy { lastRequest = Date() }
         lock.unlock()
         if busy { return }
         let whole = CGRect(x: 0, y: 0, width: framebuffer.width, height: framebuffer.height)
@@ -413,19 +458,40 @@ final class RFBClient: @unchecked Sendable {
         }
     }
 
-    private func u8() async throws -> UInt8 { try await read(1)[0] }
+    // Small reads come straight from the buffer when the bytes are there,
+    // without allocating: Hextile reads a few bytes at a time.
+
+    private var available: Int { buffer.count - bufferOffset }
+
+    private func u8() async throws -> UInt8 {
+        if available >= 1 {
+            defer { bufferOffset += 1 }
+            return buffer[bufferOffset]
+        }
+        return try await read(1)[0]
+    }
 
     private func u16() async throws -> UInt16 {
-        let b = try await read(2)
-        return UInt16(b[0]) << 8 | UInt16(b[1])
+        if available < 2 { return try await read(2).withUnsafeBufferPointer { UInt16($0[0]) << 8 | UInt16($0[1]) } }
+        defer { bufferOffset += 2 }
+        return UInt16(buffer[bufferOffset]) << 8 | UInt16(buffer[bufferOffset + 1])
     }
 
     private func u32() async throws -> UInt32 {
-        let b = try await read(4)
-        return UInt32(b[0]) << 24 | UInt32(b[1]) << 16 | UInt32(b[2]) << 8 | UInt32(b[3])
+        if available < 4 {
+            let b = try await read(4)
+            return UInt32(b[0]) << 24 | UInt32(b[1]) << 16 | UInt32(b[2]) << 8 | UInt32(b[3])
+        }
+        defer { bufferOffset += 4 }
+        let i = bufferOffset
+        return UInt32(buffer[i]) << 24 | UInt32(buffer[i + 1]) << 16 | UInt32(buffer[i + 2]) << 8 | UInt32(buffer[i + 3])
     }
 
     private func pixel() async throws -> UInt32 {
+        if available >= pixelBytes {
+            defer { bufferOffset += pixelBytes }
+            return buffer.withUnsafeBufferPointer { PixelFormat.pixel($0, at: bufferOffset, size: pixelBytes) }
+        }
         let b = try await read(pixelBytes)
         return b.withUnsafeBufferPointer { PixelFormat.pixel($0, at: 0, size: pixelBytes) }
     }
