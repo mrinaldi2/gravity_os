@@ -10,8 +10,10 @@ enum RFBCrypto {
     static func appleResponse(generator: [UInt8], prime: [UInt8], serverKey: [UInt8],
                               username: String, password: String) throws -> [UInt8] {
         let length = prime.count
-        var secretExponent = [UInt8](repeating: 0, count: length)
-        guard SecRandomCopyBytes(kSecRandomDefault, length, &secretExponent) == errSecSuccess else {
+        // A 256-bit private exponent is the usual strength for this group and
+        // makes the two exponentiations about four times faster than a full-size one.
+        var secretExponent = [UInt8](repeating: 0, count: 32)
+        guard SecRandomCopyBytes(kSecRandomDefault, secretExponent.count, &secretExponent) == errSecSuccess else {
             throw RFBError.auth("Could not generate a key.")
         }
         let modulus = BigUInt(bytes: prime)

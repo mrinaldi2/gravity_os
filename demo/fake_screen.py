@@ -60,7 +60,10 @@ class Session:
         self.zlib = zlib.compressobj(6)
         self.dirty = [(0, 0, size[0], size[1])]
         self.pending_request = False
+        self.region = (0, 0, size[0], size[1])
+        self.bpp = 32
         self.buttons = 0
+        self.sent_bytes = 0
 
     @staticmethod
     def without_alert(desktop: Image.Image) -> Image.Image:
@@ -117,7 +120,11 @@ class Session:
                 for row in range(ty, ty + th):
                     start = (row * w + tx) * 3
                     line = region[start:start + tw * 3]
-                    pixels.extend(bytes((line[i + 2], line[i + 1], line[i])) for i in range(0, len(line), 3))
+                    if self.bpp == 16:
+                        pixels.extend(struct.pack("<H", (line[i] >> 3) << 11 | (line[i + 1] >> 2) << 5 | line[i + 2] >> 3)
+                                      for i in range(0, len(line), 3))
+                    else:
+                        pixels.extend(bytes((line[i + 2], line[i + 1], line[i])) for i in range(0, len(line), 3))
                 if len(set(pixels)) == 1:
                     tiles += b"\x01" + pixels[0]
                 else:
@@ -125,11 +132,25 @@ class Session:
         data = self.zlib.compress(bytes(tiles)) + self.zlib.flush(zlib.Z_SYNC_FLUSH)
         return struct.pack(">HHHHiI", x, y, w, h, 16, len(data)) + data
 
+    def clip(self, rect):
+        x, y, w, h = rect
+        rx, ry, rw, rh = self.region
+        x0, y0 = max(x, rx), max(y, ry)
+        x1, y1 = min(x + w, rx + rw), min(y + h, ry + rh)
+        return (x0, y0, x1 - x0, y1 - y0) if x1 > x0 and y1 > y0 else None
+
     def send_update(self) -> None:
-        if not self.dirty or not self.pending_request:
+        if not self.pending_request:
             return
-        rects, self.dirty, self.pending_request = self.dirty, [], False
+        rects = list(dict.fromkeys(r for r in (self.clip(rect) for rect in self.dirty) if r))
+        if not rects:
+            return
+        # Changes outside the requested region wait for a request that covers them.
+        self.dirty = [rect for rect in self.dirty if not self.clip(rect)]
+        self.pending_request = False
         body = b"".join(self.zrle(*rect) for rect in rects)
+        self.sent_bytes += len(body)
+        print(f"sent {len(rects)} rect(s) {rects[0]}… {len(body) / 1024:.0f} KB at {self.bpp} bpp", flush=True)
         self.sock.sendall(struct.pack(">BxH", 0, len(rects)) + body)
 
     def click(self, x: int, y: int) -> None:
@@ -150,15 +171,16 @@ class Session:
         while True:
             kind = recv_exact(self.sock, 1)[0]
             if kind == 0:
-                recv_exact(self.sock, 19)
+                self.bpp = recv_exact(self.sock, 19)[3]
             elif kind == 2:
                 count = struct.unpack(">xH", recv_exact(self.sock, 3))[0]
                 encodings = struct.unpack(f">{count}i", recv_exact(self.sock, count * 4))
                 print("encodings", encodings)
             elif kind == 3:
-                incremental, *_ = struct.unpack(">BHHHH", recv_exact(self.sock, 9))
+                incremental, x, y, w, h = struct.unpack(">BHHHH", recv_exact(self.sock, 9))
+                self.region = (x, y, w, h)
                 if not incremental:
-                    self.dirty = [(0, 0, *self.frame.size)]
+                    self.dirty.append((x, y, w, h))
                 self.pending_request = True
             elif kind == 4:
                 down, keysym = struct.unpack(">BxxI", recv_exact(self.sock, 7))

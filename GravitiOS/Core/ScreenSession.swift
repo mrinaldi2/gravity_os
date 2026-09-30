@@ -78,24 +78,49 @@ final class ScreenSession {
     }
 
     var phase: Phase = .idle
+    /// The picture of the display in view (or the whole screen).
     var image: CGImage?
+    /// Size of the Mac's whole picture, all displays together.
+    var screenSize = ScreenSession.savedSize {
+        didSet { UserDefaults.standard.set([screenSize.width, screenSize.height], forKey: "screenSize") }
+    }
+    var stats: RFBClient.Stats?
     /// Latched modifiers, applied to the next key and then released.
     var modifiers: Modifiers = []
     /// Text the Mac put on its clipboard, until dismissed.
     var macClipboard: String?
     /// Where the last tap landed, in screen pixels.
     var lastTap: CGPoint?
-    /// How macOS arranges the displays, from Gravity Lens.
-    var layout: [MacDisplay] = []
-    /// Which display fills the phone; nil shows them all.
-    var focus: Int? = UserDefaults.standard.object(forKey: "screenFocus") as? Int {
-        didSet { UserDefaults.standard.set(focus, forKey: "screenFocus") }
+    /// How macOS arranges the displays, from Gravity Lens. Remembered, so the
+    /// very first request after launching asks for one display only.
+    var layout: [MacDisplay] = ScreenSession.savedLayout {
+        didSet { UserDefaults.standard.set(try? JSONEncoder().encode(layout), forKey: "screenLayout") }
     }
+
+    private static var savedLayout: [MacDisplay] {
+        guard let data = UserDefaults.standard.data(forKey: "screenLayout") else { return [] }
+        return (try? JSONDecoder().decode([MacDisplay].self, from: data)) ?? []
+    }
+
+    private static var savedSize: CGSize {
+        let pair = UserDefaults.standard.array(forKey: "screenSize") as? [Double] ?? []
+        return pair.count == 2 ? CGSize(width: pair[0], height: pair[1]) : .zero
+    }
+    /// Which display fills the phone.
+    var focus: Int? = UserDefaults.standard.object(forKey: "screenFocus") as? Int {
+        didSet {
+            UserDefaults.standard.set(focus, forKey: "screenFocus")
+            regionChanged()
+        }
+    }
+    /// The last picture of each region, shown at once when switching or reconnecting.
+    @ObservationIgnored private var remembered: [CGRect: CGImage] = [:]
+    @ObservationIgnored private var paused = true
 
     @ObservationIgnored private var client: RFBClient?
     @ObservationIgnored private var pointer = CGPoint.zero
 
-    var size: CGSize { image.map { CGSize(width: $0.width, height: $0.height) } ?? .zero }
+    var size: CGSize { screenSize }
 
     /// Each display's rectangle within the shared picture, left to right.
     /// Screen Sharing sends every display as one image covering their
@@ -134,16 +159,50 @@ final class ScreenSession {
         return rects.indices.map { String($0 + 1) }
     }
 
-    /// The part of the picture on the phone.
+    /// The part of the Mac's picture on the phone: one display, or all of it
+    /// when there is only one.
     var focusRect: CGRect? {
-        guard let focus, displays.indices.contains(focus) else { return nil }
-        return displays[focus]
+        let rects = displays
+        guard rects.count > 1 else { return nil }
+        let index = focus.flatMap { rects.indices.contains($0) ? $0 : nil } ?? mainIndex
+        return rects[index]
     }
 
-    /// The main display when there is more than one and nothing is chosen yet.
-    func chooseDefaultFocus() {
-        guard UserDefaults.standard.object(forKey: "screenFocus") == nil, displays.count > 1 else { return }
-        focus = layout.firstIndex(where: \.main) ?? 0
+    private var mainIndex: Int { layout.firstIndex(where: \.main) ?? 0 }
+
+    func setLayout(_ layout: [MacDisplay]) {
+        guard layout != self.layout else { return }
+        self.layout = layout
+        regionChanged()
+    }
+
+    /// Tells the client which part to keep current, and shows what we already have of it.
+    private func regionChanged() {
+        let region = focusRect
+        if let known = remembered[region ?? .null] { image = known } else if region != nil { image = nil }
+        client?.setRegion(region)
+    }
+
+    // MARK: Being looked at
+
+    /// The screen view appeared: resume a live connection, or connect.
+    func show(_ settings: ScreenSettings) {
+        paused = false
+        switch phase {
+        case .live:
+            client?.setPaused(false)
+        case .connecting, .signingIn:
+            break
+        case .idle, .failed:
+            connect(settings)
+        }
+    }
+
+    /// The screen view went away or the app left the foreground. The Mac
+    /// stops sending, but the connection stays signed in for next time.
+    func hide() {
+        paused = true
+        client?.setPaused(true)
     }
 
     func connect(_ settings: ScreenSettings) {
@@ -153,9 +212,13 @@ final class ScreenSession {
             return
         }
         let client = RFBClient(host: settings.host, port: settings.port,
-                               credentials: .init(username: settings.username, password: password))
+                               credentials: .init(username: settings.username, password: password),
+                               fastColours: UserDefaults.standard.bool(forKey: "screenFastColours"))
         client.onState = { [weak self] state in self?.stateChanged(state) }
-        client.onImage = { [weak self] image in self?.image = image }
+        client.onImage = { [weak self] image in self?.received(image) }
+        client.onStats = { [weak self] stats in self?.stats = stats }
+        // Known from an earlier connection: ask for just that display from the start.
+        client.setRegion(focusRect)
         client.onClipboard = { [weak self] text in
             let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
             if !trimmed.isEmpty { self?.macClipboard = trimmed }
@@ -171,13 +234,31 @@ final class ScreenSession {
         phase = .idle
     }
 
+    private func received(_ image: CGImage) {
+        // A picture for a region we have since switched away from is dropped.
+        let region = focusRect
+        let expected = region.map { (Int($0.width), Int($0.height)) } ?? (Int(screenSize.width), Int(screenSize.height))
+        guard (image.width, image.height) == expected else { return }
+        self.image = image
+        remembered[region ?? .null] = image
+    }
+
     private func stateChanged(_ state: RFBClient.State) {
         switch state {
         case .connecting: phase = .connecting
         case .signingIn: phase = .signingIn
-        case .connected(let name): phase = .live(name)
-        case .failed(let message): phase = .failed(message)
-        case .closed: if case .live = phase { phase = .idle }
+        case .connected(let name, let width, let height):
+            screenSize = CGSize(width: width, height: height)
+            phase = .live(name)
+            client?.setRegion(focusRect)
+            client?.setPaused(paused)
+        case .failed(let message):
+            // Dropped while nobody was looking (the app was in the background):
+            // reconnect quietly next time instead of showing an error.
+            phase = paused ? .idle : .failed(message)
+            client = nil
+        case .closed:
+            if case .live = phase { phase = .idle }
         }
     }
 

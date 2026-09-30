@@ -159,7 +159,7 @@ struct MacFolder: Decodable {
 }
 
 /// One of the Mac's displays, in points, as macOS arranges them.
-struct MacDisplay: Decodable, Hashable {
+struct MacDisplay: Codable, Hashable {
     let id: Int
     let main: Bool
     let x: Double

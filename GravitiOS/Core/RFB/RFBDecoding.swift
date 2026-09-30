@@ -17,24 +17,33 @@ enum RFBError: LocalizedError {
 }
 
 /// The remote screen as 32-bit pixels, 0xXXRRGGBB, top row first.
-final class Framebuffer {
-    private(set) var width: Int
-    private(set) var height: Int
-    private(set) var pixels: [UInt32]
+/// Decoding writes and the main actor takes pictures from different threads,
+/// so every access holds the lock (none of them waits on anything).
+final class Framebuffer: @unchecked Sendable {
+    private let lock = NSLock()
+    private var _width: Int
+    private var _height: Int
+    private var pixels: [UInt32]
+
+    var width: Int { lock.lock(); defer { lock.unlock() }; return _width }
+    var height: Int { lock.lock(); defer { lock.unlock() }; return _height }
 
     init(width: Int, height: Int) {
-        self.width = width
-        self.height = height
+        _width = width
+        _height = height
         pixels = [UInt32](repeating: 0xFF20_2024, count: width * height)
     }
 
     func resize(width: Int, height: Int) {
-        self.width = width
-        self.height = height
-        pixels = [UInt32](repeating: 0, count: width * height)
+        lock.lock(); defer { lock.unlock() }
+        _width = width
+        _height = height
+        pixels = [UInt32](repeating: 0xFF20_2024, count: width * height)
     }
 
     func fill(x: Int, y: Int, w: Int, h: Int, color: UInt32) {
+        lock.lock(); defer { lock.unlock() }
+        let width = _width
         guard let (x, y, w, h) = clip(x, y, w, h) else { return }
         pixels.withUnsafeMutableBufferPointer { buffer in
             for row in y..<y + h {
@@ -45,6 +54,8 @@ final class Framebuffer {
     }
 
     func copy(fromX sx: Int, fromY sy: Int, toX dx: Int, toY dy: Int, w: Int, h: Int) {
+        lock.lock(); defer { lock.unlock() }
+        let width = _width, height = _height
         guard clip(sx, sy, w, h) != nil, clip(dx, dy, w, h) != nil,
               sx + w <= width, dx + w <= width, sy + h <= height, dy + h <= height else { return }
         var region = [UInt32](repeating: 0, count: w * h)
@@ -60,23 +71,43 @@ final class Framebuffer {
 
     private func clip(_ x: Int, _ y: Int, _ w: Int, _ h: Int) -> (Int, Int, Int, Int)? {
         let x0 = max(0, x), y0 = max(0, y)
-        let x1 = min(width, x + w), y1 = min(height, y + h)
+        let x1 = min(_width, x + w), y1 = min(_height, y + h)
         return x1 > x0 && y1 > y0 ? (x0, y0, x1 - x0, y1 - y0) : nil
     }
 
     /// Writes `count` pixels produced in reading order into the rectangle.
     func withRect(x: Int, y: Int, w: Int, h: Int, _ body: (inout RectWriter) throws -> Void) rethrows {
+        lock.lock(); defer { lock.unlock() }
+        let width = _width, height = _height
         try pixels.withUnsafeMutableBufferPointer { buffer in
             var writer = RectWriter(buffer: buffer, stride: width, height: height, x: x, y: y, w: w, h: h)
             try body(&writer)
         }
     }
 
-    func image() -> CGImage? {
-        let data = pixels.withUnsafeBufferPointer { Data(buffer: $0) }
+    /// A picture of part of the screen (or all of it), copied out so the
+    /// framebuffer can keep changing underneath.
+    func image(of region: CGRect? = nil) -> CGImage? {
+        lock.lock(); defer { lock.unlock() }
+        let width = _width
+        let whole = CGRect(x: 0, y: 0, width: width, height: _height)
+        let area = (region ?? whole).intersection(whole).integral
+        guard area.width >= 1, area.height >= 1 else { return nil }
+        let x = Int(area.minX), y = Int(area.minY), w = Int(area.width), h = Int(area.height)
+        var data = Data(count: w * h * 4)
+        data.withUnsafeMutableBytes { raw in
+            let out = raw.bindMemory(to: UInt32.self)
+            pixels.withUnsafeBufferPointer { source in
+                for row in 0..<h {
+                    let from = (y + row) * width + x
+                    UnsafeMutableRawPointer(out.baseAddress! + row * w)
+                        .copyMemory(from: source.baseAddress! + from, byteCount: w * 4)
+                }
+            }
+        }
         guard let provider = CGDataProvider(data: data as CFData) else { return nil }
         let info = CGBitmapInfo(rawValue: CGBitmapInfo.byteOrder32Little.rawValue | CGImageAlphaInfo.noneSkipFirst.rawValue)
-        return CGImage(width: width, height: height, bitsPerComponent: 8, bitsPerPixel: 32, bytesPerRow: width * 4,
+        return CGImage(width: w, height: h, bitsPerComponent: 8, bitsPerPixel: 32, bytesPerRow: w * 4,
                        space: CGColorSpace(name: CGColorSpace.sRGB)!, bitmapInfo: info, provider: provider,
                        decode: nil, shouldInterpolate: true, intent: .defaultIntent)
     }
@@ -137,11 +168,15 @@ struct ByteReader {
         return bytes[offset]
     }
 
-    /// A ZRLE compressed pixel: 3 bytes, little-endian, for 24-bit colour.
+    /// Bytes per ZRLE compressed pixel: 3 for 24-bit colour, 2 for 16-bit.
+    var pixelBytes = 3
+
+    /// A ZRLE compressed pixel, little-endian, as 0x00RRGGBB.
     @inline(__always)
     mutating func cpixel() throws -> UInt32 {
-        guard offset + 3 <= bytes.count else { throw RFBError.protocolError("Truncated screen data.") }
-        defer { offset += 3 }
+        guard offset + pixelBytes <= bytes.count else { throw RFBError.protocolError("Truncated screen data.") }
+        defer { offset += pixelBytes }
+        if pixelBytes == 2 { return PixelFormat.expand565(UInt32(bytes[offset]) | UInt32(bytes[offset + 1]) << 8) }
         return UInt32(bytes[offset]) | UInt32(bytes[offset + 1]) << 8 | UInt32(bytes[offset + 2]) << 16
     }
 
@@ -206,11 +241,34 @@ final class Inflater {
     }
 }
 
+/// The two pixel formats GravitiOS asks the Mac for.
+enum PixelFormat {
+    /// 32 bits per pixel, 24-bit colour, little-endian, 0x00RRGGBB.
+    static let full: [UInt8] = [32, 24, 0, 1, 0, 255, 0, 255, 0, 255, 16, 8, 0, 0, 0, 0]
+    /// 16 bits per pixel, RGB 5-6-5, little-endian: a third less to send.
+    static let fast: [UInt8] = [16, 16, 0, 1, 0, 31, 0, 63, 0, 31, 11, 5, 0, 0, 0, 0]
+
+    @inline(__always)
+    static func expand565(_ value: UInt32) -> UInt32 {
+        let r = value >> 11 & 31, g = value >> 5 & 63, b = value & 31
+        return (r << 3 | r >> 2) << 16 | (g << 2 | g >> 4) << 8 | (b << 3 | b >> 2)
+    }
+
+    /// A pixel as sent in Raw and Hextile rectangles.
+    @inline(__always)
+    static func pixel(_ bytes: UnsafeBufferPointer<UInt8>, at i: Int, size: Int) -> UInt32 {
+        if size == 2 { return expand565(UInt32(bytes[i]) | UInt32(bytes[i + 1]) << 8) }
+        return UInt32(bytes[i]) | UInt32(bytes[i + 1]) << 8 | UInt32(bytes[i + 2]) << 16
+    }
+}
+
 enum ZRLE {
     /// Decodes one ZRLE rectangle (already inflated) into the framebuffer.
-    static func decode(_ data: [UInt8], x: Int, y: Int, w: Int, h: Int, into framebuffer: Framebuffer) throws {
+    static func decode(_ data: [UInt8], x: Int, y: Int, w: Int, h: Int, pixelBytes: Int = 3,
+                       into framebuffer: Framebuffer) throws {
         try data.withUnsafeBufferPointer { bytes in
             var reader = ByteReader(bytes: bytes)
+            reader.pixelBytes = pixelBytes
             var palette = [UInt32](repeating: 0, count: 128)
             for ty in Swift.stride(from: y, to: y + h, by: 64) {
                 let th = min(64, y + h - ty)

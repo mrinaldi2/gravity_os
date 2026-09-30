@@ -4,6 +4,8 @@ import SwiftUI
 struct MacSettingsSection: View {
     @Environment(AppStore.self) private var store
     @Environment(LensStore.self) private var lens
+    @Environment(ScreenSession.self) private var screen
+    @AppStorage("screenFastColours") private var fastColours = false
     @State private var host = ""
     @State private var port = "5900"
     @State private var username = ""
@@ -26,10 +28,13 @@ struct MacSettingsSection: View {
                 .textContentType(.password)
             Button("Save") { save() }
                 .disabled(username.isEmpty || (password.isEmpty && !hasPassword))
+            Toggle("Fast colours", isOn: $fastColours)
+                .onChange(of: fastColours) { _, _ in screen.disconnect() }
+            if let stats = screen.stats { LabeledContent("Last connection", value: describe(stats)) }
         } header: {
             Text("Mac screen")
         } footer: {
-            Text("Turn on Screen Sharing on the Mac: System Settings → General → Sharing → Screen Sharing, and allow your user. Sign in here with that Mac account. The password stays in this iPhone's Keychain and only goes to the Mac.")
+            Text("Turn on Screen Sharing on the Mac: System Settings → General → Sharing → Screen Sharing, and allow your user. Sign in here with that Mac account. The password stays in this iPhone's Keychain and only goes to the Mac. Fast colours sends 16-bit colour: about a third less data, with slight banding on gradients.")
         }
         .onAppear(perform: loadSettings)
 
@@ -39,6 +44,16 @@ struct MacSettingsSection: View {
             Text("To browse the Mac's files, run on the Mac: companion/install.sh --with-files. Needs a device with the control grant.")
         }
         .task { await checkFiles() }
+    }
+
+    private func describe(_ stats: RFBClient.Stats) -> String {
+        let names: [Int32: String] = [0: "Raw", 1: "CopyRect", 5: "Hextile", 16: "ZRLE"]
+        var parts = [String(format: "sign-in %.1f s", stats.signIn)]
+        if let first = stats.firstPicture { parts.append(String(format: "picture %.1f s", first)) }
+        parts.append(ByteCountFormatter.string(fromByteCount: Int64(stats.bytes), countStyle: .binary))
+        let used = stats.encodings.compactMap { names[$0] }.sorted()
+        if !used.isEmpty { parts.append(used.joined(separator: "+")) }
+        return parts.joined(separator: " · ")
     }
 
     private func loadSettings() {

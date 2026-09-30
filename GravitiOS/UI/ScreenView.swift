@@ -5,7 +5,8 @@ import UIKit
 struct ScreenView: View {
     @Environment(AppStore.self) private var store
     @Environment(LensStore.self) private var lens
-    @State private var session = ScreenSession()
+    @Environment(ScreenSession.self) private var session
+    @Environment(\.scenePhase) private var scenePhase
     @State private var canvas = CanvasController()
     @State private var sendItem: SendItem?
     @State private var showingKeyboard = false
@@ -21,6 +22,18 @@ struct ScreenView: View {
                 } else {
                     placeholder
                 }
+                if session.image != nil, session.phase != .idle, !isLive {
+                    // An earlier picture is on screen while the connection comes back.
+                    VStack {
+                        Spacer()
+                        Label(waitingText, systemImage: "arrow.triangle.2.circlepath")
+                            .font(.caption.weight(.medium))
+                            .padding(.horizontal, 12).padding(.vertical, 6)
+                            .background(.ultraThinMaterial, in: Capsule())
+                            .environment(\.colorScheme, .dark)
+                            .padding(.bottom, 12)
+                    }
+                }
             }
             .overlay(alignment: .top) {
                 VStack(spacing: 0) {
@@ -33,13 +46,15 @@ struct ScreenView: View {
         .toolbar {
             ToolbarItem(placement: .topBarTrailing) { statusBadge }
         }
-        .onAppear { if session.phase == .idle { session.connect(settings) } }
-        .onDisappear { session.disconnect() }
+        .onAppear { session.show(settings) }
+        .onDisappear { session.hide() }
+        .onChange(of: scenePhase) { _, phase in
+            if phase == .active { session.show(settings) } else { session.hide() }
+        }
         .task(id: session.phase) {
             guard case .live = session.phase else { return }
-            if let layout = try? await lens.displays() { session.layout = layout }
+            if let layout = try? await lens.displays() { session.setLayout(layout) }
         }
-        .onChange(of: session.displays.count) { _, _ in session.chooseDefaultFocus() }
         .sheet(item: $sendItem) { SendToBotSheet(text: $0.text) }
         .animation(.snappy, value: session.macClipboard)
     }
@@ -64,6 +79,11 @@ struct ScreenView: View {
         }
     }
 
+    private var isLive: Bool {
+        if case .live = session.phase { return true }
+        return false
+    }
+
     private var waitingText: String {
         switch session.phase {
         case .signingIn: "Signing in…"
@@ -84,17 +104,16 @@ struct ScreenView: View {
         }
     }
 
-    /// Both screens, or one at a time filling the phone.
+    /// One display at a time, filling the phone.
     @ViewBuilder private var displayPicker: some View {
         let names = session.displayNames
         if names.count > 1 {
-            Picker("Display", selection: Binding(get: { session.focus ?? -1 },
-                                                 set: { session.focus = $0 < 0 ? nil : $0 })) {
+            let current = session.focusRect.flatMap { session.displays.firstIndex(of: $0) } ?? 0
+            Picker("Display", selection: Binding(get: { current }, set: { session.focus = $0 })) {
                 ForEach(Array(names.enumerated()), id: \.offset) { index, name in Text(name).tag(index) }
-                Text(names.count == 2 ? "Both" : "All").tag(-1)
             }
             .pickerStyle(.segmented)
-            .frame(maxWidth: 260)
+            .frame(maxWidth: 200)
             .padding(6)
             .background(.ultraThinMaterial, in: Capsule())
             .environment(\.colorScheme, .dark)
@@ -152,7 +171,7 @@ private struct ScreenCanvas: UIViewRepresentable {
     }
 
     func updateUIView(_ view: ScreenCanvasView, context: Context) {
-        view.show(session.image, tap: session.lastTap, focus: session.focusRect)
+        view.show(session.image, tap: session.lastTap, origin: session.focusRect?.origin ?? .zero)
     }
 }
 
@@ -221,15 +240,17 @@ final class ScreenCanvasView: UIView, UIScrollViewDelegate {
         scroll.minimumZoomScale = min(bounds.width / shownSize.width, bounds.height / shownSize.height)
     }
 
-    func show(_ image: CGImage?, tap: CGPoint?, focus: CGRect?) {
+    /// `image` is the part of the Mac's picture that starts at `origin`.
+    func show(_ image: CGImage?, tap: CGPoint?, origin: CGPoint) {
         guard let image else { return }
-        let whole = CGRect(x: 0, y: 0, width: image.width, height: image.height)
-        let area = focus?.intersection(whole) ?? whole
-        let shown = area == whole ? image : (image.cropping(to: area) ?? image)
-        offset = area == whole ? .zero : area.origin
-        screen.image = UIImage(cgImage: shown)
-        let size = CGSize(width: shown.width, height: shown.height)
-        if size != shownSize {
+        let switched = origin != offset
+        offset = origin
+        screen.image = UIImage(cgImage: image)
+        let size = CGSize(width: image.width, height: image.height)
+        if size != shownSize || switched {
+            // The frame must be set at zoom 1: setting it on a zoomed view
+            // stretches it, which is what broke zooming after a switch.
+            scroll.zoomScale = 1
             shownSize = size
             screen.frame = CGRect(origin: .zero, size: size)
             scroll.contentSize = size

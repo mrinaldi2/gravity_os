@@ -9,9 +9,17 @@ final class RFBClient: @unchecked Sendable {
     enum State: Equatable {
         case connecting
         case signingIn
-        case connected(name: String)
+        case connected(name: String, width: Int, height: Int)
         case failed(String)
         case closed
+    }
+
+    /// How the connection is doing, for the timing readout.
+    struct Stats: Equatable {
+        var signIn: TimeInterval = 0
+        var firstPicture: TimeInterval?
+        var bytes = 0
+        var encodings: Set<Int32> = []
     }
 
     struct Credentials {
@@ -22,6 +30,7 @@ final class RFBClient: @unchecked Sendable {
     var onState: (@MainActor (State) -> Void)?
     var onImage: (@MainActor (CGImage) -> Void)?
     var onClipboard: (@MainActor (String) -> Void)?
+    var onStats: (@MainActor (Stats) -> Void)?
 
     private let connection: NWConnection
     private let credentials: Credentials
@@ -31,15 +40,70 @@ final class RFBClient: @unchecked Sendable {
     private var task: Task<Void, Never>?
     private var framebuffer = Framebuffer(width: 1, height: 1)
     private var inflater: Inflater?
+    private let pixelBytes: Int
+    private var stats = Stats()
+    private var started = Date()
+
+    // Shared with the main actor: which part of the screen to keep current,
+    // and whether anyone is looking.
+    private let lock = NSLock()
+    private var _region: CGRect?
+    private var _paused = false
+    private var waitingForUpdate = false
+    /// Set once the pixel format and encodings are sent; asking for pictures
+    /// before that would get them in the Mac's own format.
+    private var ready = false
 
     // Encodings, in the order the Mac should prefer them.
     private static let encodings: [Int32] = [16, 5, 1, 0, -223]  // ZRLE, Hextile, CopyRect, Raw, DesktopSize
 
-    init(host: String, port: Int, credentials: Credentials) {
+    init(host: String, port: Int, credentials: Credentials, fastColours: Bool = false) {
+        let tcp = NWProtocolTCP.Options()
+        tcp.noDelay = true
+        tcp.enableKeepalive = true
+        tcp.keepaliveIdle = 20
         connection = NWConnection(host: NWEndpoint.Host(host), port: NWEndpoint.Port(rawValue: UInt16(port)) ?? 5900,
-                                  using: .tcp)
+                                  using: NWParameters(tls: nil, tcp: tcp))
         self.credentials = credentials
+        pixelBytes = fastColours ? 2 : 4
     }
+
+    // MARK: What to keep current (any thread)
+
+    /// Only this part of the screen is asked for and pictured; nil means all.
+    /// Changing it shows what the client already has, then refreshes it.
+    func setRegion(_ region: CGRect?) {
+        lock.lock()
+        let changed = _region != region
+        _region = region
+        let paused = _paused, ready = self.ready
+        lock.unlock()
+        guard changed, !paused, ready else { return }
+        queue.async { [weak self] in
+            guard let self else { return }
+            self.publish()
+            self.requestUpdate(incremental: false)
+        }
+    }
+
+    /// While paused nothing new is asked for, so the Mac sends nothing; the
+    /// connection stays signed in for when the screen is looked at again.
+    func setPaused(_ paused: Bool) {
+        lock.lock()
+        let wasPaused = _paused
+        _paused = paused
+        let ready = self.ready
+        lock.unlock()
+        guard wasPaused, !paused, ready else { return }
+        queue.async { [weak self] in
+            guard let self else { return }
+            self.publish()
+            self.requestUpdate(incremental: true)
+        }
+    }
+
+    private var region: CGRect? { lock.lock(); defer { lock.unlock() }; return _region }
+    private var paused: Bool { lock.lock(); defer { lock.unlock() }; return _paused }
 
     func start() {
         task = Task.detached(priority: .userInitiated) { [weak self] in
@@ -58,8 +122,11 @@ final class RFBClient: @unchecked Sendable {
         do {
             await report(.connecting)
             try await waitUntilReady()
+            started = Date()
             try await handshake()
+            stats.signIn = Date().timeIntervalSince(started)
             try await sendFormatAndEncodings()
+            lock.lock(); ready = true; lock.unlock()
             requestUpdate(incremental: false)
             try await messageLoop()
         } catch is CancellationError {
@@ -158,12 +225,11 @@ final class RFBClient: @unchecked Sendable {
         _ = try await read(16)  // the server's pixel format; ours replaces it
         let name = String(decoding: try await read(Int(try await u32())), as: UTF8.self)
         framebuffer = Framebuffer(width: width, height: height)
-        await report(.connected(name: name))
+        await report(.connected(name: name, width: width, height: height))
     }
 
     private func sendFormatAndEncodings() async throws {
-        // 32 bits per pixel, 24-bit colour, little-endian, 0x00RRGGBB.
-        send([0, 0, 0, 0, 32, 24, 0, 1, 0, 255, 0, 255, 0, 255, 16, 8, 0, 0, 0, 0])
+        send([0, 0, 0, 0] + (pixelBytes == 2 ? PixelFormat.fast : PixelFormat.full))
         var message: [UInt8] = [2, 0] + be16(Self.encodings.count)
         for encoding in Self.encodings { message += be32(UInt32(bitPattern: encoding)) }
         send(message)
@@ -174,10 +240,14 @@ final class RFBClient: @unchecked Sendable {
             switch try await u8() {
             case 0:
                 try await framebufferUpdate()
-                if let image = framebuffer.image() {
-                    await MainActor.run { [onImage] in onImage?(image) }
+                lock.lock(); waitingForUpdate = false; lock.unlock()
+                if stats.firstPicture == nil { stats.firstPicture = Date().timeIntervalSince(started) }
+                let snapshot = stats
+                await MainActor.run { [onStats] in onStats?(snapshot) }
+                if !paused {
+                    publish()
+                    requestUpdate(incremental: true)
                 }
-                requestUpdate(incremental: true)
             case 1:
                 _ = try await read(3)
                 let count = Int(try await u16())
@@ -201,13 +271,15 @@ final class RFBClient: @unchecked Sendable {
             let x = Int(try await u16()), y = Int(try await u16())
             let w = Int(try await u16()), h = Int(try await u16())
             let encoding = Int32(bitPattern: try await u32())
+            stats.encodings.insert(encoding)
             switch encoding {
             case 0:
-                let bytes = try await read(w * h * 4)
+                let bytes = try await read(w * h * pixelBytes)
+                let size = pixelBytes
                 bytes.withUnsafeBufferPointer { raw in
                     framebuffer.withRect(x: x, y: y, w: w, h: h) { out in
-                        for i in Swift.stride(from: 0, to: raw.count, by: 4) {
-                            out.put(UInt32(raw[i]) | UInt32(raw[i + 1]) << 8 | UInt32(raw[i + 2]) << 16)
+                        for i in Swift.stride(from: 0, to: raw.count, by: size) {
+                            out.put(PixelFormat.pixel(raw, at: i, size: size))
                         }
                     }
                 }
@@ -220,7 +292,8 @@ final class RFBClient: @unchecked Sendable {
                 let length = Int(try await u32())
                 let compressed = try await read(length)
                 if inflater == nil { inflater = try Inflater() }
-                try ZRLE.decode(try inflater!.inflate(compressed), x: x, y: y, w: w, h: h, into: framebuffer)
+                try ZRLE.decode(try inflater!.inflate(compressed), x: x, y: y, w: w, h: h,
+                                pixelBytes: pixelBytes == 2 ? 2 : 3, into: framebuffer)
             case -223:
                 framebuffer.resize(width: w, height: h)
             default:
@@ -237,10 +310,13 @@ final class RFBClient: @unchecked Sendable {
                 let tw = min(16, x + w - tx)
                 let flags = try await u8()
                 if flags & 1 != 0 {
-                    let bytes = try await read(tw * th * 4)
-                    framebuffer.withRect(x: tx, y: ty, w: tw, h: th) { out in
-                        for i in Swift.stride(from: 0, to: bytes.count, by: 4) {
-                            out.put(UInt32(bytes[i]) | UInt32(bytes[i + 1]) << 8 | UInt32(bytes[i + 2]) << 16)
+                    let bytes = try await read(tw * th * pixelBytes)
+                    let size = pixelBytes
+                    bytes.withUnsafeBufferPointer { raw in
+                        framebuffer.withRect(x: tx, y: ty, w: tw, h: th) { out in
+                            for i in Swift.stride(from: 0, to: raw.count, by: size) {
+                                out.put(PixelFormat.pixel(raw, at: i, size: size))
+                            }
                         }
                     }
                     continue
@@ -276,8 +352,25 @@ final class RFBClient: @unchecked Sendable {
         send([6, 0, 0, 0] + be32(UInt32(bytes.count)) + bytes)
     }
 
+    /// Asks for the region in view. Only one request is outstanding at a time,
+    /// so the phone never queues up more pictures than it can show.
     private func requestUpdate(incremental: Bool) {
-        send([3, incremental ? 1 : 0, 0, 0, 0, 0] + be16(framebuffer.width) + be16(framebuffer.height))
+        lock.lock()
+        let busy = incremental && waitingForUpdate
+        waitingForUpdate = true
+        lock.unlock()
+        if busy { return }
+        let whole = CGRect(x: 0, y: 0, width: framebuffer.width, height: framebuffer.height)
+        let area = (region ?? whole).intersection(whole).integral
+        guard area.width >= 1, area.height >= 1 else { return }
+        send([3, incremental ? 1 : 0] + be16(Int(area.minX)) + be16(Int(area.minY))
+             + be16(Int(area.width)) + be16(Int(area.height)))
+    }
+
+    /// Hands the main actor a picture of the region in view.
+    private func publish() {
+        guard let image = framebuffer.image(of: region) else { return }
+        Task { @MainActor [onImage] in onImage?(image) }
     }
 
     // MARK: Wire
@@ -295,6 +388,7 @@ final class RFBClient: @unchecked Sendable {
                 bufferOffset = 0
             }
             let chunk = try await receive(atLeast: count - buffer.count)
+            stats.bytes += chunk.count
             buffer.append(contentsOf: chunk)
         }
         let out = Array(buffer[bufferOffset..<bufferOffset + count])
@@ -332,8 +426,8 @@ final class RFBClient: @unchecked Sendable {
     }
 
     private func pixel() async throws -> UInt32 {
-        let b = try await read(4)
-        return UInt32(b[0]) | UInt32(b[1]) << 8 | UInt32(b[2]) << 16
+        let b = try await read(pixelBytes)
+        return b.withUnsafeBufferPointer { PixelFormat.pixel($0, at: 0, size: pixelBytes) }
     }
 
     private func reason() async throws -> String {
