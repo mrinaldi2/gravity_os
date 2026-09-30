@@ -1,6 +1,11 @@
 #!/bin/sh
 # Installs Gravity Lens as a launchd agent that starts at login and restarts
-# if it stops.  ./install.sh uninstall  removes it again.
+# if it stops.
+#
+#   ./install.sh                    install or update
+#   ./install.sh --with-files       also share your home folder with the phone's file browser
+#   ./install.sh --without-files    turn the file browser off again
+#   ./install.sh uninstall          remove it
 set -eu
 
 LABEL="${GRAVITY_LENS_LABEL:-gravitios.gravity-lens}"
@@ -17,7 +22,16 @@ if [ "${1:-}" = "uninstall" ]; then
 fi
 
 mkdir -p "$HOME_DIR" "$HOME/Library/LaunchAgents"
-cp "$(dirname "$0")/gravity_lens.py" "$HOME_DIR/gravity_lens.py"
+cp "$(dirname "$0")/gravity_lens.py" "$(dirname "$0")/gravity_files.py" "$HOME_DIR/"
+
+case "${1:-}" in
+    --with-files)
+        printf '{\n  "files": {"enabled": true, "roots": ["~"]}\n}\n' > "$HOME_DIR/config.json"
+        echo "File browsing: on for your home folder (edit roots in $HOME_DIR/config.json)." ;;
+    --without-files)
+        printf '{\n  "files": {"enabled": false}\n}\n' > "$HOME_DIR/config.json"
+        echo "File browsing: off." ;;
+esac
 
 cat > "$PLIST" <<EOF
 <?xml version="1.0" encoding="UTF-8"?>
@@ -41,5 +55,10 @@ cat > "$PLIST" <<EOF
 EOF
 
 launchctl bootout "$DOMAIN/$LABEL" 2>/dev/null || true
+# bootout returns before the old process is gone; bootstrap fails until it is.
+for _ in 1 2 3 4 5 6 7 8 9 10; do
+    launchctl print "$DOMAIN/$LABEL" >/dev/null 2>&1 || break
+    sleep 0.5
+done
 launchctl bootstrap "$DOMAIN" "$PLIST"
 echo "Gravity Lens installed ($LABEL). Log: $HOME_DIR/lens.log"

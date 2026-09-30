@@ -5,7 +5,7 @@
 <h1 align="center">GravitiOS</h1>
 
 <p align="center">
-  <b>Follow, steer and rule on your <a href="https://getgravity.build">Gravity</a> bot team from your iPhone.</b><br>
+  <b>Follow, steer and rule on your <a href="https://getgravity.build">Gravity</a> bot team from your iPhone, and take over the Mac when it needs you.</b><br>
   An open-source iOS client for the Gravity daemon, over your own Tailscale network.
 </p>
 
@@ -19,7 +19,7 @@
 
 ---
 
-[Gravity](https://getgravity.build) runs a team of persistent [Claude Code](https://claude.com/claude-code) bots on your Mac: they hand work to each other, run on schedules and keep going when you close the lid. It has no phone app. **GravitiOS is one**: see what every bot is doing right now, read its work as a story instead of a scrolling terminal, answer the decisions it is waiting on, and start new projects and bots, from anywhere your phone has Tailscale.
+[Gravity](https://getgravity.build) runs a team of persistent [Claude Code](https://claude.com/claude-code) bots on your Mac: they hand work to each other, run on schedules and keep going when you close the lid. It has no phone app. **GravitiOS is one**: see what every bot is doing right now, read its work as a story instead of a scrolling terminal, answer the decisions it is waiting on, start new projects and bots, and, when a bot is stuck on a permission dialog or a browser sign-in, **see and control the Mac's screen** or **browse its files** and hand a path straight to a bot. All from anywhere your phone has Tailscale.
 
 > GravitiOS is an independent project. It is not made by, affiliated with or endorsed by the Gravity authors. It speaks Gravity's documented [control-plane protocol](https://github.com/ahilles107/gravity/blob/main/docs/protocol.md).
 
@@ -31,6 +31,8 @@
 | **Activity**: every bot's latest work, with what it is doing right now | **Turns as a story**: the request, replies, messages, folded steps, screenshots | **Every step**: the command and its output, or the file diff |
 | <img src="docs/screenshots/report.png" width="240" alt="A report"> | <img src="docs/screenshots/decision.png" width="240" alt="A decision"> | <img src="docs/screenshots/new-bot.png" width="240" alt="Creating a bot"> |
 | **Reports**: the team's shared documents, with tables and images | **Decisions**: pick an option or write a ruling and publish it | **Create** projects and bots with Gravity's own avatars |
+| <img src="docs/screenshots/screen.png" width="240" alt="The Mac's screen"> | <img src="docs/screenshots/files.png" width="240" alt="The Mac's files"> | |
+| **The Mac's screen**: tap to click, pinch to zoom, type, shortcuts | **The Mac's files**: browse, preview, copy a path or send it to a bot | |
 
 - **Activity feed.** Every bot's recent turns, newest first, with "working now" at the top: who asked, the step in progress, the latest message, and a summary such as *54 commands · 2 files +510 −0 · 2 messages sent*.
 - **Readable turns.** A turn is told in order: what came in, what the bot said and sent, tasks it completed, and the mechanical steps folded into groups. Tap a step for the full command and output or a coloured diff.
@@ -40,6 +42,8 @@
 - **Live terminal.** The bot's real Claude Code terminal ([SwiftTerm](https://github.com/migueldeicaza/SwiftTerm)) with a message box and a key row (esc, return, arrows, 1/2/3, tab, ^C) for permission prompts.
 - **Messages, routines and bot details.** The bot's message thread, its routines (enable, run now) and its charter.
 - **Create projects and bots** with a name, a charter and one of Gravity's twenty avatars.
+- **Control the Mac's screen.** macOS's own Screen Sharing, built into the app: tap to click, long-press or two-finger tap to right-click, double-tap to double-click, pinch to zoom. Type with the iOS keyboard; ⌘ ⌥ ⌃ ⇧ latch for the next key; one-tap shortcuts (copy, paste, Spotlight, switch app, Finder's *Copy as pathname*). What the Mac copies pops up on the phone, ready to send to a bot.
+- **Browse the Mac's files.** Folders, image thumbnails, previews (markdown rendered, code in monospace, PDFs and images in Quick Look), share or save to the phone, and **Copy path** or **Send to a bot**, either typed into its terminal or as a message.
 - **Resilient.** Reconnects by itself and resumes the terminal from where it left off. The device token stays in the Keychain.
 
 ## How it works
@@ -57,7 +61,9 @@ flowchart LR
         R[("reports<br/>~/.gravity/projects/*/artifacts")]
     end
     A -- "WebSocket :49777<br/>bots, terminal, decisions" --> D
-    A -- "HTTP :49778<br/>activity, images, reports" --> L
+    A -- "HTTP :49778<br/>activity, images, reports, files" --> L
+    S["Screen Sharing<br/>(macOS)"]
+    A -- "VNC :5900<br/>screen, mouse, keyboard" --> S
     L -- "checks the device token" --> D
     D --- B
     B -. write .-> T
@@ -67,7 +73,8 @@ flowchart LR
 
 - **The daemon** (`gravityd`, part of Gravity) is the source of truth for projects, bots, the terminal, messages and decisions. GravitiOS talks to it with a scoped **device token** you create in Gravity.
 - **Gravity Lens** ([`companion/gravity_lens.py`](companion/gravity_lens.py)) is a small, read-only, standard-library Python service. Gravity does not serve the bots' Claude Code logs to clients, so Lens parses them into turns and serves them, along with the reports folder and the images the bots touched. It accepts only a Gravity device token with the `read` grant, verified by the daemon itself, so revoking the device in Gravity cuts off both.
-- **Tailscale** carries both over WireGuard. Nothing is exposed to the internet and nothing goes through a third-party server.
+- **Screen Sharing** is macOS's own VNC server. GravitiOS includes a small client for it (RFB 3.8, ZRLE/Hextile, Apple's Diffie-Hellman sign-in), so you sign in with your Mac user name and password and nothing extra runs on the Mac.
+- **Tailscale** carries all of it over WireGuard. Nothing is exposed to the internet and nothing goes through a third-party server.
 
 ## Requirements
 
@@ -125,6 +132,18 @@ Open `GravitiOS.xcodeproj`, choose your iPhone and press **Run**. Your team ID i
 
 Open GravitiOS and enter the Mac's Tailscale address, port `49777` and the device token.
 
+### 6. Optional: control the Mac
+
+**Screen.** On the Mac, turn on **System Settings → General → Sharing → Screen Sharing**, and under its ⓘ allow only your user. On the phone, open **Settings → Mac screen** and enter your Mac user name and password (kept in the iPhone Keychain). Then use the **Mac** tab.
+
+**Files.** Share your home folder with the file browser:
+
+```bash
+./companion/install.sh --with-files
+```
+
+Secret places are never served, even inside the shared folder: `.ssh`, `.gnupg`, `.aws`, `.kube`, `.docker`, Keychains, cookies, `*.token`, `*.pem`, `*.key` and similar. Browsing needs a device with the `control` grant. To share other folders, edit `roots` in `~/.gravity-lens/config.json`; `--without-files` turns it off. macOS may ask you to allow `python3` into Desktop, Documents and Downloads the first time; for everything, give `python3` Full Disk Access.
+
 ## Try it without your own bots
 
 The screenshots above come from a demo world: a fictional team building a notes app, with projects, bots, decisions, activity, reports and images. You can run it too. It starts a throwaway daemon with Gravity's test runtime, so no Claude sessions run and no tokens are spent:
@@ -133,7 +152,15 @@ The screenshots above come from a demo world: a fictional team building a notes 
 python3 demo/make_demo.py --serve
 ```
 
-Then run the Debug build in the simulator with the launch arguments it prints (`-gravHost`, `-gravPort`, `-lensPort`, `-gravToken`). Everything lives in `/tmp/gravitios-demo`.
+Then run the Debug build in the simulator with the launch arguments it prints (`-gravHost`, `-gravPort`, `-lensPort`, `-gravToken`). Everything lives in `/tmp/gravitios-demo`, including a small fictional home folder for the file browser.
+
+For the screen, `demo/fake_screen.py` is a stand-in Screen Sharing server that serves a fictional desktop and signs in the way a Mac does (`demo` / `demo`):
+
+```bash
+uv run --with cryptography --with pillow demo/fake_screen.py
+```
+
+Add `-screenHost 127.0.0.1 -screenPort 5901 -screenUser demo -screenPassword demo` to the launch arguments.
 
 ## Security and privacy
 
@@ -141,7 +168,9 @@ Then run the Debug build in the simulator with the launch arguments it prints (`
 - The device token is stored in the iPhone Keychain (this device only, after first unlock).
 - Traffic is plain HTTP and WebSocket inside your tailnet; Tailscale encrypts it end to end. Bind the daemon and Lens only to loopback and your Tailscale address.
 - Lens is read-only. It serves only bot logs, the artifacts folder and images that a bot's log or a report refers to, and writes nothing but a thumbnail cache in `~/Library/Caches/GravityLens`.
-- A lost phone: revoke its device in Gravity. The daemon and Lens both refuse it immediately.
+- A lost phone: revoke its device in Gravity. The daemon and Lens both refuse it immediately. Screen Sharing uses your Mac password instead, so change that too.
+- Screen Sharing listens on every network the Mac is on, not only Tailscale. The Mac's user password protects it; on untrusted Wi-Fi, consider turning it off or enabling the macOS firewall.
+- The file browser is off unless you turn it on. When on, it serves the folders you chose, never secret locations, and resolves symlinks so nothing leads outside them.
 
 See [SECURITY.md](SECURITY.md) to report a vulnerability.
 
@@ -154,6 +183,9 @@ See [SECURITY.md](SECURITY.md) to report a vulnerability.
 | Activity says "Gravity Lens not reachable" | Run `./companion/install.sh`, then `curl http://100.x.y.z:49778/health`. Its log is `~/.gravity-lens/lens.log`. |
 | Lens stops after a reboot | It needs the Tailscale address to exist; launchd restarts it every 15 s until Tailscale is up. |
 | The terminal looks narrow on the Mac | The terminal is shared: opening it on the phone resizes it for every client until the Mac resizes it again. |
+| The Mac tab says it can't reach Screen Sharing | Turn it on in System Settings → General → Sharing, and check the address in Settings → Mac screen (empty means the daemon's address). |
+| "The Mac refused the user name or password" | Use the Mac account's short name and its login password, and allow that user under Screen Sharing's ⓘ. |
+| Files: "macOS blocked Gravity Lens from this folder" | Allow `python3` in System Settings → Privacy & Security → Files and Folders, or give it Full Disk Access. |
 | No notifications in the background | iOS suspends the app; alerts fire only while it is open or just backgrounded. There is no push server. |
 
 ## Project layout
@@ -162,8 +194,9 @@ See [SECURITY.md](SECURITY.md) to report a vulnerability.
 GravitiOS/            the SwiftUI app
   Core/               daemon client (WebSocket), Lens client, state, Keychain
   UI/                 screens
-companion/            Gravity Lens (gravity_lens.py) and its installer
-demo/                 the demo world generator and its images
+  Core/RFB/            the Screen Sharing (VNC) client
+companion/            Gravity Lens (gravity_lens.py, gravity_files.py) and its installer
+demo/                 the demo world, a fake Screen Sharing server, and their images
 tests/                Lens tests (python3 -m unittest discover tests)
 Config/               Info.plist, Signing.xcconfig (+ your git-ignored Local.xcconfig)
 ```

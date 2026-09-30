@@ -129,7 +129,37 @@ private struct TurnReply: Decodable {
     let events: [LensEvent]
 }
 
+/// A file or folder on the Mac, from the file browser.
+struct MacFile: Decodable, Identifiable, Hashable {
+    let name: String
+    /// `~/…` for display.
+    let path: String
+    let kind: String
+    let link: Bool
+    let size: Int
+    let modifiedAt: String
+    let type: String
+
+    var id: String { path }
+    var isFolder: Bool { kind == "folder" }
+    var modified: Date? { WireDate.parse(modifiedAt) }
+    var isImage: Bool { type.hasPrefix("image/") }
+}
+
+struct MacFolder: Decodable {
+    let path: String
+    let absolute: String
+    let name: String
+    let parent: String?
+    let roots: [String]
+    let entries: [MacFile]
+
+    /// The absolute path of an entry, for copying and sending to bots.
+    func absolute(_ file: MacFile) -> String { (absolute as NSString).appendingPathComponent(file.name) }
+}
+
 private struct ArtifactsReply: Decodable { let artifacts: [LensArtifact] }
+private struct ServerMessage: Decodable { let message: String? }
 private struct ArtifactReply: Decodable { let text: String }
 
 enum LensStatus: Equatable {
@@ -215,7 +245,10 @@ final class LensStore {
                 status = .unauthorized
                 throw DaemonError(code: "unauthorized", message: "Gravity Lens rejected the device token.")
             }
-            guard code == 200 else { throw DaemonError(code: "http_\(code)", message: "Gravity Lens answered \(code).") }
+            guard code == 200 else {
+                let message = (try? decoder.decode(ServerMessage.self, from: data))?.message
+                throw DaemonError(code: "http_\(code)", message: message ?? "Gravity Lens answered \(code).")
+            }
             status = .ok
             return data
         } catch let error as DaemonError {
@@ -290,6 +323,31 @@ final class LensStore {
             throw DaemonError(code: "image", message: "Not an image the phone can show.")
         }
         imageCache.setObject(image, forKey: cacheKey)
+        return image
+    }
+
+    // MARK: Files
+
+    func folder(_ path: String, hidden: Bool) async throws -> MacFolder {
+        try await get("/v1/files", ["path": path, "hidden": hidden ? "1" : "0"])
+    }
+
+    /// Downloads a file into the app's cache under its own name, for preview and sharing.
+    func download(_ path: String) async throws -> URL {
+        let data = try await fetch("/v1/files/raw", ["path": path])
+        let folder = FileManager.default.temporaryDirectory.appendingPathComponent("mac-files/\(UUID().uuidString)")
+        try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+        let url = folder.appendingPathComponent((path as NSString).lastPathComponent)
+        try data.write(to: url)
+        return url
+    }
+
+    func fileThumbnail(_ path: String) async throws -> UIImage {
+        let key = "file:\(path)" as NSString
+        if let cached = imageCache.object(forKey: key) { return cached }
+        let data = try await fetch("/v1/files/raw", ["path": path, "size": "thumb"])
+        guard let image = UIImage(data: data) else { throw DaemonError(code: "image", message: "Not an image.") }
+        imageCache.setObject(image, forKey: key)
         return image
     }
 

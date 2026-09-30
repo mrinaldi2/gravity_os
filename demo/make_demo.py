@@ -447,6 +447,33 @@ The conflict banner uses **amber/500** on paper in light mode and amber/500 at 2
             handle.write(text)
 
 
+def write_home(home: str) -> None:
+    """A small made-up home folder for the file browser."""
+    files = {
+        "Code/aurora-notes/README.md": "# Aurora Notes\n\nNotes that sync, even offline.\n\n```bash\nswift build\n```\n",
+        "Code/aurora-notes/CHANGELOG.md": "## 1.8 (build 142)\n\n- Conflicting edits are kept side by side.\n- Up to 30% faster launch.\n",
+        "Code/aurora-notes/Package.swift": "// swift-tools-version: 5.9\nimport PackageDescription\n",
+        "Code/aurora-notes/Sources/Sync/NoteStore.swift": "final class NoteStore {\n    var notes: [UUID: Note] = [:]\n}\n",
+        "Code/aurora-notes/Sources/Sync/SyncClient.swift": "struct SyncClient {}\n",
+        "Code/aurora-notes/Sources/Views/NotesList.swift": "import SwiftUI\n",
+        "Code/aurora-notes/server/sync/changes.go": "package sync\n",
+        "Code/aurora-site/src/pages/index.astro": "<h1>Your notes, everywhere, even offline.</h1>\n",
+        "Documents/Offsite agenda.md": "# Offsite\n\n1. Roadmap\n2. Hiring\n",
+        "Downloads/aurora-1.8.zip": "not really a zip",
+    }
+    for relative, text in files.items():
+        path = os.path.join(home, relative)
+        os.makedirs(os.path.dirname(path), exist_ok=True)
+        with open(path, "w") as handle:
+            handle.write(text)
+    shots = os.path.join(home, "Code", "aurora-notes", "docs", "screenshots")
+    os.makedirs(shots, exist_ok=True)
+    for image in ("notes_list_light.png", "notes_list_dark.png", "launch_time.png"):
+        shutil.copy(os.path.join(ASSETS, image), os.path.join(shots, image))
+    os.makedirs(os.path.join(home, "Desktop"), exist_ok=True)
+    shutil.copy(os.path.join(ASSETS, "palette.png"), os.path.join(home, "Desktop", "palette.png"))
+
+
 # ---------------------------------------------------------------- main
 
 def main() -> None:
@@ -516,8 +543,11 @@ def main() -> None:
     if not args.serve:
         print("Stop the demo daemon with: kill", daemon.pid)
         return
+    mac_home = os.path.join(out, "mac-home")
+    write_home(mac_home)
     lens = subprocess.Popen([sys.executable, LENS, "--port", str(args.lens_port), "--bind", "127.0.0.1",
-                             "--gravity-home", home, "--claude-projects", claude, "--daemon-port", str(args.port)])
+                             "--gravity-home", home, "--claude-projects", claude, "--daemon-port", str(args.port),
+                             "--files-root", mac_home])
     print(f"  Gravity Lens: 127.0.0.1:{args.lens_port}\nServing. Ctrl-C stops both.")
     try:
         daemon.wait()

@@ -7,10 +7,12 @@ struct SettingsView: View {
     @AppStorage("lensPort") private var lensPort = LensStore.defaultPort
     @State private var confirmForget = false
     @AppStorage("terminalFontSize") private var fontSize = 11.0
+    @Environment(\.dismiss) private var dismiss
 
     var body: some View {
         NavigationStack {
             Form {
+                MacSettingsSection()
                 Section("Connection") {
                     LabeledContent("Status", value: store.status.label)
                     if let endpoint = store.endpoint {
@@ -80,6 +82,9 @@ struct SettingsView: View {
                 }
             }
             .navigationTitle("Settings")
+            .toolbar {
+                ToolbarItem(placement: .confirmationAction) { Button("Done") { dismiss() } }
+            }
             .task(id: store.status) { await loadDiagnostics() }
             .refreshable { await loadDiagnostics() }
             .confirmationDialog("Forget this daemon?", isPresented: $confirmForget, titleVisibility: .visible) {

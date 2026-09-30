@@ -172,6 +172,7 @@ struct FeedView: View {
             .safeAreaInset(edge: .top, spacing: 0) { ConnectionBanner() }
             .refreshable { await lens.refresh() }
             .navigationTitle("Activity")
+            .toolbar { ToolbarItem(placement: .topBarLeading) { SettingsButton() } }
             .navigationDestination(for: TurnLink.self) { TurnDetailView(botId: $0.botId, turnId: $0.turnId) }
         }
     }

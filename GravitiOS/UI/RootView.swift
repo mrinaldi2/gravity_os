@@ -6,7 +6,7 @@ struct RootView: View {
     @State private var tab = Tab.activity
     @State private var openDecision: String?
 
-    enum Tab { case activity, bots, decisions, reports, settings }
+    enum Tab { case activity, bots, decisions, reports, mac }
 
     var body: some View {
         TabView(selection: $tab) {
@@ -23,9 +23,9 @@ struct RootView: View {
             ReportsView()
                 .tabItem { Label("Reports", systemImage: "doc.richtext") }
                 .tag(Tab.reports)
-            SettingsView()
-                .tabItem { Label("Settings", systemImage: "gearshape") }
-                .tag(Tab.settings)
+            MacView()
+                .tabItem { Label("Mac", systemImage: "laptopcomputer") }
+                .tag(Tab.mac)
         }
         .overlay(alignment: .top) { noticeBanner }
         .animation(.snappy, value: store.notice)

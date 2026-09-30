@@ -57,6 +57,7 @@ struct BotsView: View {
             .refreshable { await store.refresh() }
             .navigationTitle("Bots")
             .toolbar {
+                ToolbarItem(placement: .topBarLeading) { SettingsButton() }
                 if store.canControl, store.status == .connected {
                     ToolbarItem(placement: .topBarTrailing) {
                         Menu {

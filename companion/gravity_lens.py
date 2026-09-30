@@ -20,6 +20,7 @@ import hashlib
 import json
 import os
 import re
+import shutil
 import socket
 import subprocess
 import sys
@@ -28,6 +29,9 @@ import time
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from typing import Any, Dict, List, Optional
 from urllib.parse import parse_qs, unquote, urlparse
+
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from gravity_files import FileBrowser, FileError  # noqa: E402
 
 VERSION = "0.1.0"
 OUTPUT_LIMIT = 12_000
@@ -740,7 +744,8 @@ class DaemonAuth:
     def __init__(self, gravity_home: str, port: Optional[int]):
         self.gravity_home = gravity_home
         self.port = port
-        self.cache: Dict[str, float] = {}
+        # token hash -> (grants, expiry)
+        self.cache: Dict[str, Any] = {}
         self.lock = threading.Lock()
 
     def daemon_port(self) -> int:
@@ -752,21 +757,26 @@ class DaemonAuth:
         except (OSError, ValueError):
             return 49777
 
-    def allowed(self, token: str) -> bool:
+    def grants(self, token: str) -> Optional[List[str]]:
+        """The token's grants when the daemon accepts it with `read`, else None."""
         if not token or len(token) > 512:
-            return False
+            return None
         key = hashlib.sha256(token.encode()).hexdigest()
         now = time.time()
         with self.lock:
-            if self.cache.get(key, 0) > now:
-                return True
-        ok = self.handshake(token)
-        if ok:
+            cached = self.cache.get(key)
+            if cached and cached[1] > now:
+                return cached[0]
+        grants = self.handshake(token)
+        if grants is not None:
             with self.lock:
-                self.cache[key] = now + 60
-        return ok
+                self.cache[key] = (grants, now + 60)
+        return grants
 
-    def handshake(self, token: str) -> bool:
+    def allowed(self, token: str) -> bool:
+        return self.grants(token) is not None
+
+    def handshake(self, token: str) -> Optional[List[str]]:
         try:
             with socket.create_connection(("127.0.0.1", self.daemon_port()), timeout=5) as sock:
                 key = base64.b64encode(os.urandom(16)).decode()
@@ -775,7 +785,7 @@ class DaemonAuth:
                               f"Sec-WebSocket-Version: 13\r\n\r\n").encode())
                 reader = sock.makefile("rb")
                 if b" 101 " not in reader.readline():
-                    return False
+                    return None
                 while reader.readline() not in (b"\r\n", b""):
                     pass
                 hello = json.dumps({"type": "hello", "req_id": "1", "protocol_version": 2,
@@ -783,9 +793,10 @@ class DaemonAuth:
                 sock.sendall(self.frame(hello))
                 reply = json.loads(self.read_frame(reader))
                 sock.sendall(b"\x88\x80" + os.urandom(4))  # close
-                return reply.get("type") == "hello_ok" and "read" in (reply.get("grants") or [])
+                grants = list(reply.get("grants") or [])
+                return grants if reply.get("type") == "hello_ok" and "read" in grants else None
         except (OSError, ValueError):
-            return False
+            return None
 
     @staticmethod
     def frame(payload: bytes) -> bytes:
@@ -821,6 +832,7 @@ class DaemonAuth:
 class Handler(BaseHTTPRequestHandler):
     lens: Lens
     auth: DaemonAuth
+    files: Optional[FileBrowser] = None
     server_version = f"GravityLens/{VERSION}"
 
     def log_message(self, fmt: str, *args: Any) -> None:  # quiet: paths carry no secrets, but keep logs small
@@ -853,13 +865,47 @@ class Handler(BaseHTTPRequestHandler):
             return
         header = self.headers.get("Authorization", "")
         token = header[7:].strip() if header.lower().startswith("bearer ") else ""
-        if not self.auth.allowed(token):
+        grants = self.auth.grants(token)
+        if grants is None:
             self.send_json(401, {"error": "unauthorized"})
             return
         try:
+            if parts[:2] == ["v1", "files"]:
+                self.route_files(parts, query, grants)
+                return
             self.route(parts, query)
         except Exception as error:  # a bad transcript line must not take the service down
             self.send_json(500, {"error": type(error).__name__})
+
+    def route_files(self, parts: List[str], query: Dict[str, str], grants: List[str]) -> None:
+        if self.files is None:
+            self.send_json(404, {"error": "files_disabled", "message":
+                                 "File browsing is off. Enable it on the Mac: companion/install.sh --with-files"})
+            return
+        if "control" not in grants:
+            self.send_json(403, {"error": "forbidden", "message": "Browsing files needs a device with the control grant."})
+            return
+        try:
+            if parts == ["v1", "files"]:
+                self.send_json(200, self.files.listing(query.get("path", ""), query.get("hidden") == "1"))
+            elif parts == ["v1", "files", "raw"]:
+                path, kind, size = self.files.open(query.get("path", ""))
+                image = serve_file_image(path, True) if query.get("size") == "thumb" else None
+                if image is not None:
+                    self.send_bytes(*image)
+                    return
+                self.send_response(200)
+                self.send_header("Content-Type", kind)
+                self.send_header("Content-Length", str(size))
+                self.send_header("Content-Disposition", 'inline; filename="%s"' % os.path.basename(path).replace('"', ""))
+                self.send_header("Cache-Control", "no-store")
+                self.end_headers()
+                with open(path, "rb") as handle:
+                    shutil.copyfileobj(handle, self.wfile, 256 * 1024)
+            else:
+                self.send_json(404, {"error": "not_found"})
+        except FileError as error:
+            self.send_json(error.status, {"error": error.code, "message": error.message})
 
     def route(self, parts: List[str], query: Dict[str, str]) -> None:
         limit = max(1, min(int(query.get("limit", "30") or 30), 200))
@@ -919,7 +965,23 @@ def main() -> None:
     parser.add_argument("--workspace-home", help="gravity home the bot workspaces and artifacts are under (default: --gravity-home)")
     parser.add_argument("--claude-projects", default=os.path.join(home, ".claude", "projects"))
     parser.add_argument("--daemon-port", type=int, help="gravityd port used to check tokens (default: gravityd.port)")
+    parser.add_argument("--files-root", action="append",
+                        help="share this folder for file browsing (repeatable; default: config file)")
+    parser.add_argument("--config", default=os.path.join(home, ".gravity-lens", "config.json"))
     args = parser.parse_args()
+
+    roots = args.files_root
+    if roots is None:
+        try:
+            with open(args.config) as handle:
+                files = json.load(handle).get("files") or {}
+            if files.get("enabled"):
+                roots = files.get("roots") or ["~"]
+        except (OSError, ValueError):
+            roots = None
+    if roots:
+        Handler.files = FileBrowser(roots)
+        sys.stderr.write("file browsing on for: %s\n" % ", ".join(Handler.files.roots))
 
     Handler.lens = Lens(args.gravity_home, args.workspace_home or args.gravity_home, args.claude_projects)
     Handler.auth = DaemonAuth(args.gravity_home, args.daemon_port)

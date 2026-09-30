@@ -35,4 +35,33 @@ enum Keychain {
     static func deleteToken() {
         SecItemDelete(query as CFDictionary)
     }
+
+    // MARK: Other secrets (the Mac's screen-sharing password)
+
+    private static func query(_ account: String) -> [String: Any] {
+        [kSecClass as String: kSecClassGenericPassword, kSecAttrService as String: service,
+         kSecAttrAccount as String: account]
+    }
+
+    static func save(_ value: String, account: String) {
+        SecItemDelete(query(account) as CFDictionary)
+        var item = query(account)
+        item[kSecValueData as String] = Data(value.utf8)
+        item[kSecAttrAccessible as String] = kSecAttrAccessibleWhenUnlockedThisDeviceOnly
+        SecItemAdd(item as CFDictionary, nil)
+    }
+
+    static func load(account: String) -> String? {
+        var lookup = query(account)
+        lookup[kSecReturnData as String] = true
+        lookup[kSecMatchLimit as String] = kSecMatchLimitOne
+        var result: AnyObject?
+        guard SecItemCopyMatching(lookup as CFDictionary, &result) == errSecSuccess,
+              let data = result as? Data else { return nil }
+        return String(data: data, encoding: .utf8)
+    }
+
+    static func delete(account: String) {
+        SecItemDelete(query(account) as CFDictionary)
+    }
 }

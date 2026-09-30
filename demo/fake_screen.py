@@ -1,0 +1,206 @@
+#!/usr/bin/env python3
+"""A stand-in for macOS Screen Sharing, for developing GravitiOS's screen view.
+
+Serves demo/assets/desktop.png over RFB 3.8 with ZRLE, and signs in the way a
+Mac does (security type 30: Diffie-Hellman, then the user name and password
+under AES-128). Clicking "Allow" on the fake permission prompt dismisses it,
+so taps can be checked end to end. Keys, clicks and clipboard text are logged.
+
+    uv run --with cryptography --with pillow demo/fake_screen.py
+    # sign in as demo / demo on 127.0.0.1:5901
+
+Not a real VNC server. Development only.
+"""
+from __future__ import annotations
+
+import argparse
+import hashlib
+import os
+import secrets
+import socket
+import struct
+import threading
+import zlib
+
+from cryptography.hazmat.primitives.ciphers import Cipher, algorithms, modes
+from PIL import Image
+
+HERE = os.path.dirname(os.path.abspath(__file__))
+# RFC 2409 group 2, as a Mac uses for this sign-in.
+PRIME = int(
+    "FFFFFFFFFFFFFFFFC90FDAA22168C234C4C6628B80DC1CD129024E088A67CC74020BBEA63B139B22514A08798E3404DD"
+    "EF9519B3CD3A431B302B0A6DF25F14374FE1356D6D51C245E485B576625E7EC6F44C42E9A637ED6B0BFF5CB6F406B7ED"
+    "EE386BFB5A899FA5AE9F24117C4B1FE649286651ECE65381FFFFFFFFFFFFFFFF", 16)
+ALLOW_BUTTON = (970, 1000, 1190, 1048)  # in desktop.png pixels
+ALERT_BOX = (650, 760, 1270, 1130)
+
+
+def recv_exact(sock: socket.socket, count: int) -> bytes:
+    data = b""
+    while len(data) < count:
+        chunk = sock.recv(count - len(data))
+        if not chunk:
+            raise ConnectionError("client closed")
+        data += chunk
+    return data
+
+
+class Session:
+    def __init__(self, sock: socket.socket, desktop: Image.Image, user: str, password: str, scale: float):
+        self.sock = sock
+        self.user = user
+        self.password = password
+        size = (int(desktop.width * scale), int(desktop.height * scale))
+        self.scale = scale
+        self.frame = desktop.resize(size, Image.LANCZOS).convert("RGB")
+        self.clean = self.without_alert(desktop).resize(size, Image.LANCZOS).convert("RGB")
+        self.zlib = zlib.compressobj(6)
+        self.dirty = [(0, 0, size[0], size[1])]
+        self.pending_request = False
+        self.buttons = 0
+
+    @staticmethod
+    def without_alert(desktop: Image.Image) -> Image.Image:
+        clean = desktop.copy().convert("RGB")
+        # Paint the alert away with the wallpaper's own gradient.
+        pixels = clean.load()
+        x0, y0, x1, y1 = ALERT_BOX
+        for y in range(y0, y1):
+            for x in range(x0, x1):
+                t = x / desktop.width * 0.5 + y / desktop.height * 0.5
+                pixels[x, y] = (int(40 + 60 * t), int(30 + 40 * (1 - t)), int(90 + 80 * t))
+        return clean
+
+    # Handshake ----------------------------------------------------------------
+
+    def handshake(self) -> None:
+        self.sock.sendall(b"RFB 003.008\n")
+        recv_exact(self.sock, 12)
+        self.sock.sendall(bytes([1, 30]))
+        if recv_exact(self.sock, 1)[0] != 30:
+            raise ConnectionError("client chose another security type")
+        secret = secrets.randbits(1024)
+        public = pow(2, secret, PRIME).to_bytes(128, "big")
+        self.sock.sendall(struct.pack(">HH", 2, 128) + PRIME.to_bytes(128, "big") + public)
+        sealed = recv_exact(self.sock, 128)
+        client_public = int.from_bytes(recv_exact(self.sock, 128), "big")
+        shared = pow(client_public, secret, PRIME).to_bytes(128, "big")
+        key = hashlib.md5(shared).digest()
+        decryptor = Cipher(algorithms.AES(key), modes.ECB()).decryptor()
+        plain = decryptor.update(sealed) + decryptor.finalize()
+        user = plain[:64].split(b"\0")[0].decode("utf-8", "replace")
+        password = plain[64:].split(b"\0")[0].decode("utf-8", "replace")
+        if (user, password) != (self.user, self.password):
+            reason = b"Authentication failed"
+            self.sock.sendall(struct.pack(">II", 1, len(reason)) + reason)
+            raise ConnectionError(f"bad credentials for {user!r}")
+        print(f"signed in as {user}")
+        self.sock.sendall(struct.pack(">I", 0))
+        recv_exact(self.sock, 1)
+        name = b"Demo Mac"
+        pixel_format = struct.pack(">BBBBHHHBBBxxx", 32, 24, 0, 1, 255, 255, 255, 16, 8, 0)
+        self.sock.sendall(struct.pack(">HH", *self.frame.size) + pixel_format + struct.pack(">I", len(name)) + name)
+
+    # Updates ------------------------------------------------------------------
+
+    def zrle(self, x: int, y: int, w: int, h: int) -> bytes:
+        region = self.frame.crop((x, y, x + w, y + h)).tobytes()
+        tiles = bytearray()
+        for ty in range(0, h, 64):
+            th = min(64, h - ty)
+            for tx in range(0, w, 64):
+                tw = min(64, w - tx)
+                pixels = []
+                for row in range(ty, ty + th):
+                    start = (row * w + tx) * 3
+                    line = region[start:start + tw * 3]
+                    pixels.extend(bytes((line[i + 2], line[i + 1], line[i])) for i in range(0, len(line), 3))
+                if len(set(pixels)) == 1:
+                    tiles += b"\x01" + pixels[0]
+                else:
+                    tiles += b"\x00" + b"".join(pixels)
+        data = self.zlib.compress(bytes(tiles)) + self.zlib.flush(zlib.Z_SYNC_FLUSH)
+        return struct.pack(">HHHHiI", x, y, w, h, 16, len(data)) + data
+
+    def send_update(self) -> None:
+        if not self.dirty or not self.pending_request:
+            return
+        rects, self.dirty, self.pending_request = self.dirty, [], False
+        body = b"".join(self.zrle(*rect) for rect in rects)
+        self.sock.sendall(struct.pack(">BxH", 0, len(rects)) + body)
+
+    def click(self, x: int, y: int) -> None:
+        dx, dy = x / self.scale, y / self.scale
+        bx0, by0, bx1, by1 = ALLOW_BUTTON
+        print(f"click at {x},{y} (desktop {dx:.0f},{dy:.0f})")
+        if bx0 <= dx <= bx1 and by0 <= dy <= by1 and self.frame is not self.clean:
+            print("  -> Allow pressed: dismissing the prompt")
+            self.frame = self.clean
+            s = self.scale
+            ax0, ay0, ax1, ay1 = ALERT_BOX
+            self.dirty.append((int(ax0 * s), int(ay0 * s), int((ax1 - ax0) * s), int((ay1 - ay0) * s)))
+
+    # Loop -----------------------------------------------------------------------
+
+    def run(self) -> None:
+        self.handshake()
+        while True:
+            kind = recv_exact(self.sock, 1)[0]
+            if kind == 0:
+                recv_exact(self.sock, 19)
+            elif kind == 2:
+                count = struct.unpack(">xH", recv_exact(self.sock, 3))[0]
+                encodings = struct.unpack(f">{count}i", recv_exact(self.sock, count * 4))
+                print("encodings", encodings)
+            elif kind == 3:
+                incremental, *_ = struct.unpack(">BHHHH", recv_exact(self.sock, 9))
+                if not incremental:
+                    self.dirty = [(0, 0, *self.frame.size)]
+                self.pending_request = True
+            elif kind == 4:
+                down, keysym = struct.unpack(">BxxI", recv_exact(self.sock, 7))
+                print(f"key {'down' if down else 'up  '} {keysym:#06x}", repr(chr(keysym)) if keysym < 0x100 else "")
+            elif kind == 5:
+                buttons, x, y = struct.unpack(">BHH", recv_exact(self.sock, 5))
+                if buttons & 1 and not self.buttons & 1:
+                    self.click(x, y)
+                if buttons & 24:
+                    print("scroll", "up" if buttons & 8 else "down")
+                if buttons & 4 and not self.buttons & 4:
+                    print(f"right click at {x},{y}")
+                self.buttons = buttons
+            elif kind == 6:
+                length = struct.unpack(">xxxI", recv_exact(self.sock, 7))[0]
+                print("clipboard from phone:", recv_exact(self.sock, length).decode("latin-1"))
+            else:
+                raise ConnectionError(f"unknown message {kind}")
+            self.send_update()
+
+
+def main() -> None:
+    parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
+    parser.add_argument("--port", type=int, default=5901)
+    parser.add_argument("--user", default="demo")
+    parser.add_argument("--password", default="demo")
+    parser.add_argument("--scale", type=float, default=0.75, help="served size relative to desktop.png")
+    args = parser.parse_args()
+    desktop = Image.open(os.path.join(HERE, "assets", "desktop.png"))
+    server = socket.create_server(("127.0.0.1", args.port))
+    print(f"fake Screen Sharing on 127.0.0.1:{args.port} (user {args.user!r})", flush=True)
+    while True:
+        sock, _ = server.accept()
+        session = Session(sock, desktop, args.user, args.password, args.scale)
+
+        def serve(session: Session = session) -> None:
+            try:
+                session.run()
+            except (ConnectionError, OSError) as error:
+                print("session ended:", error, flush=True)
+            finally:
+                session.sock.close()
+
+        threading.Thread(target=serve, daemon=True).start()
+
+
+if __name__ == "__main__":
+    main()
