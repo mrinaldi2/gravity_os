@@ -19,10 +19,12 @@ struct Notice: Identifiable, Equatable {
     let decisionId: String?
 }
 
-/// Everything the UI shows, kept current from replies and pushes.
+/// Everything the UI shows about one computer, kept current from replies and pushes.
 @MainActor
 @Observable
 final class AppStore {
+    var computerName = ""
+    var kind = ComputerKind.mac
     var status: ConnectionStatus = .idle
     var endpoint: Endpoint?
     var grants: Set<String> = []
@@ -44,57 +46,37 @@ final class AppStore {
     var lastSeen: [String: Date] = [:]
     var notice: Notice?
     var inBackground = false
+    /// Set when the phone knows several computers: notifications name this one.
+    @ObservationIgnored var notificationTag: String?
+    /// The pending-decision counts changed (for the app icon's badge).
+    @ObservationIgnored var onCountsChanged: (() -> Void)?
 
     @ObservationIgnored let client = DaemonClient()
+    @ObservationIgnored private let defaults: ComputerDefaults
     @ObservationIgnored private var sinks: [String: TerminalSink] = [:]
 
     var canControl: Bool { grants.contains("control") }
     var canApprove: Bool { grants.contains("approve") }
-    var hasEndpoint: Bool { endpoint != nil }
 
-    init() {
+    init(defaults: ComputerDefaults) {
+        self.defaults = defaults
         client.onStatus = { [weak self] status in self?.statusChanged(status) }
         client.onHello = { [weak self] hello in self?.helloReceived(hello) }
         client.onPush = { [weak self] type, frame in self?.pushReceived(type, frame) }
-        if let seen = UserDefaults.standard.dictionary(forKey: "lastSeen") as? [String: Double] {
+        if let seen = UserDefaults.standard.dictionary(forKey: defaults.key("lastSeen")) as? [String: Double] {
             lastSeen = seen.mapValues(Date.init(timeIntervalSince1970:))
         }
-        restoreEndpoint()
     }
 
     // MARK: Endpoint
 
-    private func restoreEndpoint() {
-        let defaults = UserDefaults.standard
-        #if DEBUG
-        // Simulator runs against a test daemon: -gravHost … -gravPort … -gravToken …
-        if let host = defaults.string(forKey: "gravHost"), let token = defaults.string(forKey: "gravToken") {
-            let port = defaults.integer(forKey: "gravPort")
-            connect(Endpoint(host: host, port: port == 0 ? 49777 : port, token: token), remember: false)
-            return
-        }
-        #endif
-        guard let host = defaults.string(forKey: "host"), let token = Keychain.loadToken() else { return }
-        let port = defaults.integer(forKey: "port")
-        connect(Endpoint(host: host, port: port == 0 ? 49777 : port, token: token), remember: false)
-    }
-
-    func connect(_ endpoint: Endpoint, remember: Bool = true) {
-        if remember {
-            UserDefaults.standard.set(endpoint.host, forKey: "host")
-            UserDefaults.standard.set(endpoint.port, forKey: "port")
-            Keychain.saveToken(endpoint.token)
-        }
+    func connect(_ endpoint: Endpoint) {
         self.endpoint = endpoint
         client.start(endpoint)
     }
 
-    /// Drop the saved connection and its token.
-    func forget() {
+    func disconnect() {
         client.stop()
-        Keychain.deleteToken()
-        UserDefaults.standard.removeObject(forKey: "host")
-        UserDefaults.standard.removeObject(forKey: "port")
         endpoint = nil
         clear()
     }
@@ -172,7 +154,7 @@ final class AppStore {
         guard let reply = try? await client.request("count_pending_decisions"),
               let counts = reply.dict("counts") else { return }
         pendingCounts = PendingCounts(counts)
-        Notifier.setBadge(pendingCounts.total)
+        onCountsChanged?()
     }
 
     // MARK: Pushes
@@ -218,7 +200,7 @@ final class AppStore {
         bots[index].stateReason = frame.str("reason")
         if state != .waitingForApproval { approvals[id] = nil }
         if inBackground, state == .waitingForUser, previous != state {
-            Notifier.post(title: "\(bots[index].name) is waiting for you", body: activity[id]?.text ?? "", id: "wait-\(id)")
+            notify("\(bots[index].name) is waiting for you", activity[id]?.text ?? "", id: "wait-\(id)")
         }
     }
 
@@ -227,7 +209,7 @@ final class AppStore {
         let detail = frame.str("detail")
         approvals[id] = detail
         if inBackground {
-            Notifier.post(title: "\(bot(id)?.name ?? "A bot") needs approval", body: detail, id: "approval-\(id)")
+            notify("\(bot(id)?.name ?? "A bot") needs approval", detail, id: "approval-\(id)")
         }
     }
 
@@ -235,10 +217,15 @@ final class AppStore {
         let entry = Notice(level: frame.str("level"), title: frame.str("title"),
                            body: frame.str("body"), decisionId: frame.optStr("decision_id"))
         if inBackground {
-            Notifier.post(title: entry.title, body: entry.body)
+            notify(entry.title, entry.body)
         } else {
             notice = entry
         }
+    }
+
+    private func notify(_ title: String, _ body: String, id: String = UUID().uuidString) {
+        let tagged = notificationTag.map { "\($0): \(title)" } ?? title
+        Notifier.post(title: tagged, body: body, id: defaults.key(id))
     }
 
     private func upsert(_ bot: Bot) {
@@ -271,7 +258,7 @@ final class AppStore {
         } else {
             decisions.insert(updated, at: 0)
             if inBackground, decision.state == "open" {
-                Notifier.post(title: "\(decision.raisedByName) needs a decision", body: decision.title, id: "decision-\(decision.id)")
+                notify("\(decision.raisedByName) needs a decision", decision.title, id: "decision-\(decision.id)")
             }
         }
         Task { await refreshCounts() }
@@ -312,7 +299,7 @@ final class AppStore {
 
     func markSeen(_ botId: String) {
         lastSeen[botId] = Date()
-        UserDefaults.standard.set(lastSeen.mapValues(\.timeIntervalSince1970), forKey: "lastSeen")
+        UserDefaults.standard.set(lastSeen.mapValues(\.timeIntervalSince1970), forKey: defaults.key("lastSeen"))
     }
 
     // MARK: Terminal

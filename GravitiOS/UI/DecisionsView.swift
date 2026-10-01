@@ -36,6 +36,7 @@ struct DecisionsView: View {
             .safeAreaInset(edge: .top, spacing: 0) { ConnectionBanner() }
             .refreshable { await store.refreshDecisions() }
             .navigationTitle("Decisions")
+            .toolbar { ToolbarItem(placement: .topBarTrailing) { ComputerSwitcher() } }
             .navigationDestination(for: String.self) { DecisionDetailView(decisionId: $0) }
         }
         .onChange(of: openDecision) { _, id in

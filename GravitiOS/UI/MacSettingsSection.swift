@@ -1,8 +1,9 @@
 import SwiftUI
 
-/// Screen Sharing sign-in and the file browser's status.
+/// The selected computer's screen sign-in and its file browser's status.
 struct MacSettingsSection: View {
-    @Environment(AppStore.self) private var store
+    @Environment(Fleet.self) private var fleet
+    @Environment(Computer.self) private var computer
     @Environment(LensStore.self) private var lens
     @Environment(ScreenSession.self) private var screen
     @AppStorage("screenFastColours") private var fastColours = false
@@ -10,8 +11,10 @@ struct MacSettingsSection: View {
     @State private var port = "5900"
     @State private var username = ""
     @State private var password = ""
-    @State private var hasPassword = ScreenSettings.password != nil
+    @State private var hasPassword = false
     @State private var filesStatus = "Checking…"
+
+    private var isMac: Bool { computer.kind == .mac }
 
     var body: some View {
         Section {
@@ -20,30 +23,38 @@ struct MacSettingsSection: View {
                 .autocorrectionDisabled()
                 .keyboardType(.URL)
             TextField("Port", text: $port).keyboardType(.numberPad)
-            TextField("Mac user name", text: $username)
-                .textInputAutocapitalization(.never)
-                .autocorrectionDisabled()
-                .textContentType(.username)
-            SecureField(hasPassword ? "Password (saved)" : "Mac password", text: $password)
+            if isMac {
+                TextField("Mac user name", text: $username)
+                    .textInputAutocapitalization(.never)
+                    .autocorrectionDisabled()
+                    .textContentType(.username)
+            }
+            SecureField(hasPassword ? "Password (saved)" : (isMac ? "Mac password" : "VNC password"), text: $password)
                 .textContentType(.password)
             Button("Save") { save() }
-                .disabled(username.isEmpty || (password.isEmpty && !hasPassword))
+                .disabled((isMac && username.isEmpty) || (password.isEmpty && !hasPassword))
             Toggle("Fast colours", isOn: $fastColours)
                 .onChange(of: fastColours) { _, _ in screen.disconnect() }
             if let stats = screen.stats { LabeledContent("Last connection", value: describe(stats)) }
         } header: {
-            Text("Mac screen")
+            Text("\(computer.name): screen")
         } footer: {
-            Text("Turn on Screen Sharing on the Mac: System Settings → General → Sharing → Screen Sharing, and allow your user. Sign in here with that Mac account. The password stays in this iPhone's Keychain and only goes to the Mac. Fast colours sends 16-bit colour: about a third less data, with slight banding on gradients.")
+            if isMac {
+                Text("Turn on Screen Sharing on the Mac: System Settings → General → Sharing → Screen Sharing, and allow your user. Sign in here with that Mac account. The password stays in this iPhone's Keychain and only goes to the Mac. Fast colours sends 16-bit colour: about a third less data, with slight banding on gradients.")
+            } else {
+                Text("Install TightVNC Server on the PC and set its primary password (8 characters at most) in TightVNC Service Configuration. Allow port 5900 only from Tailscale in Windows Firewall. The password stays in this iPhone's Keychain. Fast colours sends 16-bit colour: about a third less data, with slight banding on gradients.")
+            }
         }
         .onAppear(perform: loadSettings)
 
         Section {
             LabeledContent("File browser", value: filesStatus)
         } footer: {
-            Text("To browse the Mac's files, run on the Mac: companion/install.sh --with-files. Needs a device with the control grant.")
+            Text(isMac
+                 ? "To browse the Mac's files, run on the Mac: companion/install.sh --with-files. Needs a device with the control grant."
+                 : "To browse the PC's files, run on the PC: companion\\install.ps1 -WithFiles. Needs a device with the control grant.")
         }
-        .task { await checkFiles() }
+        .task(id: computer.id) { await checkFiles() }
     }
 
     private func describe(_ stats: RFBClient.Stats) -> String {
@@ -57,17 +68,21 @@ struct MacSettingsSection: View {
     }
 
     private func loadSettings() {
-        let settings = ScreenSettings.load(defaultHost: "")
-        host = settings.host
-        port = String(settings.port)
-        username = settings.username
+        let record = computer.record
+        host = record.screenHost
+        port = String(record.screenPort)
+        username = record.screenUser
+        hasPassword = computer.screenSettings.password != nil
     }
 
     private func save() {
-        ScreenSettings(host: host.trimmingCharacters(in: .whitespaces), port: Int(port) ?? 5900,
-                       username: username.trimmingCharacters(in: .whitespaces)).save()
+        var record = computer.record
+        record.screenHost = host.trimmingCharacters(in: .whitespaces)
+        record.screenPort = Int(port) ?? 5900
+        record.screenUser = isMac ? username.trimmingCharacters(in: .whitespaces) : ""
+        fleet.update(computer, record)
         if !password.isEmpty {
-            Keychain.save(password, account: ScreenSettings.passwordAccount)
+            computer.setScreenPassword(password)
             password = ""
             hasPassword = true
         }

@@ -100,7 +100,7 @@ private struct RoutinesSection: View {
     var body: some View {
         Section("Routines") {
           if loaded, routines.isEmpty {
-            Text("No routines. Ask the bot to schedule one, or add it in Gravity on the Mac.")
+            Text("No routines. Ask the bot to schedule one, or add it in Gravity on that computer.")
                 .font(.footnote).foregroundStyle(.secondary)
           }
           ForEach(routines) { routine in

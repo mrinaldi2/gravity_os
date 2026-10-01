@@ -297,7 +297,7 @@ struct ShareSheet: UIViewControllerRepresentable {
     func updateUIViewController(_ controller: UIActivityViewController, context: Context) {}
 }
 
-/// The Mac tab: its screen or its files.
+/// The computer's tab: its screen or its files.
 struct MacView: View {
     @State private var mode = Mode.screen
     @State private var path = NavigationPath()
@@ -324,6 +324,7 @@ struct MacView: View {
                     .pickerStyle(.segmented)
                     .frame(width: 200)
                 }
+                ToolbarItem(placement: .topBarLeading) { ComputerSwitcher() }
             }
             .navigationDestination(for: FolderLink.self) { FolderView(path: $0.path) }
         }

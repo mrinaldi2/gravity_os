@@ -4,16 +4,15 @@ struct SettingsView: View {
     @Environment(AppStore.self) private var store
     @Environment(LensStore.self) private var lens
     @State private var diagnostics: Diagnostics?
-    @AppStorage("lensPort") private var lensPort = LensStore.defaultPort
-    @State private var confirmForget = false
     @AppStorage("terminalFontSize") private var fontSize = 11.0
     @Environment(\.dismiss) private var dismiss
 
     var body: some View {
         NavigationStack {
             Form {
+                ComputersSection()
                 MacSettingsSection()
-                Section("Connection") {
+                Section("\(store.computerName): connection") {
                     LabeledContent("Status", value: store.status.label)
                     if let endpoint = store.endpoint {
                         LabeledContent("Daemon", value: "\(endpoint.host):\(endpoint.port)")
@@ -35,7 +34,7 @@ struct SettingsView: View {
                 }
 
                 if let diagnostics {
-                    Section("Daemon") {
+                    Section("\(store.computerName): daemon") {
                         LabeledContent("Active bots", value: "\(diagnostics.activeBots)")
                         LabeledContent("Runtime", value: diagnostics.runtimeAvailable
                             ? diagnostics.runtimeKind : "\(diagnostics.runtimeKind) (unavailable)")
@@ -55,16 +54,12 @@ struct SettingsView: View {
                     if case .unreachable(let reason) = lens.status {
                         Text(reason).font(.footnote).foregroundStyle(.secondary)
                     }
-                    LabeledContent("Port") {
-                        TextField("Port", value: $lensPort, format: .number.grouping(.never))
-                            .keyboardType(.numberPad)
-                            .multilineTextAlignment(.trailing)
-                    }
+                    LabeledContent("Port", value: String(lens.port))
                     Button("Check now") { Task { await lens.refresh() } }
                 } header: {
-                    Text("Gravity Lens")
+                    Text("\(store.computerName): Gravity Lens")
                 } footer: {
-                    Text("The companion on the Mac that turns the bots' logs into the Activity and Reports views. It uses the same device token and host as the daemon.")
+                    Text("The companion that turns the bots' logs into the Activity and Reports views. It uses the same device token as the daemon. Change its address under Computers.")
                 }
 
                 Section {
@@ -72,13 +67,7 @@ struct SettingsView: View {
                 } header: {
                     Text("Terminal")
                 } footer: {
-                    Text("Opening a bot's terminal resizes it to fit this screen. The terminal is shared, so the Mac app shows that size too until it resizes it again.")
-                }
-
-                Section {
-                    Button("Forget this daemon", role: .destructive) { confirmForget = true }
-                } footer: {
-                    Text("Removes the token from this iPhone. To cut off a lost phone, revoke the device in Gravity on the Mac.")
+                    Text("Opening a bot's terminal resizes it to fit this screen. The terminal is shared, so Gravity on the computer shows that size too until it resizes it again.")
                 }
             }
             .navigationTitle("Settings")
@@ -87,9 +76,6 @@ struct SettingsView: View {
             }
             .task(id: store.status) { await loadDiagnostics() }
             .refreshable { await loadDiagnostics() }
-            .confirmationDialog("Forget this daemon?", isPresented: $confirmForget, titleVisibility: .visible) {
-                Button("Forget", role: .destructive) { store.forget() }
-            }
         }
     }
 

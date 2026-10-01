@@ -2,7 +2,7 @@ import Foundation
 import Observation
 import UIKit
 
-// Gravity Lens: the companion on the Mac (companion/gravity_lens.py) that
+// Gravity Lens: the companion on each computer (companion/gravity_lens.py) that
 // turns each bot's Claude Code log into readable turns. Its JSON is ours, so
 // it is decoded strictly.
 
@@ -207,10 +207,9 @@ final class LensStore {
 
     static let defaultPort = 49778
 
-    var port: Int {
-        let saved = UserDefaults.standard.integer(forKey: "lensPort")
-        return saved == 0 ? Self.defaultPort : saved
-    }
+    /// Where this computer's Lens answers; set from its saved settings.
+    @ObservationIgnored var host = ""
+    var port = LensStore.defaultPort
 
     init(app: AppStore) {
         self.app = app
@@ -237,11 +236,6 @@ final class LensStore {
         guard let endpoint = app.endpoint else {
             throw DaemonError(code: "not_connected", message: "No daemon configured.")
         }
-        #if DEBUG
-        let host = UserDefaults.standard.string(forKey: "lensHost") ?? endpoint.host
-        #else
-        let host = endpoint.host
-        #endif
         var components = URLComponents()
         components.scheme = "http"
         components.host = host

@@ -1,9 +1,10 @@
 import Foundation
 import Security
 
-/// The device token lives in the Keychain, never in UserDefaults.
+/// Device tokens and screen passwords live in the Keychain, never in UserDefaults.
 enum Keychain {
     private static let service = "\(Bundle.main.bundleIdentifier ?? "gravitios").daemon"
+    /// Where the single token lived before there could be several computers.
     private static let account = "device-token"
 
     private static var query: [String: Any] {
@@ -12,14 +13,6 @@ enum Keychain {
             kSecAttrService as String: service,
             kSecAttrAccount as String: account,
         ]
-    }
-
-    static func saveToken(_ token: String) {
-        SecItemDelete(query as CFDictionary)
-        var item = query
-        item[kSecValueData as String] = Data(token.utf8)
-        item[kSecAttrAccessible as String] = kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly
-        SecItemAdd(item as CFDictionary, nil)
     }
 
     static func loadToken() -> String? {
@@ -36,18 +29,21 @@ enum Keychain {
         SecItemDelete(query as CFDictionary)
     }
 
-    // MARK: Other secrets (the Mac's screen-sharing password)
+    // MARK: Per-computer secrets
 
     private static func query(_ account: String) -> [String: Any] {
         [kSecClass as String: kSecClassGenericPassword, kSecAttrService as String: service,
          kSecAttrAccount as String: account]
     }
 
-    static func save(_ value: String, account: String) {
+    /// Device tokens are readable after the first unlock, so a reconnect in the
+    /// background works; passwords only while the phone is unlocked.
+    static func save(_ value: String, account: String, afterFirstUnlock: Bool = false) {
         SecItemDelete(query(account) as CFDictionary)
         var item = query(account)
         item[kSecValueData as String] = Data(value.utf8)
-        item[kSecAttrAccessible as String] = kSecAttrAccessibleWhenUnlockedThisDeviceOnly
+        item[kSecAttrAccessible as String] = afterFirstUnlock
+            ? kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly : kSecAttrAccessibleWhenUnlockedThisDeviceOnly
         SecItemAdd(item as CFDictionary, nil)
     }
 

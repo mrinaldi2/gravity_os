@@ -58,6 +58,7 @@ struct BotsView: View {
             .navigationTitle("Bots")
             .toolbar {
                 ToolbarItem(placement: .topBarLeading) { SettingsButton() }
+                ToolbarItem(placement: .topBarLeading) { ComputerSwitcher() }
                 if store.canControl, store.status == .connected {
                     ToolbarItem(placement: .topBarTrailing) {
                         Menu {
@@ -98,7 +99,7 @@ struct BotsView: View {
 
     private var emptyDetail: String {
         switch store.status {
-        case .connected: "Create a project and bots in Gravity on the Mac."
+        case .connected: "Create a project and bots in Gravity on \(store.computerName)."
         case .disconnected(let reason): reason
         case .authFailed(let reason), .versionMismatch(let reason): reason
         default: ""

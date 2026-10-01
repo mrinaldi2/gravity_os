@@ -172,7 +172,10 @@ struct FeedView: View {
             .safeAreaInset(edge: .top, spacing: 0) { ConnectionBanner() }
             .refreshable { await lens.refresh() }
             .navigationTitle("Activity")
-            .toolbar { ToolbarItem(placement: .topBarLeading) { SettingsButton() } }
+            .toolbar {
+                ToolbarItem(placement: .topBarLeading) { SettingsButton() }
+                ToolbarItem(placement: .topBarTrailing) { ComputerSwitcher() }
+            }
             .navigationDestination(for: TurnLink.self) { TurnDetailView(botId: $0.botId, turnId: $0.turnId) }
         }
     }
@@ -237,6 +240,7 @@ struct BotActivityView: View {
 }
 
 struct LensEmptyState: View {
+    @Environment(AppStore.self) private var store
     @Environment(LensStore.self) private var lens
 
     var body: some View {
@@ -247,7 +251,7 @@ struct LensEmptyState: View {
             ContentUnavailableView {
                 Label("Gravity Lens not reachable", systemImage: "eye.slash")
             } description: {
-                Text("The activity view needs the Gravity Lens companion running on the Mac, on port \(String(lens.port)). See the README in the GravitiOS project.")
+                Text("The activity view needs the Gravity Lens companion running on \(store.computerName), on port \(String(lens.port)). See the README in the GravitiOS project.")
             }
         case .unauthorized:
             ContentUnavailableView("Token rejected", systemImage: "lock",

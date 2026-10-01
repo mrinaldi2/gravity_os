@@ -39,7 +39,7 @@ struct SendToBotSheet: View {
                     .pickerStyle(.segmented)
                 } footer: {
                     Text(route == .terminal
-                         ? "Typed into the bot's Claude Code prompt and submitted, as if you typed it at the Mac."
+                         ? "Typed into the bot's Claude Code prompt and submitted, as if you typed it at \(store.computerName)."
                          : "Delivered to the bot's inbox; it reads it between steps.")
                 }
                 Section("Text") {

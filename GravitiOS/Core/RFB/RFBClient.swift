@@ -174,7 +174,7 @@ final class RFBClient: @unchecked Sendable {
                 case .failed(let error), .waiting(let error):
                     once.done = true
                     continuation.resume(throwing: RFBError.protocolError(
-                        "Could not reach Screen Sharing on the Mac (\(error.localizedDescription)). Is it turned on?"))
+                        "Could not reach the screen-sharing server (\(error.localizedDescription)). Is it turned on?"))
                 case .cancelled:
                     once.done = true
                     continuation.resume(throwing: CancellationError())
@@ -206,7 +206,7 @@ final class RFBClient: @unchecked Sendable {
             } else if offered.contains(1) {
                 type = 1
             } else if offered.contains(30) {
-                throw RFBError.auth("Enter the Mac's user name and password.")
+                throw RFBError.auth("Enter the Mac's user name and password in Settings.")
             } else {
                 throw RFBError.auth("The Mac asked for a sign-in method GravitiOS does not support (\(offered)).")
             }

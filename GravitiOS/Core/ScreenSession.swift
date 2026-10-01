@@ -3,51 +3,30 @@ import Foundation
 import Observation
 import UIKit
 
-/// Where the Mac's screen is and who signs in. The password is in the Keychain.
+/// Where a computer's screen is and who signs in. The password is in the Keychain.
 struct ScreenSettings {
-    static let passwordAccount = "mac-screen-password"
-
     var host: String
     var port: Int
+    /// Empty for a plain VNC password (Windows servers).
     var username: String
+    var passwordAccount: String
 
-    static func load(defaultHost: String) -> ScreenSettings {
-        let defaults = UserDefaults.standard
+    var password: String? {
         #if DEBUG
-        // Simulator runs against demo/fake_screen.py: -screenHost … -screenPort 5901 -screenUser demo -screenPassword demo
-        if let host = defaults.string(forKey: "screenHost") {
-            return ScreenSettings(host: host, port: defaults.integer(forKey: "screenPort"),
-                                  username: defaults.string(forKey: "screenUser") ?? "")
-        }
-        #endif
-        let port = defaults.integer(forKey: "macScreenPort")
-        let saved = defaults.string(forKey: "macScreenHost") ?? ""
-        return ScreenSettings(host: saved.isEmpty ? defaultHost : saved,
-                              port: port == 0 ? 5900 : port,
-                              username: defaults.string(forKey: "macScreenUser") ?? "")
-    }
-
-    func save() {
-        let defaults = UserDefaults.standard
-        defaults.set(host, forKey: "macScreenHost")
-        defaults.set(port, forKey: "macScreenPort")
-        defaults.set(username, forKey: "macScreenUser")
-    }
-
-    static var password: String? {
-        #if DEBUG
-        if let password = UserDefaults.standard.string(forKey: "screenPassword") { return password }
+        // Simulator runs against demo/fake_screen.py: -screenPassword demo (-screen2Password for the second computer)
+        let debugKey = passwordAccount.hasSuffix(".debug2") ? "screen2Password" : "screenPassword"
+        if let password = UserDefaults.standard.string(forKey: debugKey) { return password }
         #endif
         return Keychain.load(account: passwordAccount)
     }
 }
 
-/// X11 keysyms the Mac's screen-sharing server understands.
+/// X11 keysyms VNC servers understand. On Windows, `command` (Super) is the Windows key.
 enum Keysym {
     static let backspace: UInt32 = 0xFF08, tab: UInt32 = 0xFF09, returnKey: UInt32 = 0xFF0D
     static let escape: UInt32 = 0xFF1B, delete: UInt32 = 0xFFFF
     static let left: UInt32 = 0xFF51, up: UInt32 = 0xFF52, right: UInt32 = 0xFF53, down: UInt32 = 0xFF54
-    static let pageUp: UInt32 = 0xFF55, pageDown: UInt32 = 0xFF56
+    static let pageUp: UInt32 = 0xFF55, pageDown: UInt32 = 0xFF56, f4: UInt32 = 0xFFC1
     static let shift: UInt32 = 0xFFE1, control: UInt32 = 0xFFE3, option: UInt32 = 0xFFE9, command: UInt32 = 0xFFEB
 
     static func of(_ scalar: Unicode.Scalar) -> UInt32 {
@@ -59,7 +38,7 @@ enum Keysym {
     }
 }
 
-/// One live look at the Mac's screen.
+/// One live look at a computer's screen.
 @MainActor
 @Observable
 final class ScreenSession {
@@ -81,8 +60,8 @@ final class ScreenSession {
     /// The picture of the display in view (or the whole screen).
     var image: CGImage?
     /// Size of the Mac's whole picture, all displays together.
-    var screenSize = ScreenSession.savedSize {
-        didSet { UserDefaults.standard.set([screenSize.width, screenSize.height], forKey: "screenSize") }
+    var screenSize: CGSize {
+        didSet { UserDefaults.standard.set([screenSize.width, screenSize.height], forKey: defaults.key("screenSize")) }
     }
     var stats: RFBClient.Stats?
     /// Latched modifiers, applied to the next key and then released.
@@ -93,25 +72,26 @@ final class ScreenSession {
     var lastTap: CGPoint?
     /// How macOS arranges the displays, from Gravity Lens. Remembered, so the
     /// very first request after launching asks for one display only.
-    var layout: [MacDisplay] = ScreenSession.savedLayout {
-        didSet { UserDefaults.standard.set(try? JSONEncoder().encode(layout), forKey: "screenLayout") }
-    }
-
-    private static var savedLayout: [MacDisplay] {
-        guard let data = UserDefaults.standard.data(forKey: "screenLayout") else { return [] }
-        return (try? JSONDecoder().decode([MacDisplay].self, from: data)) ?? []
-    }
-
-    private static var savedSize: CGSize {
-        let pair = UserDefaults.standard.array(forKey: "screenSize") as? [Double] ?? []
-        return pair.count == 2 ? CGSize(width: pair[0], height: pair[1]) : .zero
+    var layout: [MacDisplay] {
+        didSet { UserDefaults.standard.set(try? JSONEncoder().encode(layout), forKey: defaults.key("screenLayout")) }
     }
     /// Which display fills the phone.
-    var focus: Int? = UserDefaults.standard.object(forKey: "screenFocus") as? Int {
+    var focus: Int? {
         didSet {
-            UserDefaults.standard.set(focus, forKey: "screenFocus")
+            UserDefaults.standard.set(focus, forKey: defaults.key("screenFocus"))
             regionChanged()
         }
+    }
+    @ObservationIgnored private let defaults: ComputerDefaults
+
+    init(defaults: ComputerDefaults) {
+        self.defaults = defaults
+        let saved = UserDefaults.standard
+        let pair = saved.array(forKey: defaults.key("screenSize")) as? [Double] ?? []
+        screenSize = pair.count == 2 ? CGSize(width: pair[0], height: pair[1]) : .zero
+        layout = saved.data(forKey: defaults.key("screenLayout"))
+            .flatMap { try? JSONDecoder().decode([MacDisplay].self, from: $0) } ?? []
+        focus = saved.object(forKey: defaults.key("screenFocus")) as? Int
     }
     /// The last picture of each region, shown at once when switching or reconnecting.
     @ObservationIgnored private var remembered: [CGRect: CGImage] = [:]
@@ -207,8 +187,8 @@ final class ScreenSession {
 
     func connect(_ settings: ScreenSettings) {
         disconnect()
-        guard let password = ScreenSettings.password, !password.isEmpty else {
-            phase = .failed("Add the Mac's user name and password in Settings → Mac.")
+        guard let password = settings.password, !password.isEmpty else {
+            phase = .failed("Add the screen's sign-in in Settings → Screen.")
             return
         }
         let client = RFBClient(host: settings.host, port: settings.port,

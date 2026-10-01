@@ -1,12 +1,14 @@
 import SwiftUI
 
 struct RootView: View {
+    @Environment(Fleet.self) private var fleet
+    @Environment(Computer.self) private var computer
     @Environment(AppStore.self) private var store
     @Environment(LensStore.self) private var lens
     @State private var tab = Tab.activity
     @State private var openDecision: String?
 
-    enum Tab { case activity, bots, decisions, reports, mac }
+    enum Tab { case activity, bots, decisions, reports, computer }
 
     var body: some View {
         TabView(selection: $tab) {
@@ -24,25 +26,32 @@ struct RootView: View {
                 .tabItem { Label("Reports", systemImage: "doc.richtext") }
                 .tag(Tab.reports)
             MacView()
-                .tabItem { Label("Mac", systemImage: "laptopcomputer") }
-                .tag(Tab.mac)
+                .tabItem { Label(store.kind.label, systemImage: store.kind.symbol) }
+                .tag(Tab.computer)
         }
+        // Another computer: fresh navigation, since ids belong to one daemon.
+        .id(computer.id)
         .overlay(alignment: .top) { noticeBanner }
-        .animation(.snappy, value: store.notice)
+        .animation(.snappy, value: fleet.notice?.1)
         .task { Notifier.requestPermission() }
-        .task { await lens.poll() }
+        .task(id: computer.id) { await lens.poll() }
     }
 
     @ViewBuilder private var noticeBanner: some View {
-        if let notice = store.notice {
+        if case let (source, notice)? = fleet.notice {
             Button {
                 if let id = notice.decisionId {
+                    fleet.select(source)
                     tab = .decisions
                     openDecision = id
                 }
-                store.notice = nil
+                source.store.notice = nil
             } label: {
                 VStack(alignment: .leading, spacing: 2) {
+                    if fleet.computers.count > 1 {
+                        Label(source.name, systemImage: source.kind.symbol)
+                            .font(.caption.weight(.medium)).foregroundStyle(.secondary)
+                    }
                     Text(notice.title).font(.subheadline.weight(.semibold))
                     if !notice.body.isEmpty {
                         Text(notice.body).font(.footnote).lineLimit(2)
@@ -57,7 +66,7 @@ struct RootView: View {
             .transition(.move(edge: .top).combined(with: .opacity))
             .task(id: notice.id) {
                 try? await Task.sleep(for: .seconds(5))
-                if store.notice?.id == notice.id { store.notice = nil }
+                if source.store.notice?.id == notice.id { source.store.notice = nil }
             }
         }
     }

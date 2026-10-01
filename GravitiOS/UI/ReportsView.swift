@@ -34,6 +34,7 @@ struct ReportsView: View {
             .refreshable { await lens.loadArtifacts() }
             .task { await lens.loadArtifacts() }
             .navigationTitle("Reports")
+            .toolbar { ToolbarItem(placement: .topBarTrailing) { ComputerSwitcher() } }
             .navigationDestination(for: LensArtifact.self) { ReportView(artifact: $0) }
         }
     }

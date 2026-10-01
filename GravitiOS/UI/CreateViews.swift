@@ -22,7 +22,7 @@ struct NewProjectSheet: View {
                         .submitLabel(.done)
                         .onSubmit(create)
                 } footer: {
-                    Text("Its bots share a folder of artifacts on the Mac: ~/.gravity/projects/<name>.")
+                    Text("Its bots share a folder of artifacts on \(store.computerName): ~/.gravity/projects/<name>.")
                 }
                 Section {
                     Toggle("Add a first bot next", isOn: $addBot)
@@ -91,7 +91,7 @@ struct NewBotSheet: View {
                         .textInputAutocapitalization(.words)
                 } footer: {
                     if bots >= 12 {
-                        Text("This project already has 12 bots, the most Gravity allows. Delete one on the Mac first.")
+                        Text("This project already has 12 bots, the most Gravity allows. Delete one on \(store.computerName) first.")
                             .foregroundStyle(.orange)
                     }
                 }

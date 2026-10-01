@@ -1,9 +1,9 @@
 import SwiftUI
 import UIKit
 
-/// The Mac's screen, live: pinch to zoom, drag to pan, tap to click.
+/// A computer's screen, live: pinch to zoom, drag to pan, tap to click.
 struct ScreenView: View {
-    @Environment(AppStore.self) private var store
+    @Environment(Computer.self) private var computer
     @Environment(LensStore.self) private var lens
     @Environment(ScreenSession.self) private var session
     @Environment(\.scenePhase) private var scenePhase
@@ -11,7 +11,7 @@ struct ScreenView: View {
     @State private var sendItem: SendItem?
     @State private var showingKeyboard = false
 
-    private var settings: ScreenSettings { ScreenSettings.load(defaultHost: store.endpoint?.host ?? "") }
+    private var settings: ScreenSettings { computer.screenSettings }
 
     var body: some View {
         VStack(spacing: 0) {
@@ -41,7 +41,9 @@ struct ScreenView: View {
                     clipboardBanner
                 }
             }
-            if case .live = session.phase { KeyRow(session: session, canvas: canvas, keyboard: $showingKeyboard) }
+            if case .live = session.phase {
+                KeyRow(session: session, canvas: canvas, kind: computer.kind, keyboard: $showingKeyboard)
+            }
         }
         .toolbar {
             ToolbarItem(placement: .topBarTrailing) { statusBadge }
@@ -88,7 +90,7 @@ struct ScreenView: View {
         switch session.phase {
         case .signingIn: "Signing in…"
         case .live: "Waiting for the first picture…"
-        default: "Connecting to the Mac…"
+        default: "Connecting to \(computer.name)…"
         }
     }
 
@@ -124,7 +126,7 @@ struct ScreenView: View {
     @ViewBuilder private var clipboardBanner: some View {
         if let text = session.macClipboard {
             VStack(alignment: .leading, spacing: 8) {
-                Label("The Mac copied", systemImage: "doc.on.clipboard").font(.caption.weight(.semibold))
+                Label("\(computer.name) copied", systemImage: "doc.on.clipboard").font(.caption.weight(.semibold))
                 Text(text).font(.footnote.monospaced()).lineLimit(3)
                 HStack {
                     Button("Copy") {
@@ -355,12 +357,19 @@ final class KeyCaptureView: UIView, UIKeyInput {
 private struct KeyRow: View {
     let session: ScreenSession
     let canvas: CanvasController
+    let kind: ComputerKind
     @Binding var keyboard: Bool
     @State private var pasteText = ""
 
-    private let modifiers: [(String, ScreenSession.Modifiers, String)] = [
-        ("⌘", .command, "Command"), ("⌥", .option, "Option"), ("⌃", .control, "Control"), ("⇧", .shift, "Shift"),
-    ]
+    /// On Windows, `command` (Super) is the Windows key and `option` is Alt.
+    private var modifiers: [(String, ScreenSession.Modifiers, String)] {
+        switch kind {
+        case .mac:
+            [("⌘", .command, "Command"), ("⌥", .option, "Option"), ("⌃", .control, "Control"), ("⇧", .shift, "Shift")]
+        case .windows:
+            [("Ctrl", .control, "Control"), ("⊞", .command, "Windows key"), ("Alt", .option, "Alt"), ("⇧", .shift, "Shift")]
+        }
+    }
     private let keys: [(String, UInt32, String)] = [
         ("esc", Keysym.escape, "Escape"), ("⇥", Keysym.tab, "Tab"), ("⏎", Keysym.returnKey, "Return"),
         ("←", Keysym.left, "Left"), ("↑", Keysym.up, "Up"), ("↓", Keysym.down, "Down"), ("→", Keysym.right, "Right"),
@@ -389,15 +398,9 @@ private struct KeyRow: View {
                 Button { session.scroll(lines: 3) } label: { Image(systemName: "chevron.down.2") }
                     .accessibilityLabel("Scroll down")
                 Menu {
-                    Button("Copy  ⌘C") { session.shortcut(0x63, .command) }
-                    Button("Paste  ⌘V") { session.shortcut(0x76, .command) }
-                    Button("Copy path (Finder)  ⌥⌘C") { session.shortcut(0x63, [.command, .option]) }
-                    Button("Spotlight  ⌘Space") { session.shortcut(0x20, .command) }
-                    Button("Switch app  ⌘Tab") { session.shortcut(Keysym.tab, .command) }
-                    Button("Close window  ⌘W") { session.shortcut(0x77, .command) }
-                    Button("Go to folder (Finder)  ⇧⌘G") { session.shortcut(0x67, [.command, .shift]) }
+                    shortcuts
                     Divider()
-                    Button("Send this phone's clipboard to the Mac") {
+                    Button("Send this phone's clipboard to the \(kind.label)") {
                         if let text = UIPasteboard.general.string { session.pasteToMac(text) }
                     }
                 } label: {
@@ -411,6 +414,30 @@ private struct KeyRow: View {
         }
         .background(Color(white: 0.12))
         .environment(\.colorScheme, .dark)
+    }
+
+    @ViewBuilder private var shortcuts: some View {
+        switch kind {
+        case .mac:
+            Button("Copy  ⌘C") { session.shortcut(0x63, .command) }
+            Button("Paste  ⌘V") { session.shortcut(0x76, .command) }
+            Button("Copy path (Finder)  ⌥⌘C") { session.shortcut(0x63, [.command, .option]) }
+            Button("Spotlight  ⌘Space") { session.shortcut(0x20, .command) }
+            Button("Switch app  ⌘Tab") { session.shortcut(Keysym.tab, .command) }
+            Button("Close window  ⌘W") { session.shortcut(0x77, .command) }
+            Button("Go to folder (Finder)  ⇧⌘G") { session.shortcut(0x67, [.command, .shift]) }
+        case .windows:
+            Button("Copy  Ctrl+C") { session.shortcut(0x63, .control) }
+            Button("Paste  Ctrl+V") { session.shortcut(0x76, .control) }
+            Button("Copy as path (Explorer)  Ctrl+Shift+C") { session.shortcut(0x63, [.control, .shift]) }
+            Button("Start menu  ⊞") { session.shortcut(Keysym.command, []) }
+            Button("Search  ⊞S") { session.shortcut(0x73, .command) }
+            Button("Switch app  Alt+Tab") { session.shortcut(Keysym.tab, .option) }
+            Button("Close window  Alt+F4") { session.shortcut(Keysym.f4, .option) }
+            Button("File Explorer  ⊞E") { session.shortcut(0x65, .command) }
+            Button("Address bar (Explorer)  Ctrl+L") { session.shortcut(0x6C, .control) }
+            Button("Task Manager  Ctrl+Shift+Esc") { session.shortcut(Keysym.escape, [.control, .shift]) }
+        }
     }
 }
 
