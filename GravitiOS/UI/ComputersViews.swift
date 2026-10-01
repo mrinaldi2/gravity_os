@@ -48,10 +48,11 @@ struct ComputerSwitcher: View {
     }
 }
 
-/// Every computer the phone knows, in Settings.
+/// Every computer the phone knows, in Settings. The add sheet belongs to the
+/// Form's owner: a modifier on a Section is applied to each of its rows.
 struct ComputersSection: View {
     @Environment(Fleet.self) private var fleet
-    @State private var adding = false
+    @Binding var adding: Bool
 
     var body: some View {
         Section {
@@ -72,7 +73,6 @@ struct ComputersSection: View {
         } footer: {
             Text("Every computer stays connected, so notifications and decisions come from all of them. The menu at the top of each tab picks the one on screen.")
         }
-        .sheet(isPresented: $adding) { ConnectView(adding: true) }
     }
 }
 

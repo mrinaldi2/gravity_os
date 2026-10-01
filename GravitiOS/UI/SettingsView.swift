@@ -4,13 +4,14 @@ struct SettingsView: View {
     @Environment(AppStore.self) private var store
     @Environment(LensStore.self) private var lens
     @State private var diagnostics: Diagnostics?
+    @State private var addingComputer = false
     @AppStorage("terminalFontSize") private var fontSize = 11.0
     @Environment(\.dismiss) private var dismiss
 
     var body: some View {
         NavigationStack {
             Form {
-                ComputersSection()
+                ComputersSection(adding: $addingComputer)
                 MacSettingsSection()
                 Section("\(store.computerName): connection") {
                     LabeledContent("Status", value: store.status.label)
@@ -76,6 +77,7 @@ struct SettingsView: View {
             }
             .task(id: store.status) { await loadDiagnostics() }
             .refreshable { await loadDiagnostics() }
+            .sheet(isPresented: $addingComputer) { ConnectView(adding: true) }
         }
     }
 
