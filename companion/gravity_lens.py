@@ -41,10 +41,13 @@ ARTIFACT_LIMIT = 2_000_000
 ARTIFACT_SUFFIXES = (".md", ".markdown", ".txt", ".json", ".csv", ".log", ".yaml", ".yml", ".toml")
 IMAGE_TYPES = {".png": "image/png", ".jpg": "image/jpeg", ".jpeg": "image/jpeg", ".gif": "image/gif",
                ".webp": "image/webp", ".heic": "image/heic"}
-IMAGE_PATH = re.compile(r"(/[^\s\"'`<>()\[\]{},;|]+\.(?:png|jpe?g|gif|webp|heic))", re.I)
+WINDOWS = os.name == "nt"
+# A POSIX path, or on Windows one that starts with a drive letter.
+IMAGE_PATH = re.compile(r"((?:[A-Za-z]:[\\/]|/)[^\s\"'`<>()\[\]{},;|]+\.(?:png|jpe?g|gif|webp|heic))", re.I)
 IMAGE_LIMIT = 30_000_000
 IMAGES_PER_EVENT = 24
-THUMB_DIR = os.path.join(os.path.expanduser("~"), "Library", "Caches", "GravityLens", "thumbs")
+THUMB_DIR = (os.path.join(os.environ.get("LOCALAPPDATA") or os.path.expanduser("~"), "GravityLens", "thumbs")
+             if WINDOWS else os.path.join(os.path.expanduser("~"), "Library", "Caches", "GravityLens", "thumbs"))
 
 PEER_PREFIX = "Another Claude session sent a message:\n"
 CONTINUED_PREFIX = "This session is being continued from a previous conversation"
@@ -62,6 +65,24 @@ def tail(text: str, limit: int) -> str:
 def mangle(path: str) -> str:
     """Claude Code's project folder name for a working directory."""
     return re.sub(r"[/.]", "-", path)
+
+
+def project_folder(claude_projects: str, workspace: str) -> str:
+    """The folder Claude Code keeps a workspace's logs in. Claude Code turns
+    every character other than letters and digits into "-" (so on Windows
+    `C:\\Users\\me` becomes `C--Users-me`); the older Mac rule changed only
+    "/" and ".". The one that exists wins."""
+    loose = re.sub(r"[^A-Za-z0-9]", "-", workspace)
+    candidates = [loose, mangle(workspace)] if WINDOWS else [mangle(workspace), loose]
+    for name in candidates:
+        if os.path.isdir(os.path.join(claude_projects, name)):
+            return os.path.join(claude_projects, name)
+    return os.path.join(claude_projects, candidates[0])
+
+
+def portable(path: str) -> str:
+    """Paths go to the phone with "/" on every system."""
+    return path.replace("\\", "/") if WINDOWS else path
 
 
 def parse_envelope(text: str) -> Dict[str, Any]:
@@ -89,12 +110,14 @@ def block_text(content: Any) -> str:
 
 
 def base(path: str) -> str:
-    return os.path.basename(path.rstrip("/")) or path
+    return os.path.basename(path.rstrip("/\\")) or path
 
 
 def short_path(path: str) -> str:
     home = os.path.expanduser("~")
-    return "~" + path[len(home):] if path.startswith(home) else path
+    if os.path.normcase(path).startswith(os.path.normcase(home)):
+        path = "~" + path[len(home):]
+    return portable(path)
 
 
 # ---------------------------------------------------------------- transcript
@@ -512,14 +535,14 @@ class Lens:
                 continue
             for bot in sorted(os.listdir(bots_dir)):
                 try:
-                    with open(os.path.join(bots_dir, bot, "bot.json")) as handle:
+                    with open(os.path.join(bots_dir, bot, "bot.json"), encoding="utf-8") as handle:
                         meta = json.load(handle)
                 except (OSError, ValueError):
                     continue
                 workspace = os.path.join(self.workspace_home, "projects", project, "bots", bot, "workspace")
                 found[meta.get("id", "")] = {
                     "id": meta.get("id", ""), "name": meta.get("name", bot), "project": project,
-                    "folder": os.path.join(self.claude_projects, mangle(workspace)),
+                    "folder": project_folder(self.claude_projects, workspace),
                 }
         return found
 
@@ -698,7 +721,7 @@ class Lens:
     def artifact(self, project: str, name: str) -> Optional[str]:
         folder = self.artifact_dirs().get(project)
         # Only names the folder actually lists: no paths, no traversal.
-        if folder is None or "/" in name or name not in os.listdir(folder):
+        if folder is None or "/" in name or "\\" in name or name not in os.listdir(folder):
             return None
         path = os.path.join(folder, name)
         if not os.path.isfile(path) or not name.lower().endswith(ARTIFACT_SUFFIXES):
@@ -720,8 +743,40 @@ def serve_file_image(path: str, thumb: bool) -> Optional[Any]:
         return handle.read(), kind
 
 
+# Windows has no sips: .NET's System.Drawing makes the thumbnail instead. Paths
+# go in through the environment, so no quoting.
+WINDOWS_THUMB = r"""
+Add-Type -AssemblyName System.Drawing
+$src = [System.Drawing.Image]::FromFile($env:LENS_SRC)
+try {
+  $scale = [Math]::Min(1.0, 640 / [Math]::Max($src.Width, $src.Height))
+  $w = [int][Math]::Max(1, [Math]::Round($src.Width * $scale))
+  $h = [int][Math]::Max(1, [Math]::Round($src.Height * $scale))
+  $bmp = New-Object System.Drawing.Bitmap $w, $h
+  $g = [System.Drawing.Graphics]::FromImage($bmp)
+  $g.InterpolationMode = [System.Drawing.Drawing2D.InterpolationMode]::HighQualityBicubic
+  $g.DrawImage($src, 0, 0, $w, $h)
+  $codec = [System.Drawing.Imaging.ImageCodecInfo]::GetImageEncoders() | Where-Object { $_.MimeType -eq 'image/jpeg' }
+  $params = New-Object System.Drawing.Imaging.EncoderParameters 1
+  $params.Param[0] = New-Object System.Drawing.Imaging.EncoderParameter ([System.Drawing.Imaging.Encoder]::Quality), 70L
+  $bmp.Save($env:LENS_DST, $codec, $params)
+  $g.Dispose(); $bmp.Dispose()
+} finally { $src.Dispose() }
+"""
+
+
+def thumbnail_command(path: str, target: str) -> Dict[str, Any]:
+    """How this system makes a 640 px JPEG: sips on macOS, PowerShell on Windows."""
+    if WINDOWS:
+        return {"args": ["powershell.exe", "-NoProfile", "-NonInteractive", "-Command", WINDOWS_THUMB],
+                "env": dict(os.environ, LENS_SRC=path, LENS_DST=target),
+                "creationflags": 0x08000000}  # CREATE_NO_WINDOW: no console flashes up
+    return {"args": ["/usr/bin/sips", "-Z", "640", "-s", "format", "jpeg", "-s", "formatOptions", "70",
+                     path, "--out", target]}
+
+
 def thumbnail(path: str) -> Optional[str]:
-    """A 640 px JPEG made once with macOS's own sips, cached by path and mtime."""
+    """A 640 px JPEG made once, cached by path and mtime."""
     st = os.stat(path)
     key = hashlib.sha1(f"{path}:{st.st_mtime_ns}:{st.st_size}".encode()).hexdigest()
     target = os.path.join(THUMB_DIR, key + ".jpg")
@@ -729,8 +784,8 @@ def thumbnail(path: str) -> Optional[str]:
         return target
     try:
         os.makedirs(THUMB_DIR, exist_ok=True)
-        subprocess.run(["/usr/bin/sips", "-Z", "640", "-s", "format", "jpeg", "-s", "formatOptions", "70",
-                        path, "--out", target], capture_output=True, timeout=20, check=True)
+        command = thumbnail_command(path, target)
+        subprocess.run(command.pop("args"), capture_output=True, timeout=30, check=True, **command)
         return target if os.path.isfile(target) else None
     except (OSError, subprocess.SubprocessError):
         return None
@@ -752,7 +807,7 @@ class DaemonAuth:
         if self.port:
             return self.port
         try:
-            with open(os.path.join(self.gravity_home, "gravityd.port")) as handle:
+            with open(os.path.join(self.gravity_home, "gravityd.port"), encoding="utf-8") as handle:
                 return int(handle.read().strip())
         except (OSError, ValueError):
             return 49777
@@ -945,11 +1000,17 @@ class Handler(BaseHTTPRequestHandler):
 
 
 def displays() -> List[Dict[str, Any]]:
-    """Where each display sits, in points, as macOS arranges them.
+    """Where each display sits, as the system arranges them.
 
-    Screen Sharing sends every display as one picture; the phone uses this to
-    cut it back into screens. Read-only, and needs no permission.
+    Screen Sharing (and a Windows VNC server) sends every display as one
+    picture; the phone uses this to cut it back into screens. Read-only, and
+    needs no permission.
     """
+    return windows_displays() if WINDOWS else mac_displays()
+
+
+def mac_displays() -> List[Dict[str, Any]]:
+    """Displays in points, from CoreGraphics."""
     import ctypes
 
     class CGRect(ctypes.Structure):
@@ -980,6 +1041,53 @@ def displays() -> List[Dict[str, Any]]:
     return rows
 
 
+def windows_displays() -> List[Dict[str, Any]]:
+    """Monitors in physical pixels, the units a VNC server's picture uses.
+    Needs the process to be DPI aware (see main), or scaled monitors report
+    smaller, virtualized sizes."""
+    import ctypes
+    from ctypes import wintypes
+
+    class MONITORINFO(ctypes.Structure):
+        _fields_ = [("cbSize", wintypes.DWORD), ("rcMonitor", wintypes.RECT),
+                    ("rcWork", wintypes.RECT), ("dwFlags", wintypes.DWORD)]
+
+    user32 = ctypes.windll.user32
+    rows: List[Dict[str, Any]] = []
+    callback_type = ctypes.WINFUNCTYPE(wintypes.BOOL, wintypes.HMONITOR, wintypes.HDC,
+                                       ctypes.POINTER(wintypes.RECT), wintypes.LPARAM)
+
+    def found(monitor: Any, _dc: Any, _rect: Any, _data: Any) -> bool:
+        info = MONITORINFO()
+        info.cbSize = ctypes.sizeof(MONITORINFO)
+        if user32.GetMonitorInfoW(monitor, ctypes.byref(info)):
+            r = info.rcMonitor
+            width, height = r.right - r.left, r.bottom - r.top
+            rows.append({"id": len(rows) + 1, "main": bool(info.dwFlags & 1),  # MONITORINFOF_PRIMARY
+                         "x": float(r.left), "y": float(r.top), "width": float(width), "height": float(height),
+                         "pixels_wide": width, "pixels_high": height})
+        return True
+
+    try:
+        user32.EnumDisplayMonitors(None, None, callback_type(found), 0)
+    except OSError:
+        return []
+    rows.sort(key=lambda row: (row["x"], row["y"]))
+    return rows
+
+
+def make_dpi_aware() -> None:
+    """Windows reports scaled monitors in real pixels only to DPI-aware processes."""
+    import ctypes
+    try:
+        ctypes.windll.shcore.SetProcessDpiAwareness(2)  # per-monitor aware
+    except (AttributeError, OSError):
+        try:
+            ctypes.windll.user32.SetProcessDPIAware()
+        except (AttributeError, OSError):
+            pass
+
+
 def ask_for_folders(files: FileBrowser) -> None:
     """Touch the folders macOS guards so it asks for access now, while
     someone is at the Mac, rather than when the phone first opens them."""
@@ -1001,7 +1109,7 @@ def ask_for_folders(files: FileBrowser) -> None:
 def daemon_binds(gravity_home: str) -> List[str]:
     """The addresses gravityd serves on, from gravityd.toml, so both stay in step."""
     try:
-        with open(os.path.join(gravity_home, "gravityd.toml")) as handle:
+        with open(os.path.join(gravity_home, "gravityd.toml"), encoding="utf-8") as handle:
             text = handle.read()
     except OSError:
         return ["127.0.0.1"]
@@ -1025,15 +1133,23 @@ def main() -> None:
     parser.add_argument("--files-root", action="append",
                         help="share this folder for file browsing (repeatable; default: config file)")
     parser.add_argument("--config", default=os.path.join(home, ".gravity-lens", "config.json"))
-    parser.add_argument("--displays-json", help="report this display layout instead of the Mac's (demos)")
+    parser.add_argument("--displays-json", help="report this display layout instead of the computer's (demos)")
+    parser.add_argument("--log", help="append messages to this file (Windows runs Lens without a console)")
     args = parser.parse_args()
+    if args.log:
+        os.makedirs(os.path.dirname(os.path.abspath(args.log)), exist_ok=True)
+        sys.stdout = sys.stderr = open(args.log, "a", encoding="utf-8", buffering=1)
+    elif sys.stderr is None:  # pythonw.exe: nowhere to write
+        sys.stdout = sys.stderr = open(os.devnull, "w")
+    if WINDOWS:
+        make_dpi_aware()
     if args.displays_json:
         Handler.display_override = json.loads(args.displays_json)
 
     roots = args.files_root
     if roots is None:
         try:
-            with open(args.config) as handle:
+            with open(args.config, encoding="utf-8") as handle:
                 files = json.load(handle).get("files") or {}
             if files.get("enabled"):
                 roots = files.get("roots") or ["~"]
@@ -1042,7 +1158,8 @@ def main() -> None:
     if roots:
         Handler.files = FileBrowser(roots)
         sys.stderr.write("file browsing on for: %s\n" % ", ".join(Handler.files.roots))
-        threading.Thread(target=ask_for_folders, args=(Handler.files,), daemon=True).start()
+        if not WINDOWS:
+            threading.Thread(target=ask_for_folders, args=(Handler.files,), daemon=True).start()
 
     Handler.lens = Lens(args.gravity_home, args.workspace_home or args.gravity_home, args.claude_projects)
     Handler.auth = DaemonAuth(args.gravity_home, args.daemon_port)

@@ -4,6 +4,7 @@ on:
   push:
     branches: [main]
   pull_request:
+  workflow_dispatch:
 
 jobs:
   lens:
@@ -19,6 +20,22 @@ jobs:
           python-version: ${{ matrix.python }}
       - run: python -m py_compile companion/gravity_lens.py companion/gravity_files.py companion/gravity_autostart.py demo/make_demo.py demo/fake_screen.py
       - run: python -m unittest discover tests -v
+
+  lens-windows:
+    name: Gravity Lens on Windows
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: python -m unittest discover tests -p "test_[flw]*.py" -v
+      - name: The installer parses
+        shell: pwsh
+        run: |
+          $errors = $null
+          [System.Management.Automation.Language.Parser]::ParseFile("$PWD\companion\install.ps1", [ref]$null, [ref]$errors) | Out-Null
+          if ($errors) { $errors | Format-List; exit 1 }
 
   app:
     name: iOS app

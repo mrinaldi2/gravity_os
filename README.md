@@ -44,7 +44,8 @@
 - **Create projects and bots** with a name, a charter and one of Gravity's twenty avatars.
 - **Control the Mac's screen.** macOS's own Screen Sharing, built into the app. With two or more displays, switch between **Left · Right · Both**: each screen fills the phone on its own. Then: tap to click, long-press or two-finger tap to right-click, double-tap to double-click, pinch to zoom. Type with the iOS keyboard; ⌘ ⌥ ⌃ ⇧ latch for the next key; one-tap shortcuts (copy, paste, Spotlight, switch app, Finder's *Copy as pathname*). What the Mac copies pops up on the phone, ready to send to a bot.
 - **Browse the Mac's files.** Folders, image thumbnails, previews (markdown rendered, code in monospace, PDFs and images in Quick Look), share or save to the phone, and **Copy path** or **Send to a bot**, either typed into its terminal or as a message.
-- **Resilient.** Reconnects by itself and resumes the terminal from where it left off. The device token stays in the Keychain.
+- **Several computers.** Add a Mac and a Windows PC (or more). They all stay connected, so notifications and decisions come from every one; the menu at the top of each tab picks the one on screen.
+- **Resilient.** Reconnects by itself and resumes the terminal from where it left off. Device tokens stay in the Keychain.
 
 ## How it works
 
@@ -82,6 +83,7 @@ flowchart LR
 |---|---|
 | Mac | [Gravity](https://getgravity.build) 0.13 or later (macOS 14+, Apple silicon) with its daemon running |
 | Mac | [Tailscale](https://tailscale.com), and Python 3.9+ (`/usr/bin/python3` ships with the Xcode command line tools) |
+| Windows PC (optional) | A Windows build of Gravity with its daemon running, Tailscale, Python 3.9+, and [TightVNC Server](https://www.tightvnc.com) for the screen |
 | iPhone | iOS 17 or later, with Tailscale signed in to the same tailnet |
 | Build | Xcode 16 or later. A free Apple ID is enough to run it on your own phone |
 
@@ -154,6 +156,25 @@ Adds a login agent that waits for Tailscale, writes the Mac's current Tailscale 
 
 Also make sure Tailscale starts at login (Tailscale menu → Settings → *Launch at login*). With FileVault on, nothing starts until someone logs in at the Mac after a restart; for a planned restart, `sudo fdesetup authrestart` unlocks the disk once so the Mac comes back on its own.
 
+### 8. Optional: add a Windows PC
+
+Each computer has its own daemon, token and Lens; the phone connects to all of them.
+
+1. **Daemon.** Add the PC's Tailscale address to `bind` in `%USERPROFILE%\.gravity\gravityd.toml` and restart the daemon.
+2. **Firewall.** Allow inbound TCP 49777, 49778 and 5900 from Tailscale only (as administrator):
+   ```powershell
+   foreach ($port in 49777, 49778, 5900) {
+     New-NetFirewallRule -DisplayName "GravitiOS $port" -Direction Inbound -Protocol TCP -LocalPort $port `
+       -RemoteAddress 100.64.0.0/10, fd7a:115c:a1e0::/48 -Action Allow
+   }
+   ```
+3. **Gravity Lens.** From a clone of this repository: `powershell -ExecutionPolicy Bypass -File companion\install.ps1 -WithFiles` (drop `-WithFiles` to keep the file browser off). It runs at sign-in from Task Scheduler and restarts if it stops; its log is `%USERPROFILE%\.gravity-lens\lens.log`. `AppData` is never shared.
+4. **Screen.** Install TightVNC Server (`winget install GlavSoft.TightVNC`) as a service and set its primary password. The phone signs in with that password only.
+5. **Token.** In Gravity on the PC: Settings → Devices → add a device with `read`, `control` and `approve`.
+6. **Phone.** Settings → Computers → **Add a computer**, choose Windows, and enter the PC's Tailscale address and token. Its screen password goes under Settings → screen while the PC is selected.
+
+On a PC the screen's key row has Ctrl, ⊞ (the Windows key) and Alt, and the shortcuts menu has Windows ones: Explorer's *Copy as path*, Start, Alt+Tab, Task Manager.
+
 ## Try it without your own bots
 
 The screenshots above come from a demo world: a fictional team building a notes app, with projects, bots, decisions, activity, reports and images. You can run it too. It starts a throwaway daemon with Gravity's test runtime, so no Claude sessions run and no tokens are spent:
@@ -172,12 +193,14 @@ uv run --with cryptography --with pillow demo/fake_screen.py
 
 Add `-screenHost 127.0.0.1 -screenPort 5901 -screenUser demo -screenPassword demo` to the launch arguments.
 
+To try two computers, run a second demo on other ports (`--out /tmp/gravitios-demo2 --port 49791 --lens-port 49789`) and add its launch arguments with a `2`: `-grav2Host`, `-grav2Port`, `-lens2Port`, `-grav2Token`, and `-grav2Kind windows` to see it as a PC.
+
 ## Security and privacy
 
 - GravitiOS talks only to your daemon and your Lens. No analytics, no crash reporting, no accounts. The one exception: a report that embeds a web image loads that image from the web.
-- The device token is stored in the iPhone Keychain (this device only, after first unlock).
+- Device tokens are stored in the iPhone Keychain (this device only, after first unlock), one per computer.
 - Traffic is plain HTTP and WebSocket inside your tailnet; Tailscale encrypts it end to end. Bind the daemon and Lens only to loopback and your Tailscale address.
-- Lens is read-only. It serves only bot logs, the artifacts folder and images that a bot's log or a report refers to, and writes nothing but a thumbnail cache in `~/Library/Caches/GravityLens`.
+- Lens is read-only. It serves only bot logs, the artifacts folder and images that a bot's log or a report refers to, and writes nothing but a thumbnail cache in `~/Library/Caches/GravityLens` (`%LOCALAPPDATA%\GravityLens` on Windows).
 - A lost phone: revoke its device in Gravity. The daemon and Lens both refuse it immediately. Screen Sharing uses your Mac password instead, so change that too.
 - Screen Sharing listens on every network the Mac is on, not only Tailscale. The Mac's user password protects it; on untrusted Wi-Fi, consider turning it off or enabling the macOS firewall.
 - The file browser is off unless you turn it on. When on, it serves the folders you chose, never secret locations, and resolves symlinks so nothing leads outside them.
@@ -189,7 +212,8 @@ See [SECURITY.md](SECURITY.md) to report a vulnerability.
 | Symptom | Fix |
 |---|---|
 | The app keeps retrying | The daemon is not listening on the Tailscale address: check `bind` and restart it. From the Mac, `curl http://100.x.y.z:49777/health` must answer. |
-| "Token rejected" | The token was mistyped, revoked, or copied incompletely. Forget the daemon in Settings and paste it again. |
+| "Token rejected" | The token was mistyped, revoked, or copied incompletely. Settings → Computers → the computer → **Replace token**. |
+| A Windows PC does not answer | On the PC, `netstat -ano \| findstr 49777` must show the Tailscale address, and the firewall rules from step 8 must exist. Lens's log is `%USERPROFILE%\.gravity-lens\lens.log`. |
 | Activity says "Gravity Lens not reachable" | Run `./companion/install.sh`, then `curl http://100.x.y.z:49778/health`. Its log is `~/.gravity-lens/lens.log`. |
 | Nothing answers after a reboot | Log in at the Mac once if FileVault is on. With `--with-autostart`, check `~/.gravity-lens/autostart.log`; without it, see step 7. |
 | The terminal looks narrow on the Mac | The terminal is shared: opening it on the phone resizes it for every client until the Mac resizes it again. |
@@ -205,7 +229,7 @@ GravitiOS/            the SwiftUI app
   Core/               daemon client (WebSocket), Lens client, state, Keychain
   UI/                 screens
   Core/RFB/            the Screen Sharing (VNC) client
-companion/            Gravity Lens (gravity_lens.py, gravity_files.py), gravity_autostart.py and the installer
+companion/            Gravity Lens (gravity_lens.py, gravity_files.py), gravity_autostart.py and the installers (install.sh, install.ps1)
 demo/                 the demo world, a fake Screen Sharing server, and their images
 tests/                Lens tests (python3 -m unittest discover tests)
 Config/               Info.plist, Signing.xcconfig (+ your git-ignored Local.xcconfig)
