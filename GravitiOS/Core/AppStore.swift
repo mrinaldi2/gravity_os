@@ -384,6 +384,23 @@ final class AppStore {
         return bot
     }
 
+    // MARK: Files
+
+    /// The project's shared artifacts, newest first.
+    func listArtifacts(projectId: String) async throws -> [ArtifactFile] {
+        let reply = try await client.request("list_artifacts", ["project_id": projectId])
+        return reply.list("artifacts").map(ArtifactFile.init)
+    }
+
+    /// A file under the bot's own folder or its project's artifacts.
+    func readFile(botId: String, path: String) async throws -> DaemonFile {
+        let reply = try await client.request("read_file", ["bot_id": botId, "path": path])
+        guard let row = reply.dict("file") else {
+            throw DaemonError(code: "not_found", message: "The daemon did not return the file.")
+        }
+        return DaemonFile(row)
+    }
+
     // MARK: Tasks
 
     func listTasks(botId: String) async throws -> [BotTask] {

@@ -12,13 +12,14 @@ struct BotDetailView: View {
         case terminal = "Terminal"
         case messages = "Messages"
         case tasks = "Tasks"
+        case files = "Files"
         case info = "Info"
     }
 
     /// A daemon that serves chat gets Gravity's chat pane and Tasks tab; an
     /// older one keeps the Gravity Lens activity and the message thread.
     private var panes: [Pane] {
-        store.hasChat ? [.chat, .terminal, .tasks, .info] : [.activity, .terminal, .messages, .info]
+        store.hasChat ? [.chat, .terminal, .tasks, .files, .info] : [.activity, .terminal, .messages, .info]
     }
 
     private var pane: Pane {
@@ -47,6 +48,7 @@ struct BotDetailView: View {
             switch pane {
             case .chat: BotChatPane(botId: botId, searching: $searching)
             case .tasks: BotTasksPane(botId: botId)
+            case .files: BotFilesPane(botId: botId)
             case .activity: BotActivityView(botId: botId)
             case .terminal: TerminalScreen(botId: botId)
             case .messages: ChatView(botId: botId)

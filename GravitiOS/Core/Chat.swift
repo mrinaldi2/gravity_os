@@ -89,12 +89,42 @@ struct DaemonFile {
     let mime: String
     let text: String?
     let data: Data?
+    /// Only the first 16 MB came back.
+    let truncated: Bool
 
     init(_ d: JSONDict) {
         name = d.str("name")
         mime = d.str("mime")
         text = d["text"] as? String
         data = (d["base64"] as? String).flatMap { Data(base64Encoded: $0) }
+        truncated = d.bool("truncated")
+    }
+}
+
+/// A file in a project's shared artifacts folder (`list_artifacts`),
+/// including files that arrived from bots on another computer.
+struct ArtifactFile: Identifiable, Hashable {
+    /// Absolute, on the computer that holds it.
+    let path: String
+    /// Inside the artifacts folder, "/"-separated.
+    let rel: String
+    let name: String
+    let size: Int
+    let modified: Date?
+    let mime: String
+    /// A markdown file's first heading.
+    let title: String?
+
+    var id: String { path }
+
+    init(_ d: JSONDict) {
+        path = d.str("path")
+        rel = d.str("rel").isEmpty ? d.str("name") : d.str("rel")
+        name = d.str("name")
+        size = d.int("size")
+        modified = d.date("modified")
+        mime = d.str("mime")
+        title = d.optStr("title")
     }
 }
 
