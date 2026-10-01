@@ -60,6 +60,25 @@ class WindowsTests(unittest.TestCase):
         self.assertNotIn("env", command)
 
 
+    def test_config_with_a_byte_order_mark_still_shares_files(self):
+        with tempfile.TemporaryDirectory() as folder:
+            config = os.path.join(folder, "config.json")
+            with open(config, "wb") as handle:  # what Windows PowerShell 5.1 writes
+                handle.write(b'\xef\xbb\xbf{"files": {"enabled": true, "roots": ["~"]}}')
+            self.assertEqual(gravity_lens.shared_roots(config), ["~"])
+            with open(config, "w", encoding="utf-8") as handle:
+                handle.write('{"files": {"enabled": false}}')
+            self.assertIsNone(gravity_lens.shared_roots(config))
+            self.assertIsNone(gravity_lens.shared_roots(os.path.join(folder, "missing.json")))
+
+    def test_a_broken_config_is_reported_not_swallowed(self):
+        with tempfile.TemporaryDirectory() as folder, mock.patch.object(sys, "stderr") as stderr:
+            config = os.path.join(folder, "config.json")
+            with open(config, "w", encoding="utf-8") as handle:
+                handle.write("{not json")
+            self.assertIsNone(gravity_lens.shared_roots(config))
+            self.assertIn("could not read", stderr.write.call_args[0][0])
+
 
 @unittest.skipUnless(os.name == "nt", "needs Windows")
 class OnWindowsTests(unittest.TestCase):

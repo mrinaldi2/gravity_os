@@ -51,12 +51,17 @@ $Source = $PSScriptRoot
 New-Item -ItemType Directory -Force -Path $HomeDir | Out-Null
 Copy-Item (Join-Path $Source "gravity_lens.py"), (Join-Path $Source "gravity_files.py") $HomeDir -Force
 
+# UTF-8 without a byte-order mark: Windows PowerShell's -Encoding UTF8 would add one.
+function Write-Config([string]$Text) {
+    [IO.File]::WriteAllText($Config, $Text, (New-Object Text.UTF8Encoding $false))
+}
+
 $Config = Join-Path $HomeDir "config.json"
 if ($WithFiles) {
-    Set-Content -Path $Config -Encoding UTF8 -Value "{`n  `"files`": {`"enabled`": true, `"roots`": [`"~`"]}`n}"
+    Write-Config "{`n  `"files`": {`"enabled`": true, `"roots`": [`"~`"]}`n}"
     Write-Host "File browsing: on for your user folder (edit roots in $Config). AppData is never shared."
 } elseif ($WithoutFiles) {
-    Set-Content -Path $Config -Encoding UTF8 -Value "{`n  `"files`": {`"enabled`": false}`n}"
+    Write-Config "{`n  `"files`": {`"enabled`": false}`n}"
     Write-Host "File browsing: off."
 }
 

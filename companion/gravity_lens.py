@@ -1120,6 +1120,20 @@ def daemon_binds(gravity_home: str) -> List[str]:
     return [b for b in binds if b not in ("0.0.0.0", "::")] or ["127.0.0.1"]
 
 
+def shared_roots(config: str) -> Optional[List[str]]:
+    """The folders config.json shares with the file browser, or None when it is off.
+    Windows PowerShell 5.1 writes UTF-8 with a byte-order mark, so that is accepted."""
+    try:
+        with open(config, encoding="utf-8-sig") as handle:
+            files = json.load(handle).get("files") or {}
+    except FileNotFoundError:
+        return None
+    except (OSError, ValueError, AttributeError) as error:
+        sys.stderr.write(f"file browsing off: could not read {config} ({error})\n")
+        return None
+    return (files.get("roots") or ["~"]) if files.get("enabled") else None
+
+
 def main() -> None:
     home = os.path.expanduser("~")
     parser = argparse.ArgumentParser(description="Read-only view of Gravity bots' work for GravitiOS.")
@@ -1146,15 +1160,7 @@ def main() -> None:
     if args.displays_json:
         Handler.display_override = json.loads(args.displays_json)
 
-    roots = args.files_root
-    if roots is None:
-        try:
-            with open(args.config, encoding="utf-8") as handle:
-                files = json.load(handle).get("files") or {}
-            if files.get("enabled"):
-                roots = files.get("roots") or ["~"]
-        except (OSError, ValueError):
-            roots = None
+    roots = args.files_root if args.files_root is not None else shared_roots(args.config)
     if roots:
         Handler.files = FileBrowser(roots)
         sys.stderr.write("file browsing on for: %s\n" % ", ".join(Handler.files.roots))
