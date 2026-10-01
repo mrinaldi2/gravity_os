@@ -14,7 +14,9 @@ extension LensTrigger {
             case "note": return from == "You" ? "Note from Gravity" : "Note from \(sender)"
             default: return "Message from \(sender)"
             }
+        case "owner": return "You"
         case "typed": return "You, in the terminal"
+        case "routine": return from.isEmpty ? "Routine" : "Routine \(from)"
         case "background": return "Background job finished"
         default: return "Continued"
         }
@@ -22,7 +24,8 @@ extension LensTrigger {
 
     var symbol: String {
         switch kind {
-        case "typed": "person.fill"
+        case "typed", "owner": "person.fill"
+        case "routine": "calendar.badge.clock"
         case "background": "clock.arrow.circlepath"
         case "message": msgKind == "task" ? "tray.and.arrow.down.fill" : "bubble.left.fill"
         default: "arrow.turn.down.right"

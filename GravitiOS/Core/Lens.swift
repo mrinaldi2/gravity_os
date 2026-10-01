@@ -87,6 +87,10 @@ struct LensEvent: Decodable, Identifiable, Hashable {
     let minor: Bool?
     let hasDetail: Bool?
     let images: [LensImageRef]?
+    /// From the daemon's chat: a step still running, a decision raised, a task completed.
+    let running: Bool?
+    let decisionId: String?
+    let taskId: String?
 
     var date: Date? { WireDate.parse(at) }
 }
@@ -199,6 +203,14 @@ final class LensStore {
     var latest: [String: LensTurn] = [:]
     var feed: [LensTurn] = []
     var artifacts: [LensArtifact] = []
+    /// From the daemon's chat: bot id → its loaded turns, oldest first.
+    var chats: [String: [ChatTurn]] = [:]
+    /// bot id → older turns exist than the ones loaded.
+    var chatHasMore: [String: Bool] = [:]
+
+    /// Turns, steps, images and reports come from the daemon when it serves
+    /// chat; Gravity Lens is then used only for files and the screen layout.
+    var fromDaemon: Bool { app.hasChat }
 
     @ObservationIgnored private let app: AppStore
     @ObservationIgnored private let session: URLSession
@@ -219,6 +231,7 @@ final class LensStore {
         session = URLSession(configuration: configuration)
         decoder = JSONDecoder()
         decoder.keyDecodingStrategy = .convertFromSnakeCase
+        app.onChatTurns = { [weak self] botId, rows in self?.merge(botId, ChatDecoding.turns(rows)) }
     }
 
     // MARK: Requests
@@ -273,6 +286,10 @@ final class LensStore {
     // MARK: Loading
 
     func refresh() async {
+        if fromDaemon {
+            await refreshChats()
+            return
+        }
         async let overview: OverviewReply? = try? get("/v1/overview")
         async let recent: TurnsReply? = try? get("/v1/feed", ["limit": "60"])
         if let overview = await overview {
@@ -283,6 +300,10 @@ final class LensStore {
     }
 
     func turns(bot: String, before: String? = nil) async throws -> (turns: [LensTurn], hasMore: Bool) {
+        if fromDaemon {
+            let page = try await chatPage(bot, before: before, limit: 25)
+            return (page.turns.reversed().compactMap { $0.lensTurn(botName: app.bot(bot)?.name) }, page.hasMore)
+        }
         var query = ["limit": "25"]
         if let before { query["before"] = before }
         let reply: TurnsReply = try await get("/v1/bots/\(encode(bot))/turns", query)
@@ -290,12 +311,31 @@ final class LensStore {
     }
 
     func turn(bot: String, id: String) async throws -> (turn: LensTurn, events: [LensEvent]) {
+        if fromDaemon {
+            var found = chats[bot]?.first { $0.id == id }
+            if found == nil {
+                found = try await chatPage(bot, before: nil, limit: 200).turns.first { $0.id == id }
+            }
+            guard let chatTurn = found, let turn = chatTurn.lensTurn(botName: app.bot(bot)?.name) else {
+                throw DaemonError(code: "not_found", message: "That turn is no longer in the bot's transcript.")
+            }
+            return (turn, chatTurn.lensEvents)
+        }
         let reply: TurnReply = try await get("/v1/bots/\(encode(bot))/turns/\(encode(id))")
         return (reply.turn, reply.events)
     }
 
     func detail(bot: String, event: String) async throws -> LensEventDetail {
-        try await get("/v1/bots/\(encode(bot))/events/\(encode(event))")
+        if fromDaemon {
+            let reply = try await app.client.request("get_chat_step", ["bot_id": bot, "item_id": event])
+            let row = reply.dict("detail") ?? [:]
+            guard let data = try? JSONSerialization.data(withJSONObject: row),
+                  let detail = try? decoder.decode(LensEventDetail.self, from: data) else {
+                throw DaemonError(code: "decode", message: "Unexpected step detail from the daemon.")
+            }
+            return detail
+        }
+        return try await get("/v1/bots/\(encode(bot))/events/\(encode(event))")
     }
 
     enum ImageSource: Hashable {
@@ -325,9 +365,13 @@ final class LensStore {
         }
         let cacheKey = "\(key)#\(thumb)" as NSString
         if let cached = imageCache.object(forKey: cacheKey) { return cached }
-        let data = try await fetch(path, query)
-        guard let image = UIImage(data: data) else {
+        let data = fromDaemon ? try await daemonImage(source) : try await fetch(path, query)
+        guard var image = UIImage(data: data) else {
             throw DaemonError(code: "image", message: "Not an image the phone can show.")
+        }
+        // The daemon sends images whole; thumbnails are made here.
+        if fromDaemon, thumb, let small = await image.byPreparingThumbnail(ofSize: Self.thumbSize(image.size)) {
+            image = small
         }
         imageCache.setObject(image, forKey: cacheKey)
         return image
@@ -366,20 +410,154 @@ final class LensStore {
     }
 
     func loadArtifacts() async {
+        if fromDaemon {
+            await loadDaemonArtifacts()
+            return
+        }
         if let reply: ArtifactsReply = try? await get("/v1/artifacts") { artifacts = reply.artifacts }
     }
 
     func artifact(project: String, name: String) async throws -> String {
+        if fromDaemon {
+            let file = try await readFile(["project_id": project, "path": name])
+            return file.text ?? ""
+        }
         let reply: ArtifactReply = try await get("/v1/artifacts/\(encode(project))/\(encode(name))")
         return reply.text
     }
 
     /// `~/.gravity/projects/<project>/artifacts/<name>` → its report, if it is one.
     func report(forPath path: String) -> (project: String, name: String)? {
-        let parts = path.split(separator: "/").map(String.init)
+        let parts = path.replacingOccurrences(of: "\\", with: "/").split(separator: "/").map(String.init)
         guard let index = parts.lastIndex(of: "artifacts"), index >= 2, index + 1 < parts.count,
               parts[index - 2] == "projects" else { return nil }
-        return (parts[index - 1], parts[index + 1])
+        guard fromDaemon else { return (parts[index - 1], parts[index + 1]) }
+        // The daemon names projects by id and artifacts by their path inside the folder.
+        guard let project = app.projects.first(where: { $0.dirName == parts[index - 1] })
+                ?? app.projects.first(where: { $0.name == parts[index - 1] }) else { return nil }
+        return (project.id, parts[(index + 1)...].joined(separator: "/"))
+    }
+
+    // MARK: Daemon chat
+
+    /// The newest turns of every bot. Listing a chat also makes the daemon
+    /// push its changes (`chat_turns`), so after this the feed follows by itself.
+    private func refreshChats() async {
+        for bot in app.bots {
+            _ = try? await chatPage(bot.id, before: nil, limit: 10)
+        }
+    }
+
+    /// A bot's chat for its Chat pane: the newest page, if nothing is loaded yet.
+    func loadChat(_ botId: String) async throws {
+        _ = try await chatPage(botId, before: nil, limit: 30)
+    }
+
+    func loadOlderChat(_ botId: String) async throws {
+        guard let first = chats[botId]?.first else { return try await loadChat(botId) }
+        _ = try await chatPage(botId, before: first.id, limit: 30)
+    }
+
+    private func chatPage(_ botId: String, before: String?, limit: Int) async throws -> (turns: [ChatTurn], hasMore: Bool) {
+        var fields: JSONDict = ["bot_id": botId, "limit": limit]
+        if let before { fields["before"] = before }
+        let reply = try await app.client.request("list_chat", fields)
+        let turns = ChatDecoding.turns(reply.list("turns"))
+        let hasMore = reply.bool("has_more")
+        let wasEmpty = chats[botId]?.isEmpty ?? true
+        merge(botId, turns)
+        // Only a page that reaches the oldest loaded turn says whether more exist.
+        if wasEmpty || before != nil || turns.first?.id == chats[botId]?.first?.id {
+            chatHasMore[botId] = hasMore
+        }
+        status = .ok
+        return (turns, hasMore)
+    }
+
+    /// New or changed turns, from a page or a push, merged by id.
+    private func merge(_ botId: String, _ turns: [ChatTurn]) {
+        guard !turns.isEmpty else { return }
+        var list = chats[botId] ?? []
+        for turn in turns {
+            if let index = list.firstIndex(where: { $0.id == turn.id }) {
+                list[index] = turn
+            } else {
+                list.append(turn)
+            }
+        }
+        list.sort { $0.startedAt < $1.startedAt }
+        chats[botId] = list
+        let name = app.bot(botId)?.name
+        latest[botId] = list.last?.lensTurn(botName: name)
+        rebuildFeed()
+    }
+
+    private func rebuildFeed() {
+        var all: [LensTurn] = []
+        for (botId, turns) in chats {
+            let name = app.bot(botId)?.name
+            all += turns.suffix(20).compactMap { $0.lensTurn(botName: name) }
+        }
+        feed = Array(all.sorted { $0.updatedAt > $1.updatedAt }.prefix(60))
+    }
+
+    private func readFile(_ fields: JSONDict) async throws -> DaemonFile {
+        let reply = try await app.client.request("read_file", fields)
+        guard let row = reply.dict("file") else {
+            throw DaemonError(code: "not_found", message: "The daemon did not return the file.")
+        }
+        return DaemonFile(row)
+    }
+
+    private func daemonImage(_ source: ImageSource) async throws -> Data {
+        let file: DaemonFile
+        switch source {
+        case .bot(let bot, let ref):
+            let reply = try await app.client.request("get_chat_image", ["bot_id": bot, "image_id": ref.id])
+            file = DaemonFile(reply.dict("file") ?? [:])
+        case .report(let project, let name, let src):
+            file = try await readFile(["project_id": project, "path": Self.resolve(src, besideFile: name)])
+        }
+        guard let data = file.data else { throw DaemonError(code: "image", message: "Not an image.") }
+        return data
+    }
+
+    /// A report's image path, relative to the report, as a path inside the artifacts folder.
+    static func resolve(_ src: String, besideFile file: String) -> String {
+        var parts = file.split(separator: "/").map(String.init).dropLast()
+        for part in src.split(separator: "/").map(String.init) {
+            switch part {
+            case ".", "": continue
+            case "..": if !parts.isEmpty { parts.removeLast() }
+            default: parts.append(part)
+            }
+        }
+        return parts.joined(separator: "/")
+    }
+
+    private static func thumbSize(_ size: CGSize) -> CGSize {
+        let scale = min(1, 480 / max(size.width, size.height, 1))
+        return CGSize(width: size.width * scale, height: size.height * scale)
+    }
+
+    private static let reportSuffixes = [".md", ".markdown", ".txt", ".json", ".csv", ".log", ".yaml", ".yml", ".toml"]
+
+    private func loadDaemonArtifacts() async {
+        var found: [LensArtifact] = []
+        for project in app.projects {
+            guard let reply = try? await app.client.request("list_artifacts", ["project_id": project.id]) else { continue }
+            for row in reply.list("artifacts") {
+                let rel = row.str("rel").isEmpty ? row.str("name") : row.str("rel")
+                guard Self.reportSuffixes.contains(where: { rel.lowercased().hasSuffix($0) }) else { continue }
+                let name = row.str("name")
+                found.append(LensArtifact(
+                    project: project.id, name: rel,
+                    title: row.optStr("title") ?? (name as NSString).deletingPathExtension,
+                    size: row.int("size"), modifiedAt: row.str("modified")))
+            }
+        }
+        artifacts = found.sorted { $0.modifiedAt > $1.modifiedAt }
+        status = .ok
     }
 
     /// Keeps the feed and "now doing" lines fresh while the app is open.
@@ -388,7 +566,8 @@ final class LensStore {
         var wasConnected = false
         while !Task.isCancelled {
             let connected = app.status == .connected && !app.inBackground
-            let interval: TimeInterval = app.bots.contains { $0.state == .working } ? 4 : 10
+            // The daemon pushes chat changes; a slow refresh only catches new bots.
+            let interval: TimeInterval = fromDaemon ? 60 : (app.bots.contains { $0.state == .working } ? 4 : 10)
             // Straight away on (re)connecting, then on the interval.
             if connected, !wasConnected || Date().timeIntervalSince(last) >= interval {
                 await refresh()

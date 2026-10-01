@@ -2,6 +2,7 @@ import SwiftUI
 
 /// The shared artifacts folder: the reports the bots write for each other and for you.
 struct ReportsView: View {
+    @Environment(AppStore.self) private var store
     @Environment(LensStore.self) private var lens
     @State private var query = ""
 
@@ -19,7 +20,8 @@ struct ReportsView: View {
                     VStack(alignment: .leading, spacing: 3) {
                         Text(artifact.title).font(.subheadline.weight(.medium)).lineLimit(2)
                         HStack(spacing: 6) {
-                            Text(artifact.project)
+                            // From the daemon, artifacts name their project by id.
+                            Text(store.projects.first { $0.id == artifact.project }?.name ?? artifact.project)
                             if let modified = artifact.modified { Text("·"); Text(modified.relative) }
                             Text("·")
                             Text(ByteCountFormatter.string(fromByteCount: Int64(artifact.size), countStyle: .file))
@@ -32,7 +34,7 @@ struct ReportsView: View {
             .overlay { if lens.artifacts.isEmpty { LensEmptyState() } }
             .searchable(text: $query, prompt: "Search reports")
             .refreshable { await lens.loadArtifacts() }
-            .task { await lens.loadArtifacts() }
+            .task(id: store.projects.count) { await lens.loadArtifacts() }
             .navigationTitle("Reports")
             .toolbar { ToolbarItem(placement: .topBarTrailing) { ComputerSwitcher() } }
             .navigationDestination(for: LensArtifact.self) { ReportView(artifact: $0) }

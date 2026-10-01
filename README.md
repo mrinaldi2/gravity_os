@@ -44,6 +44,9 @@
 - **Create projects and bots** with a name, a charter and one of Gravity's twenty avatars.
 - **Control the Mac's screen.** macOS's own Screen Sharing, built into the app. With two or more displays, switch between **Left · Right · Both**: each screen fills the phone on its own. Then: tap to click, long-press or two-finger tap to right-click, double-tap to double-click, pinch to zoom. Type with the iOS keyboard; ⌘ ⌥ ⌃ ⇧ latch for the next key; one-tap shortcuts (copy, paste, Spotlight, switch app, Finder's *Copy as pathname*). What the Mac copies pops up on the phone, ready to send to a bot.
 - **Browse the Mac's files.** Folders, image thumbnails, previews (markdown rendered, code in monospace, PDFs and images in Quick Look), share or save to the phone, and **Copy path** or **Send to a bot**, either typed into its terminal or as a message.
+- **Chat, the way Gravity shows it.** With a Gravity daemon that serves chat (the desktop's chat pane), each bot opens on its conversation: turns oldest first, folded steps, diffs, images, messages sent and tasks completed, live as the bot works, with a composer and **search** (matches highlighted, next and previous, folded steps opened). Older daemons keep the Activity and Messages views from Gravity Lens.
+- **Tasks.** What a bot is working on, what it is waiting on, its upcoming routines and what it finished, with the whole request and result a tap away.
+- **Talk instead of typing.** The microphone in a bot's composer dictates the message; the one on the screen's key row types what you say on the computer. Recognition stays on the phone when iOS supports your language on-device.
 - **Several computers.** Add a Mac and a Windows PC (or more). They all stay connected, so notifications and decisions come from every one; the menu at the top of each tab picks the one on screen.
 - **Resilient.** Reconnects by itself and resumes the terminal from where it left off. Device tokens stay in the Keychain.
 
@@ -73,7 +76,7 @@ flowchart LR
 ```
 
 - **The daemon** (`gravityd`, part of Gravity) is the source of truth for projects, bots, the terminal, messages and decisions. GravitiOS talks to it with a scoped **device token** you create in Gravity.
-- **Gravity Lens** ([`companion/gravity_lens.py`](companion/gravity_lens.py)) is a small, read-only, standard-library Python service. Gravity does not serve the bots' Claude Code logs to clients, so Lens parses them into turns and serves them, along with the reports folder and the images the bots touched. It accepts only a Gravity device token with the `read` grant, verified by the daemon itself, so revoking the device in Gravity cuts off both.
+- **Gravity Lens** ([`companion/gravity_lens.py`](companion/gravity_lens.py)) is a small, read-only, standard-library Python service. It serves the file browser and the display layout. For daemons that do not serve chat themselves (before Gravity's chat pane), it also parses the bots' Claude Code logs into turns and serves them, along with the reports folder and the images the bots touched; with a newer daemon those come from the daemon (`list_chat`, `get_chat_step`, `get_chat_image`, `list_artifacts`, `read_file`). It accepts only a Gravity device token with the `read` grant, verified by the daemon itself, so revoking the device in Gravity cuts off both.
 - **Screen Sharing** is macOS's own VNC server. GravitiOS includes a small client for it (RFB 3.8, ZRLE/Hextile, Apple's Diffie-Hellman sign-in), so you sign in with your Mac user name and password and nothing extra runs on the Mac.
 - **Tailscale** carries all of it over WireGuard. Nothing is exposed to the internet and nothing goes through a third-party server.
 

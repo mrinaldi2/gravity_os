@@ -17,6 +17,7 @@ import argparse
 import base64
 import json
 import os
+import re
 import shutil
 import socket
 import subprocess
@@ -109,8 +110,10 @@ def start_daemon(gravityd: str, out: str, port: int) -> subprocess.Popen:
     os.makedirs(home, exist_ok=True)
     config = os.path.join(out, "gravityd.toml")
     with open(config, "w") as handle:
-        handle.write(f'home = "{home}"\nbind = ["127.0.0.1"]\nport = {port}\n'
-                     'negotiate_port = false\nruntime = "double"\n')
+        # user_home: where the daemon reads Claude Code transcripts (~/.claude/projects),
+        # for daemons that serve the chat themselves.
+        handle.write(f'home = "{home}"\nuser_home = "{os.path.join(out, "user-home")}"\n'
+                     f'bind = ["127.0.0.1"]\nport = {port}\nnegotiate_port = false\nruntime = "double"\n')
     log = open(os.path.join(out, "gravityd.log"), "ab")
     daemon = subprocess.Popen([gravityd, "--config", config], stdout=log, stderr=log)
     for _ in range(50):
@@ -121,16 +124,55 @@ def start_daemon(gravityd: str, out: str, port: int) -> subprocess.Popen:
     raise SystemExit(f"the demo daemon did not start; see {out}/gravityd.log")
 
 
-def raise_decision(port: int, home: str, bot_id: str, **arguments: Any) -> None:
-    """Decisions are raised by bots over their MCP bus, with the bot's token."""
+def bot_tool(port: int, home: str, bot_id: str, name: str, **arguments: Any) -> Dict[str, Any]:
+    """What bots do on the bus (decisions, tasks) goes through their MCP tools, with the bot's token."""
     with open(os.path.join(home, "secrets", f"bot-{bot_id}.token")) as handle:
         token = handle.read().strip()
     body = json.dumps({"jsonrpc": "2.0", "id": 1, "method": "tools/call",
-                       "params": {"name": "raise_decision", "arguments": arguments}}).encode()
+                       "params": {"name": name, "arguments": arguments}}).encode()
     request = urllib.request.Request(f"http://127.0.0.1:{port}/mcp", data=body, headers={
         "Authorization": f"Bearer {token}", "Content-Type": "application/json",
         "Accept": "application/json, text/event-stream"})
-    urllib.request.urlopen(request, timeout=10).read()
+    reply = json.loads(urllib.request.urlopen(request, timeout=10).read())
+    try:
+        return json.loads(reply["result"]["content"][0]["text"])
+    except (KeyError, IndexError, ValueError):
+        return {}
+
+
+def raise_decision(port: int, home: str, bot_id: str, **arguments: Any) -> None:
+    bot_tool(port, home, bot_id, "raise_decision", **arguments)
+
+
+def hand_out_tasks(port: int, home: str, bots: Dict[str, Dict[str, str]]) -> None:
+    """Work bots gave each other, for the Tasks tab: open, waiting and done."""
+    def send(sender: str, to: str, body: str, hours: int = 24) -> str:
+        return bot_tool(port, home, bots[sender]["id"], "send_message", to=to, kind="task", body=body,
+                        deadline_hours=hours).get("task_id", "")
+
+    send("iOS Dev", "QA Tester", "Run the sync suite on build 142 on the SE and the 15, and report every layout "
+         "bug in the conflict banner with a screenshot.", hours=8)
+    send("QA Tester", "Backend Dev", "The SE run needs a sync server with two devices' worth of conflicting edits. "
+         "Can you seed the staging server with the conflict fixtures?", hours=4)
+    schema = send("Architect", "Backend Dev", "Write the conflict resolution note for the sync server. It should "
+                  "cover:\n\n1. **Vector clocks** per note: how they are stored, merged and compacted.\n"
+                  "2. **Last-writer-wins** for titles and tags, and why bodies are different.\n"
+                  "3. The **three-way merge** for bodies when edits do not overlap, with the paragraph as the unit.\n"
+                  "4. What the server sends the app when it cannot merge, so the banner can show both versions.\n"
+                  "5. The migration for notes written before clocks existed.\n\n"
+                  "Put it in the artifacts as sync-conflicts.md and keep it under two pages.")
+    bot_tool(port, home, bots["Backend Dev"]["id"], "complete_task", task_id=schema, result=(
+        "Done: **sync-conflicts.md** is in the artifacts.\n\n"
+        "- Each note carries a vector clock keyed by device, merged element-wise and compacted when a device has "
+        "been silent for 90 days.\n- Titles and tags are last-writer-wins on the clock; bodies are not, because a "
+        "lost paragraph is worse than a banner.\n- Bodies merge three ways by paragraph when edits do not overlap.\n"
+        "- When they do, the server answers `409 conflict` with both versions and their clocks, which is exactly "
+        "what the banner needs.\n- Old notes get a clock of zero on first sync, so any edit wins over them.\n\n"
+        "The test fixtures cover all five cases."), artifacts=["sync-conflicts.md"])
+    copy = send("Designer", "Copywriter", "Two lines for the conflict banner: one for 'edited on two devices', "
+                "one for the merge that worked.")
+    bot_tool(port, home, bots["Copywriter"]["id"], "complete_task", task_id=copy,
+             result="\"This note changed on two devices. Keep both?\" and \"Merged edits from your other device.\"")
 
 
 # ---------------------------------------------------------------- logs
@@ -227,8 +269,9 @@ class Log:
                 handle.write(json.dumps(record) + "\n")
 
 
-def mangle(path: str) -> str:
-    return path.replace("/", "-").replace(".", "-")
+def project_folder(workspace: str) -> str:
+    """Claude Code's folder name: every character but letters and digits becomes "-"."""
+    return re.sub(r"[^A-Za-z0-9]", "-", workspace)
 
 
 # ---------------------------------------------------------------- the team
@@ -489,7 +532,7 @@ def main() -> None:
     if os.path.exists(out):
         shutil.rmtree(out)
     home = os.path.join(out, "gravity")
-    claude = os.path.join(out, "claude-projects")
+    claude = os.path.join(out, "user-home", ".claude", "projects")
     shots = os.path.join(out, "shots")
     os.makedirs(shots)
     for image in os.listdir(ASSETS):
@@ -514,7 +557,7 @@ def main() -> None:
                                                                       "bots", bot["dir_name"], "workspace")}
 
     for name, log in write_logs(bots, shots, artifacts).items():
-        log.write(os.path.join(claude, mangle(bots[name]["workspace"])))
+        log.write(os.path.join(claude, project_folder(bots[name]["workspace"])))
     write_reports(artifacts["Aurora Notes"], shots)
 
     raise_decision(args.port, home, bots["Architect"]["id"], kind="decision",
@@ -533,6 +576,7 @@ def main() -> None:
                    title="Launch the site with the offline headline?",
                    options=[{"key": "yes", "label": "Yes, go live Monday"}, {"key": "wait", "label": "Wait for sharing"}],
                    body="The page is built and staged.")
+    hand_out_tasks(args.port, home, bots)
     ws.request("send_user_message", to_bot_id=bots["iOS Dev"]["id"],
                body="Nice work on the banner. Keep it behind the flag until QA signs off.")
 

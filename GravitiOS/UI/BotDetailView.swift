@@ -3,19 +3,33 @@ import SwiftUI
 struct BotDetailView: View {
     @Environment(AppStore.self) private var store
     let botId: String
-    @State private var pane = Pane.activity
+    @State private var choice: Pane?
+    @State private var searching = false
 
     enum Pane: String, CaseIterable {
+        case chat = "Chat"
         case activity = "Activity"
         case terminal = "Terminal"
         case messages = "Messages"
+        case tasks = "Tasks"
         case info = "Info"
+    }
+
+    /// A daemon that serves chat gets Gravity's chat pane and Tasks tab; an
+    /// older one keeps the Gravity Lens activity and the message thread.
+    private var panes: [Pane] {
+        store.hasChat ? [.chat, .terminal, .tasks, .info] : [.activity, .terminal, .messages, .info]
+    }
+
+    private var pane: Pane {
+        if let choice, panes.contains(choice) { return choice }
+        return panes[0]
     }
 
     var body: some View {
         VStack(spacing: 0) {
-            Picker("View", selection: $pane) {
-                ForEach(Pane.allCases, id: \.self) { Text($0.rawValue) }
+            Picker("View", selection: Binding(get: { pane }, set: { choice = $0 })) {
+                ForEach(panes, id: \.self) { Text($0.rawValue) }
             }
             .pickerStyle(.segmented)
             .padding(.horizontal, 12)
@@ -31,6 +45,8 @@ struct BotDetailView: View {
             }
 
             switch pane {
+            case .chat: BotChatPane(botId: botId, searching: $searching)
+            case .tasks: BotTasksPane(botId: botId)
             case .activity: BotActivityView(botId: botId)
             case .terminal: TerminalScreen(botId: botId)
             case .messages: ChatView(botId: botId)
@@ -42,6 +58,12 @@ struct BotDetailView: View {
         .toolbar {
             ToolbarItem(placement: .topBarTrailing) {
                 if let bot = store.bot(botId) { StateBadge(state: bot.state) }
+            }
+            if pane == .chat {
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button { searching.toggle() } label: { Image(systemName: "magnifyingglass") }
+                        .accessibilityLabel("Search this chat")
+                }
             }
         }
         .toolbar(.hidden, for: .tabBar)

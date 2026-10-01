@@ -28,6 +28,8 @@ final class AppStore {
     var status: ConnectionStatus = .idle
     var endpoint: Endpoint?
     var grants: Set<String> = []
+    /// What the daemon serves, from `hello_ok`.
+    var capabilities: Set<String> = []
     var serverVersion = ""
     var deviceId: String?
 
@@ -46,10 +48,14 @@ final class AppStore {
     var lastSeen: [String: Date] = [:]
     var notice: Notice?
     var inBackground = false
+    /// Bumped by bus traffic and routine runs: tasks open and close with them.
+    var busRevision = 0
     /// Set when the phone knows several computers: notifications name this one.
     @ObservationIgnored var notificationTag: String?
     /// The pending-decision counts changed (for the app icon's badge).
     @ObservationIgnored var onCountsChanged: (() -> Void)?
+    /// Turns of a bot's chat that are new or changed (`chat_turns`).
+    @ObservationIgnored var onChatTurns: ((String, [JSONDict]) -> Void)?
 
     @ObservationIgnored let client = DaemonClient()
     @ObservationIgnored private let defaults: ComputerDefaults
@@ -57,6 +63,9 @@ final class AppStore {
 
     var canControl: Bool { grants.contains("control") }
     var canApprove: Bool { grants.contains("approve") }
+    /// The daemon reads the bots' transcripts itself (Gravity's chat pane), so
+    /// Gravity Lens is needed only for the file browser and the screen layout.
+    var hasChat: Bool { capabilities.contains("chat") }
 
     init(defaults: ComputerDefaults) {
         self.defaults = defaults
@@ -83,6 +92,7 @@ final class AppStore {
 
     private func clear() {
         grants = []
+        capabilities = []
         projects = []
         bots = []
         activity = [:]
@@ -104,6 +114,7 @@ final class AppStore {
 
     private func helloReceived(_ hello: JSONDict) {
         grants = Set(hello.strings("grants"))
+        capabilities = Set(hello.strings("capabilities"))
         serverVersion = hello.str("server_version")
         deviceId = hello.optStr("device_id")
     }
@@ -175,6 +186,11 @@ final class AppStore {
             if let entry = frame.dict("activity").map(BotActivity.init) { activity[entry.botId] = entry }
         case "message_new":
             if let message = frame.dict("message").map(BusMessage.init) { append(message) }
+            busRevision += 1
+        case "routine_run_update":
+            busRevision += 1
+        case "chat_turns":
+            onChatTurns?(frame.str("bot_id"), frame.list("turns"))
         case "approval_pending":
             approvalPending(frame)
         case "notify":
@@ -366,6 +382,27 @@ final class AppStore {
         let bot = Bot(row)
         upsert(bot)
         return bot
+    }
+
+    // MARK: Tasks
+
+    func listTasks(botId: String) async throws -> [BotTask] {
+        let reply = try await client.request("list_tasks", ["bot_id": botId])
+        return reply.list("tasks").map(BotTask.init)
+    }
+
+    /// The task with its whole request and result.
+    func task(botId: String, taskId: String) async throws -> BotTask {
+        let reply = try await client.request("get_task", ["bot_id": botId, "task_id": taskId])
+        guard let row = reply.dict("task") else {
+            throw DaemonError(code: "not_found", message: "The daemon did not return the task.")
+        }
+        return BotTask(row)
+    }
+
+    func listRoutines(botId: String) async throws -> [Routine] {
+        let reply = try await client.request("list_routines", ["bot_id": botId])
+        return reply.list("routines").map(Routine.init)
     }
 
     // MARK: Decisions

@@ -8,10 +8,13 @@ struct Project: Identifiable, Equatable {
     var name: String
     var leadBotId: String?
     var deletedAt: Date?
+    /// Its folder under ~/.gravity/projects.
+    var dirName: String
 
     init(_ d: JSONDict) {
         id = d.str("id")
         name = d.str("name")
+        dirName = d.optStr("dir_name") ?? d.str("name")
         leadBotId = d.optStr("lead_bot_id")
         deletedAt = d.date("deleted_at")
     }

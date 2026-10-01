@@ -10,6 +10,9 @@ struct ScreenView: View {
     @State private var canvas = CanvasController()
     @State private var sendItem: SendItem?
     @State private var showingKeyboard = false
+    @State private var dictation = Dictation()
+    /// The dictation panel is open: listening, or showing what was heard.
+    @State private var dictating = false
 
     private var settings: ScreenSettings { computer.screenSettings }
 
@@ -42,14 +45,32 @@ struct ScreenView: View {
                 }
             }
             if case .live = session.phase {
-                KeyRow(session: session, canvas: canvas, kind: computer.kind, keyboard: $showingKeyboard)
+                if dictating {
+                    DictationPanel(dictation: dictation, target: computer.name) { text, submit in
+                        session.type(text)
+                        if submit { session.press(Keysym.returnKey) }
+                        dictating = false
+                    } cancel: {
+                        dictation.cancel()
+                        dictating = false
+                    }
+                }
+                KeyRow(session: session, canvas: canvas, kind: computer.kind, keyboard: $showingKeyboard) {
+                    dictating = true
+                    dictation.clearError()
+                    Task { await dictation.start() }
+                }
             }
         }
         .toolbar {
             ToolbarItem(placement: .topBarTrailing) { statusBadge }
         }
         .onAppear { session.show(settings) }
-        .onDisappear { session.hide() }
+        .onDisappear {
+            session.hide()
+            dictation.cancel()
+            dictating = false
+        }
         .onChange(of: scenePhase) { _, phase in
             if phase == .active { session.show(settings) } else { session.hide() }
         }
@@ -359,6 +380,8 @@ private struct KeyRow: View {
     let canvas: CanvasController
     let kind: ComputerKind
     @Binding var keyboard: Bool
+    /// Talk, and what you said is typed on the computer.
+    let dictate: () -> Void
     @State private var pasteText = ""
 
     /// On Windows, `command` (Super) is the Windows key and `option` is Alt.
@@ -383,6 +406,8 @@ private struct KeyRow: View {
                     Image(systemName: keyboard ? "keyboard.chevron.compact.down" : "keyboard")
                 }
                 .accessibilityLabel(keyboard ? "Hide keyboard" : "Show keyboard")
+                Button(action: dictate) { Image(systemName: "mic") }
+                    .accessibilityLabel("Dictate text to type")
                 ForEach(modifiers, id: \.0) { label, modifier, name in
                     Button(label) { session.toggle(modifier) }
                         .background(session.modifiers.contains(modifier) ? Color.accentColor : .clear,
@@ -438,6 +463,52 @@ private struct KeyRow: View {
             Button("Address bar (Explorer)  Ctrl+L") { session.shortcut(0x6C, .control) }
             Button("Task Manager  Ctrl+Shift+Esc") { session.shortcut(Keysym.escape, [.control, .shift]) }
         }
+    }
+}
+
+/// What dictation heard, before it is typed on the computer.
+private struct DictationPanel: View {
+    let dictation: Dictation
+    let target: String
+    let type: (String, Bool) -> Void
+    let cancel: () -> Void
+
+    private var heard: String { dictation.transcript.trimmingCharacters(in: .whitespacesAndNewlines) }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack(spacing: 6) {
+                if dictation.isListening {
+                    Image(systemName: "waveform").symbolEffect(.variableColor.iterative, isActive: true).foregroundStyle(.red)
+                    Text("Listening…").font(.caption.weight(.semibold))
+                } else if case .failed(let reason) = dictation.phase {
+                    Text(reason).font(.caption).foregroundStyle(.orange)
+                } else {
+                    Text("Type this on \(target)?").font(.caption.weight(.semibold))
+                }
+                Spacer()
+                if dictation.isListening {
+                    Button("Stop") { dictation.stop() }.font(.caption.weight(.semibold))
+                }
+            }
+            Text(heard.isEmpty ? "Say what to type." : heard)
+                .font(.body)
+                .foregroundStyle(heard.isEmpty ? .secondary : .primary)
+                .frame(maxWidth: .infinity, alignment: .leading)
+            HStack {
+                Button("Cancel", role: .cancel, action: cancel)
+                Spacer()
+                Button("Type") { type(dictation.stop(), false) }
+                    .disabled(heard.isEmpty)
+                Button("Type + ⏎") { type(dictation.stop(), true) }
+                    .buttonStyle(.borderedProminent)
+                    .disabled(heard.isEmpty)
+            }
+            .controlSize(.small)
+        }
+        .padding(12)
+        .background(.regularMaterial)
+        .environment(\.colorScheme, .dark)
     }
 }
 

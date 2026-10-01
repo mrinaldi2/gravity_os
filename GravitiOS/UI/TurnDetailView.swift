@@ -11,33 +11,7 @@ struct TurnDetailView: View {
     @State private var events: [LensEvent] = []
     @State private var error: String?
 
-    /// Consecutive tool steps collapse into one group; everything else stands alone.
-    private enum Block: Identifiable {
-        case event(LensEvent)
-        case steps([LensEvent])
-
-        var id: String {
-            switch self {
-            case .event(let event): event.id
-            case .steps(let steps): "steps-\(steps.first?.id ?? "")"
-            }
-        }
-    }
-
-    private var blocks: [Block] {
-        var result: [Block] = []
-        var run: [LensEvent] = []
-        for event in events {
-            if event.kind == "tool" {
-                run.append(event)
-                continue
-            }
-            if !run.isEmpty { result.append(.steps(run)); run = [] }
-            result.append(.event(event))
-        }
-        if !run.isEmpty { result.append(.steps(run)) }
-        return result
-    }
+    private var blocks: [TurnBlock] { TurnBlock.blocks(events) }
 
     var body: some View {
         List {
@@ -129,11 +103,45 @@ struct StepLink: Hashable {
     let event: LensEvent
 }
 
+/// Consecutive tool steps collapse into one group; everything else stands alone.
+enum TurnBlock: Identifiable {
+    case event(LensEvent)
+    case steps([LensEvent])
+
+    var id: String {
+        switch self {
+        case .event(let event): event.id
+        case .steps(let steps): "steps-\(steps.first?.id ?? "")"
+        }
+    }
+
+    static func blocks(_ events: [LensEvent]) -> [TurnBlock] {
+        var result: [TurnBlock] = []
+        var run: [LensEvent] = []
+        for event in events {
+            if event.kind == "tool" {
+                run.append(event)
+                continue
+            }
+            if !run.isEmpty { result.append(.steps(run)); run = [] }
+            result.append(.event(event))
+        }
+        if !run.isEmpty { result.append(.steps(run)) }
+        return result
+    }
+}
+
 /// A run of tool steps, summarised and folded when long.
-private struct StepGroup: View {
+struct StepGroup: View {
     let botId: String
     let steps: [LensEvent]
     @State var expanded: Bool
+    /// Held open, e.g. while searching, so matches inside can be seen.
+    var forceExpanded = false
+    /// Marks the steps that match a search, and the one in view.
+    var highlight: (String) -> Color? = { _ in nil }
+    /// A prefix for each step's scroll id.
+    var anchorPrefix = ""
 
     private var summary: String {
         let commands = steps.filter { $0.tool == "Bash" }.count
@@ -149,10 +157,12 @@ private struct StepGroup: View {
     }
 
     var body: some View {
-        DisclosureGroup(isExpanded: $expanded) {
+        DisclosureGroup(isExpanded: Binding(get: { forceExpanded || expanded }, set: { expanded = $0 })) {
             ForEach(steps) { step in
                 NavigationLink(value: StepLink(botId: botId, event: step)) { StepRow(step: step) }
                     .disabled(step.hasDetail != true)
+                    .background(highlight(step.id) ?? .clear, in: RoundedRectangle(cornerRadius: 6, style: .continuous))
+                    .id(anchorPrefix + step.id)
             }
         } label: {
             HStack {
@@ -205,6 +215,7 @@ struct StepRow: View {
                 }
             }
             Spacer(minLength: 4)
+            if step.running == true { ProgressView().controlSize(.mini) }
             if let added = step.added, let removed = step.removed, added + removed > 0 {
                 Text("+\(added) −\(removed)").font(.caption.monospaced()).foregroundStyle(.secondary)
             }
@@ -213,13 +224,17 @@ struct StepRow: View {
 }
 
 /// Messages in and out, replies and task results: the narrative of a turn.
-private struct EventRow: View {
+struct EventRow: View {
     @Environment(LensStore.self) private var lens
     let botId: String
     let event: LensEvent
 
     var body: some View {
         switch event.kind {
+        case "incoming" where event.from == nil:
+            // From the daemon: a message that came in while the bot worked, already in words.
+            bubble(label: "Came in while working", symbol: "arrow.down.left",
+                   tint: .secondary, background: Color(.secondarySystemBackground))
         case "incoming":
             bubble(label: "From \(event.from ?? "") · \(event.msgKind ?? "")", symbol: "arrow.down.left",
                    tint: .secondary, background: Color(.secondarySystemBackground))
@@ -246,6 +261,20 @@ private struct EventRow: View {
             Label("Memory compacted, the bot continued from a summary", systemImage: "arrow.down.right.and.arrow.up.left")
                 .font(.caption)
                 .foregroundStyle(.secondary)
+        case "interrupted":
+            Label(event.text?.isEmpty == false ? event.text! : "You interrupted the turn", systemImage: "stop.circle")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+        case "decision":
+            if let id = event.decisionId {
+                NavigationLink {
+                    DecisionDetailView(decisionId: id)
+                } label: {
+                    decisionLabel
+                }
+            } else {
+                decisionLabel
+            }
         default:
             VStack(alignment: .leading, spacing: 4) {
                 Label("Said", systemImage: "text.bubble").font(.caption.weight(.semibold)).foregroundStyle(.secondary)
@@ -254,6 +283,16 @@ private struct EventRow: View {
             }
             .padding(.vertical, 4)
         }
+    }
+
+    private var decisionLabel: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            Label("Asked you to decide", systemImage: "checklist").font(.caption.weight(.semibold)).foregroundStyle(.purple)
+            Text(event.title).font(.subheadline)
+        }
+        .padding(10)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(Color.purple.opacity(0.10), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
     }
 
     private func bubble(label: String, symbol: String, tint: Color, background: Color) -> some View {

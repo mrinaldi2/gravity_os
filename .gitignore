@@ -6,3 +6,4 @@ xcuserdata/
 Config/Local.xcconfig
 *.xcworkspace/xcuserdata/
 .claude/
+__pycache__/

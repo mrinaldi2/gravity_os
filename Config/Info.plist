@@ -8,6 +8,10 @@
 		<key>NSAllowsArbitraryLoads</key>
 		<true/>
 	</dict>
+	<key>NSMicrophoneUsageDescription</key>
+	<string>GravitiOS listens while you dictate a message to a bot or text to type on your computer.</string>
+	<key>NSSpeechRecognitionUsageDescription</key>
+	<string>GravitiOS turns what you dictate into text. It stays on this iPhone when your language supports on-device recognition.</string>
 	<key>NSLocalNetworkUsageDescription</key>
 	<string>GravitiOS connects to your Gravity daemon on your own network or tailnet.</string>
 </dict>
