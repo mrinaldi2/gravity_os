@@ -4,6 +4,12 @@ struct BotsView: View {
     @Environment(AppStore.self) private var store
     @State private var path = NavigationPath()
     @State private var creating: Creating?
+    @State private var linking: ProjectRef?
+    @State private var showingNetwork = false
+
+    struct ProjectRef: Identifiable {
+        let id: String
+    }
 
     /// What the create sheet is making.
     enum Creating: Identifiable {
@@ -31,14 +37,31 @@ struct BotsView: View {
                             NavigationLink(value: bot.id) { BotRow(bot: bot) }
                         }
                     } header: {
-                        HStack {
+                        HStack(spacing: 6) {
                             Text(project.name)
+                            ForEach(project.links) { link in
+                                Label(link.peerName, systemImage: "link")
+                                    .font(.caption2.weight(.semibold))
+                                    .padding(.horizontal, 6)
+                                    .padding(.vertical, 2)
+                                    .background((link.online ? Color.green : Color.gray).opacity(0.15), in: Capsule())
+                                    .foregroundStyle(link.online ? .green : .secondary)
+                                    .textCase(nil)
+                            }
                             Spacer()
                             if store.canControl {
-                                Button { creating = .bot(projectId: project.id) } label: {
-                                    Image(systemName: "plus.circle")
+                                Menu {
+                                    Button { creating = .bot(projectId: project.id) } label: {
+                                        Label("New bot", systemImage: "person.badge.plus")
+                                    }
+                                    Button { linking = ProjectRef(id: project.id) } label: {
+                                        Label(project.links.isEmpty ? "Link with another computer" : "Linked computers",
+                                              systemImage: "link")
+                                    }
+                                } label: {
+                                    Image(systemName: "ellipsis.circle")
                                 }
-                                .accessibilityLabel("New bot in \(project.name)")
+                                .accessibilityLabel("\(project.name) actions")
                             }
                         }
                     }
@@ -59,6 +82,10 @@ struct BotsView: View {
             .toolbar {
                 ToolbarItem(placement: .topBarLeading) { SettingsButton() }
                 ToolbarItem(placement: .topBarLeading) { ComputerSwitcher() }
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button { showingNetwork = true } label: { Image(systemName: "point.3.connected.trianglepath.dotted") }
+                        .accessibilityLabel("Network")
+                }
                 if store.canControl, store.status == .connected {
                     ToolbarItem(placement: .topBarTrailing) {
                         Menu {
@@ -92,6 +119,8 @@ struct BotsView: View {
                     }
                 }
             }
+            .sheet(item: $linking) { LinkProjectSheet(projectId: $0.id) }
+            .sheet(isPresented: $showingNetwork) { NetworkView() }
             .navigationDestination(for: String.self) { BotDetailView(botId: $0) }
             .navigationDestination(for: TurnLink.self) { TurnDetailView(botId: $0.botId, turnId: $0.turnId) }
         }
@@ -122,6 +151,12 @@ private struct BotRow: View {
                         Circle().fill(.tint).frame(width: 8, height: 8)
                     }
                     Spacer()
+                    if let machine = bot.peerName {
+                        Label(machine, systemImage: "link").font(.caption2).foregroundStyle(.secondary).lineLimit(1)
+                    }
+                    if bot.engine == .codex {
+                        Text("Codex").font(.caption2.weight(.semibold)).foregroundStyle(.secondary)
+                    }
                     StateBadge(state: bot.state)
                 }
                 if let turn = lens.latest[bot.id], turn.open, bot.state == .working, !turn.current.isEmpty {

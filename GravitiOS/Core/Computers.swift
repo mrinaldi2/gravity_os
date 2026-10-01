@@ -218,6 +218,41 @@ final class Fleet {
         if !ephemeral { UserDefaults.standard.set(computer.id, forKey: Self.selectedKey) }
     }
 
+    // MARK: Connecting daemons
+
+    /// `computer`'s peer row for `other`, if the two are paired: by daemon id
+    /// when the daemons report it, else by the name the phone gave it.
+    func peer(of computer: Computer, for other: Computer) -> Peer? {
+        computer.store.peers.first { peer in
+            guard peer.isActive else { return false }
+            if let id = peer.daemonId, let otherId = other.store.daemonId { return id == otherId }
+            return peer.name == other.name
+        }
+    }
+
+    /// Pairs two of the phone's computers: `listener` makes an invite, and
+    /// `dialer` adds it and keeps the link open. Each names the other as the
+    /// phone does.
+    func connect(_ dialer: Computer, to listener: Computer) async throws {
+        let invite: String
+        do {
+            invite = try await listener.store.createPeerInvite(name: dialer.name)
+        } catch {
+            // The daemon offers no address of its own (it lists only localhost
+            // under bind): the dialer is pointed where this phone reaches it.
+            let host = listener.record.host.contains(":") ? "[\(listener.record.host)]" : listener.record.host
+            invite = try await listener.store.createPeerInvite(
+                name: dialer.name, url: "ws://\(host):\(listener.record.port)/peer")
+        }
+        try await dialer.store.addPeer(name: listener.name, invite: invite)
+    }
+
+    /// Unpairs two computers on both sides, so neither keeps trying the other.
+    func disconnect(_ a: Computer, _ b: Computer) async throws {
+        if let peer = peer(of: a, for: b) { try await a.store.revokePeer(peer.id) }
+        if let peer = peer(of: b, for: a) { try await b.store.revokePeer(peer.id) }
+    }
+
     // MARK: App lifecycle
 
     func setBackground(_ background: Bool) {

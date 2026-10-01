@@ -32,6 +32,10 @@ final class AppStore {
     var capabilities: Set<String> = []
     var serverVersion = ""
     var deviceId: String?
+    /// The daemon's stable id, as its peers know it (newer daemons).
+    var daemonId: String?
+    /// Daemons this one is paired with; loaded by the network screen.
+    var peers: [Peer] = []
 
     var projects: [Project] = []
     var bots: [Bot] = []
@@ -66,6 +70,10 @@ final class AppStore {
     /// The daemon reads the bots' transcripts itself (Gravity's chat pane), so
     /// Gravity Lens is needed only for the file browser and the screen layout.
     var hasChat: Bool { capabilities.contains("chat") }
+    /// Projects can be linked across daemons, and bots created on a peer.
+    var hasLinkedProjects: Bool { capabilities.contains("linked_projects") }
+    /// Bots can run Claude Code or Codex.
+    var hasEngines: Bool { capabilities.contains("bot_runtime") }
 
     init(defaults: ComputerDefaults) {
         self.defaults = defaults
@@ -117,6 +125,7 @@ final class AppStore {
         capabilities = Set(hello.strings("capabilities"))
         serverVersion = hello.str("server_version")
         deviceId = hello.optStr("device_id")
+        daemonId = hello.optStr("daemon_id")
     }
 
     func refresh() async {
@@ -369,8 +378,11 @@ final class AppStore {
     /// Only the project is required: without a name the daemon picks "New Bot",
     /// and without a charter the bot starts by asking what it is for.
     func createBot(projectId: String, name: String, description: String, instructions: String,
-                   avatar: String?) async throws -> Bot {
+                   avatar: String?, engine: BotEngine? = nil, peerId: String? = nil) async throws -> Bot {
         var fields: JSONDict = ["project_id": projectId]
+        if let engine { fields["runtime"] = engine.rawValue }
+        // On a peer: the bot runs there, in the linked project, and stands in here.
+        if let peerId { fields["peer_id"] = peerId }
         if !name.isEmpty { fields["name"] = name }
         if !description.isEmpty { fields["description"] = description }
         if !instructions.isEmpty { fields["instructions"] = instructions }
@@ -382,6 +394,58 @@ final class AppStore {
         let bot = Bot(row)
         upsert(bot)
         return bot
+    }
+
+    // MARK: Peers and linked projects
+
+    func loadPeers() async throws {
+        let reply = try await client.request("list_peers")
+        peers = reply.list("peers").map(Peer.init)
+    }
+
+    /// Pairing, listening side: a one-time code for the other daemon to add.
+    /// `url` is where the other daemon should dial; without it, the daemon
+    /// offers its first non-loopback bind address.
+    func createPeerInvite(name: String, url: String? = nil) async throws -> String {
+        var fields: JSONDict = ["name": name]
+        if let url { fields["url"] = url }
+        let reply = try await client.request("create_peer_invite", fields)
+        try? await loadPeers()
+        guard let invite = reply.optStr("invite") else {
+            throw DaemonError(code: "internal", message: "The daemon did not return an invite.")
+        }
+        return invite
+    }
+
+    /// Pairing, dialing side: keeps a link open to the daemon that made the invite.
+    func addPeer(name: String, invite: String) async throws {
+        _ = try await client.request("add_peer", ["name": name, "invite": invite])
+        try? await loadPeers()
+    }
+
+    func revokePeer(_ peerId: String) async throws {
+        _ = try await client.request("revoke_peer", ["peer_id": peerId])
+        try? await loadPeers()
+    }
+
+    func peerProjects(peerId: String) async throws -> [PeerProject] {
+        let reply = try await client.request("list_peer_projects", ["peer_id": peerId])
+        return reply.list("projects").map(PeerProject.init)
+    }
+
+    /// Links a project with one on a peer: an existing one, or a new one named like it.
+    func linkProject(_ projectId: String, peerId: String, remoteProjectId: String?) async throws {
+        var fields: JSONDict = ["project_id": projectId, "peer_id": peerId]
+        if let remoteProjectId { fields["remote_project_id"] = remoteProjectId }
+        let reply = try await client.request("link_project", fields)
+        if let project = reply.dict("project").map(Project.init) { upsert(project) }
+        await refresh()
+    }
+
+    func unlinkProject(_ projectId: String, peerId: String) async throws {
+        let reply = try await client.request("unlink_project", ["project_id": projectId, "peer_id": peerId])
+        if let project = reply.dict("project").map(Project.init) { upsert(project) }
+        await refresh()
     }
 
     // MARK: Files

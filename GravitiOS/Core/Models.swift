@@ -10,11 +10,14 @@ struct Project: Identifiable, Equatable {
     var deletedAt: Date?
     /// Its folder under ~/.gravity/projects.
     var dirName: String
+    /// Projects on other daemons this one is linked with: one team across machines.
+    var links: [ProjectLink]
 
     init(_ d: JSONDict) {
         id = d.str("id")
         name = d.str("name")
         dirName = d.optStr("dir_name") ?? d.str("name")
+        links = d.list("links").map(ProjectLink.init)
         leadBotId = d.optStr("lead_bot_id")
         deletedAt = d.date("deleted_at")
     }
@@ -49,6 +52,80 @@ enum BotState: String {
     var needsOwner: Bool { self == .waitingForUser || self == .waitingForApproval }
 }
 
+/// A project on a peer daemon that this project is linked with.
+struct ProjectLink: Identifiable, Equatable {
+    let peerId: String
+    let peerName: String
+    let online: Bool
+    let remoteProjectId: String
+    let remoteProjectName: String
+
+    var id: String { peerId }
+
+    init(_ d: JSONDict) {
+        peerId = d.str("peer_id")
+        peerName = d.str("peer_name")
+        online = d.bool("online")
+        remoteProjectId = d.str("remote_project_id")
+        remoteProjectName = d.str("remote_project_name")
+    }
+}
+
+/// Another Gravity daemon this one is paired with (`list_peers`).
+struct Peer: Identifiable, Equatable {
+    let id: String
+    let name: String
+    /// Set on the side that dials the other.
+    let url: String?
+    let daemonId: String?
+    let online: Bool
+    let lastSeenAt: Date?
+    let revokedAt: Date?
+
+    init(_ d: JSONDict) {
+        id = d.str("id")
+        name = d.str("name")
+        url = d.optStr("url")
+        daemonId = d.optStr("daemon_id")
+        online = d.bool("online")
+        lastSeenAt = d.date("last_seen_at")
+        revokedAt = d.date("revoked_at")
+    }
+
+    var isActive: Bool { revokedAt == nil }
+}
+
+/// A project on a peer, for choosing one to link (`list_peer_projects`).
+struct PeerProject: Identifiable, Equatable {
+    let id: String
+    let name: String
+    let botCount: Int
+    /// The project here it is already linked with.
+    let linkedProjectId: String?
+
+    init(_ d: JSONDict) {
+        id = d.str("id")
+        name = d.str("name")
+        botCount = d.int("bot_count")
+        linkedProjectId = d.optStr("linked_project_id")
+    }
+}
+
+/// The coding agent a bot runs.
+enum BotEngine: String, CaseIterable, Identifiable {
+    case claudeCode = "claude_code"
+    case codex = "codex_cli"
+
+    var id: String { rawValue }
+
+    var label: String {
+        switch self {
+        case .claudeCode: "Claude Code"
+        case .codex: "Codex"
+        }
+    }
+}
+
 struct Bot: Identifiable, Equatable {
     let id: String
     var projectId: String
@@ -61,9 +138,21 @@ struct Bot: Identifiable, Equatable {
     var workspacePath: String
     var createdByBotId: String?
     var deletedAt: Date?
+    /// `claude_code` or `codex_cli`; older daemons leave it out (Claude Code).
+    var runtime: String?
+    /// Set when the bot runs on another daemon and stands in here.
+    var peerName: String?
+    var peerOnline: Bool
+
+    var isLinked: Bool { peerName != nil }
+    var engine: BotEngine? { runtime.flatMap(BotEngine.init(rawValue:)) }
 
     init(_ d: JSONDict) {
         id = d.str("id")
+        runtime = d.optStr("runtime")
+        let peer = d.dict("peer")
+        peerName = peer?.optStr("name")
+        peerOnline = peer?.bool("online") ?? false
         projectId = d.str("project_id")
         name = d.str("name")
         description = d.str("description")

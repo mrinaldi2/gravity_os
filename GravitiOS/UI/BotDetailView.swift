@@ -19,7 +19,10 @@ struct BotDetailView: View {
     /// A daemon that serves chat gets Gravity's chat pane and Tasks tab; an
     /// older one keeps the Gravity Lens activity and the message thread.
     private var panes: [Pane] {
-        store.hasChat ? [.chat, .terminal, .tasks, .files, .info] : [.activity, .terminal, .messages, .info]
+        // A linked bot runs on another computer: its terminal is there, not here.
+        let linked = store.bot(botId)?.isLinked ?? false
+        let all: [Pane] = store.hasChat ? [.chat, .terminal, .tasks, .files, .info] : [.activity, .terminal, .messages, .info]
+        return linked ? all.filter { $0 != .terminal } : all
     }
 
     private var pane: Pane {

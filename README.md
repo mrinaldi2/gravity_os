@@ -48,6 +48,7 @@
 - **Files.** The bot's project artifacts, newest first, including files that bots on another computer handed over: markdown rendered, code and text, images and PDFs, with share and copy path.
 - **Tasks.** What a bot is working on, what it is waiting on, its upcoming routines and what it finished, with the whole request and result a tap away.
 - **Talk instead of typing.** The microphone in a bot's composer dictates the message; the one on the screen's key row types what you say on the computer. Recognition stays on the phone when iOS supports your language on-device.
+- **One team across computers.** The Network screen connects your Gravity daemons with one tap, shows whether each link is up, and unlinks them. A project can be linked with one on the other computer so their bots work as one team, and a new bot can run Claude Code or Codex, on this computer or the linked one. Linking projects needs a Gravity daemon with linked projects; see [docs/linked-projects.md](docs/linked-projects.md).
 - **Several computers.** Add a Mac and a Windows PC (or more). They all stay connected, so notifications and decisions come from every one; the menu at the top of each tab picks the one on screen.
 - **Resilient.** Reconnects by itself and resumes the terminal from where it left off. Device tokens stay in the Keychain.
 

@@ -7,11 +7,14 @@ struct NewProjectSheet: View {
     let created: (Project, _ addBot: Bool) -> Void
     @State private var name = ""
     @State private var addBot = true
+    /// A connected daemon to link the new project with; empty for none.
+    @State private var linkPeerId = ""
     @State private var busy = false
     @State private var error: String?
     @FocusState private var focused: Bool
 
     private var trimmed: String { name.trimmingCharacters(in: .whitespacesAndNewlines) }
+    private var peers: [Peer] { store.peers.filter(\.isActive) }
 
     var body: some View {
         NavigationStack {
@@ -23,6 +26,20 @@ struct NewProjectSheet: View {
                         .onSubmit(create)
                 } footer: {
                     Text("Its bots share a folder of artifacts on \(store.computerName): ~/.gravity/projects/<name>.")
+                }
+                if store.hasLinkedProjects, !peers.isEmpty {
+                    Section {
+                        Picker("Link with", selection: $linkPeerId) {
+                            Text("No other computer").tag("")
+                            ForEach(peers) { peer in
+                                Text(peer.online ? peer.name : "\(peer.name) (offline)").tag(peer.id)
+                            }
+                        }
+                    } footer: {
+                        Text(linkPeerId.isEmpty
+                             ? "Link it with a connected Gravity to have bots on both machines in one team."
+                             : "A project of the same name is made there and linked: bots on either machine work as one team.")
+                    }
                 }
                 Section {
                     Toggle("Add a first bot next", isOn: $addBot)
@@ -39,8 +56,9 @@ struct NewProjectSheet: View {
             .disabled(busy)
             .errorAlert($error)
             .onAppear { focused = true }
+            .task { if store.hasLinkedProjects { try? await store.loadPeers() } }
         }
-        .presentationDetents([.medium])
+        .presentationDetents([.medium, .large])
     }
 
     private func create() {
@@ -49,6 +67,16 @@ struct NewProjectSheet: View {
         Task {
             do {
                 let project = try await store.createProject(name: trimmed)
+                if !linkPeerId.isEmpty {
+                    do {
+                        try await store.linkProject(project.id, peerId: linkPeerId, remoteProjectId: nil)
+                    } catch {
+                        // The project exists either way; say why it is not linked.
+                        self.error = "\(project.name) was created but not linked: \(error.localizedDescription)"
+                        busy = false
+                        return
+                    }
+                }
                 created(project, addBot)
             } catch {
                 self.error = error.localizedDescription
@@ -70,6 +98,10 @@ struct NewBotSheet: View {
     @State private var instructions = ""
     /// nil: the daemon deals a random icon.
     @State private var avatar: String?
+    /// nil: the daemon's default engine.
+    @State private var engine: BotEngine?
+    /// Empty: this computer; else a peer the project is linked through.
+    @State private var peerId = ""
     @State private var busy = false
     @State private var error: String?
 
@@ -78,7 +110,11 @@ struct NewBotSheet: View {
         self.created = created
     }
 
-    private var bots: Int { store.bots.filter { $0.projectId == projectId }.count }
+    /// Only bots that run here count towards the limit; linked ones run elsewhere.
+    private var bots: Int { store.bots.filter { $0.projectId == projectId && !$0.isLinked }.count }
+    private var project: Project? { store.projects.first { $0.id == projectId } }
+    private var links: [ProjectLink] { store.hasLinkedProjects ? project?.links ?? [] : [] }
+    private var full: Bool { peerId.isEmpty && bots >= 12 }
 
     var body: some View {
         NavigationStack {
@@ -90,9 +126,34 @@ struct NewBotSheet: View {
                     TextField("Name (empty: New Bot)", text: $name)
                         .textInputAutocapitalization(.words)
                 } footer: {
-                    if bots >= 12 {
-                        Text("This project already has 12 bots, the most Gravity allows. Delete one on \(store.computerName) first.")
+                    if full {
+                        Text("This project already has 12 bots on \(store.computerName), the most Gravity allows. Delete one first\(links.isEmpty ? "" : ", or run the new one on a linked computer").")
                             .foregroundStyle(.orange)
+                    }
+                }
+
+                if store.hasEngines || !links.isEmpty {
+                    Section {
+                        if store.hasEngines {
+                            Picker("Engine", selection: $engine) {
+                                Text("Default").tag(BotEngine?.none)
+                                ForEach(BotEngine.allCases) { Text($0.label).tag(BotEngine?.some($0)) }
+                            }
+                        }
+                        if !links.isEmpty {
+                            Picker("Runs on", selection: $peerId) {
+                                Text(store.computerName).tag("")
+                                ForEach(links) { link in
+                                    Text(link.online ? link.peerName : "\(link.peerName) (offline)").tag(link.peerId)
+                                }
+                            }
+                        }
+                    } header: {
+                        Text("Engine and computer")
+                    } footer: {
+                        Text(peerId.isEmpty
+                             ? "Default is the engine \(store.computerName)'s Gravity is set to. The bot can switch engines later and keeps its workspace."
+                             : "It runs on \(links.first { $0.peerId == peerId }?.peerName ?? "the other computer"), in the linked project, and works with the bots here as one team.")
                     }
                 }
 
@@ -117,7 +178,7 @@ struct NewBotSheet: View {
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) { Button("Cancel") { dismiss() } }
                 ToolbarItem(placement: .confirmationAction) {
-                    if busy { ProgressView() } else { Button("Create", action: create).disabled(projectId.isEmpty || bots >= 12) }
+                    if busy { ProgressView() } else { Button("Create", action: create).disabled(projectId.isEmpty || full) }
                 }
             }
             .disabled(busy)
@@ -125,6 +186,7 @@ struct NewBotSheet: View {
             .onAppear {
                 if projectId.isEmpty { projectId = store.sortedProjects.first?.id ?? "" }
             }
+            .onChange(of: projectId) { _, _ in peerId = "" }
         }
     }
 
@@ -138,7 +200,7 @@ struct NewBotSheet: View {
                     name: name.trimmingCharacters(in: .whitespacesAndNewlines),
                     description: description.trimmingCharacters(in: .whitespacesAndNewlines),
                     instructions: instructions.trimmingCharacters(in: .whitespacesAndNewlines),
-                    avatar: avatar)
+                    avatar: avatar, engine: engine, peerId: peerId.isEmpty ? nil : peerId)
                 created(bot)
             } catch {
                 self.error = error.localizedDescription
