@@ -143,6 +143,8 @@ struct Bot: Identifiable, Equatable {
     /// Set when the bot runs on another daemon and stands in here.
     var peerName: String?
     var peerOnline: Bool
+    /// May also drive the owner's own Chrome, besides its own browser.
+    var userChrome: Bool
 
     var isLinked: Bool { peerName != nil }
     var engine: BotEngine? { runtime.flatMap(BotEngine.init(rawValue:)) }
@@ -153,6 +155,7 @@ struct Bot: Identifiable, Equatable {
         let peer = d.dict("peer")
         peerName = peer?.optStr("name")
         peerOnline = peer?.bool("online") ?? false
+        userChrome = d.bool("user_chrome")
         projectId = d.str("project_id")
         name = d.str("name")
         description = d.str("description")

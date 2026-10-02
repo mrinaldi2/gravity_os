@@ -54,6 +54,11 @@ struct BotsView: View {
                                     Button { creating = .bot(projectId: project.id) } label: {
                                         Label("New bot", systemImage: "person.badge.plus")
                                     }
+                                    if store.hasConversations {
+                                        Button { path.append(ConversationsLink(projectId: project.id)) } label: {
+                                            Label("Conversations", systemImage: "bubble.left.and.bubble.right")
+                                        }
+                                    }
                                     Button { linking = ProjectRef(id: project.id) } label: {
                                         Label(project.links.isEmpty ? "Link with another computer" : "Linked computers",
                                               systemImage: "link")
@@ -122,6 +127,21 @@ struct BotsView: View {
             .sheet(item: $linking) { LinkProjectSheet(projectId: $0.id) }
             .sheet(isPresented: $showingNetwork) { NetworkView() }
             .navigationDestination(for: String.self) { BotDetailView(botId: $0) }
+            .navigationDestination(for: ConversationsLink.self) { ConversationsView(projectId: $0.projectId) }
+            #if DEBUG
+            // Screenshots of the demo: -openConversations opens the first project's,
+            // -openBot <name> that bot.
+            .task(id: store.bots.count) {
+                guard path.isEmpty else { return }
+                if let name = UserDefaults.standard.string(forKey: "openBot"),
+                   let bot = store.bots.first(where: { $0.name == name }) {
+                    path.append(bot.id)
+                } else if UserDefaults.standard.bool(forKey: "openConversations"),
+                          let first = store.sortedProjects.first {
+                    path.append(ConversationsLink(projectId: first.id))
+                }
+            }
+            #endif
             .navigationDestination(for: TurnLink.self) { TurnDetailView(botId: $0.botId, turnId: $0.turnId) }
         }
     }

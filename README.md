@@ -47,6 +47,11 @@
 - **Chat, the way Gravity shows it.** With a Gravity daemon that serves chat (the desktop's chat pane), each bot opens on its conversation: turns oldest first, folded steps, diffs, images, messages sent and tasks completed, live as the bot works, with a composer and **search** (matches highlighted, next and previous, folded steps opened). Older daemons keep the Activity and Messages views from Gravity Lens.
 - **Files.** The bot's project artifacts, newest first, including files that bots on another computer handed over: markdown rendered, code and text, images and PDFs, with share and copy path.
 - **Tasks.** What a bot is working on, what it is waiting on, its upcoming routines and what it finished, with the whole request and result a tap away.
+- **Each bot's own browser, live.** Every bot browses in a headless Chrome of its own. The Browser pane streams the page it is on, with its tabs (tap one to see it, or follow the bot), and every browser action it took, grouped under the request that started it. "Can use your Chrome" in the bot's Info lets a bot also drive your own Chrome, for tasks that need your logged-in sessions.
+- **Commands and memory.** What the bot is running and ran, foreground and background, with status, duration, exit code and output (live for a running background command); and its long-term memory, `FACTS.md`.
+- **Conversations between bots.** A project's pairs of bots that talked, and each pair's messages as a chat with every bot in its own bubble, tasks marked with their state.
+- **Linked bots like local ones.** A bot that runs on the other computer has its terminal (watch, type, resize) and its browser here too, streamed through this computer's Gravity.
+- **Restart and Clear chat.** Restart a bot's session, or start it on a fresh conversation; either way it is told what it was doing, and keeps its files, memory and tasks.
 - **Talk instead of typing.** The microphone in a bot's composer dictates the message; the one on the screen's key row types what you say on the computer. Recognition stays on the phone when iOS supports your language on-device.
 - **One team across computers.** The Network screen connects your Gravity daemons with one tap, shows whether each link is up, and unlinks them. A project can be linked with one on the other computer so their bots work as one team, and a new bot can run Claude Code or Codex, on this computer or the linked one. Linking projects needs a Gravity daemon with linked projects; see [docs/linked-projects.md](docs/linked-projects.md).
 - **Several computers.** Add a Mac and a Windows PC (or more). They all stay connected, so notifications and decisions come from every one; the menu at the top of each tab picks the one on screen.
@@ -236,6 +241,7 @@ GravitiOS/            the SwiftUI app
   Core/RFB/            the Screen Sharing (VNC) client
 companion/            Gravity Lens (gravity_lens.py, gravity_files.py), gravity_autostart.py and the installers (install.sh, install.ps1)
 demo/                 the demo world, a fake Screen Sharing server, and their images
+GravitiOSTests/       the app's unit tests (xcodebuild test -scheme GravitiOS)
 tests/                Lens tests (python3 -m unittest discover tests)
 Config/               Info.plist, Signing.xcconfig (+ your git-ignored Local.xcconfig)
 ```

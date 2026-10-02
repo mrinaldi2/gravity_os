@@ -191,6 +191,34 @@ enum ChatDecoding {
 
 // MARK: Into the phone's turn model
 
+extension ChatTrigger {
+    /// The trigger as Gravity Lens described it, which the phone's labels read.
+    var lensRow: JSONDict {
+        let text = self.text ?? ""
+        switch kind {
+        case "owner":
+            if via == "terminal" { return ["kind": "typed", "from": "You", "msg_kind": "", "text": text] }
+            return ["kind": "owner", "from": "You", "msg_kind": "chat", "text": text]
+        case "bus":
+            return ["kind": "message", "from": from ?? "", "msg_kind": msgKind ?? "", "text": text]
+        case "routine":
+            return ["kind": "routine", "from": name ?? "", "msg_kind": "", "text": text]
+        case "ruling":
+            return ["kind": "message", "from": "You", "msg_kind": "decision", "text": text]
+        case "resumed":
+            return ["kind": "continued", "from": "", "msg_kind": "", "text": ""]
+        default:
+            return ["kind": "background", "from": "", "msg_kind": "", "text": text]
+        }
+    }
+
+    /// "Task from lead", "You", "Routine nightly": what started the turn, in words.
+    var headline: String {
+        LensTrigger(kind: lensRow.str("kind"), from: lensRow.str("from"),
+                    msgKind: lensRow.str("msg_kind"), text: lensRow.str("text")).headline
+    }
+}
+
 /// The phone's views were built on Gravity Lens's turns and events; a daemon
 /// turn is reshaped into those, so every view reads both.
 extension ChatTurn {
@@ -221,24 +249,7 @@ extension ChatTurn {
         items.compactMap { item in Self.decode(LensEvent.self, eventRow(item)) }
     }
 
-    private var triggerRow: JSONDict {
-        let text = trigger.text ?? ""
-        switch trigger.kind {
-        case "owner":
-            if trigger.via == "terminal" { return ["kind": "typed", "from": "You", "msg_kind": "", "text": text] }
-            return ["kind": "owner", "from": "You", "msg_kind": "chat", "text": text]
-        case "bus":
-            return ["kind": "message", "from": trigger.from ?? "", "msg_kind": trigger.msgKind ?? "", "text": text]
-        case "routine":
-            return ["kind": "routine", "from": trigger.name ?? "", "msg_kind": "", "text": text]
-        case "ruling":
-            return ["kind": "message", "from": "You", "msg_kind": "decision", "text": text]
-        case "resumed":
-            return ["kind": "continued", "from": "", "msg_kind": "", "text": ""]
-        default:
-            return ["kind": "background", "from": "", "msg_kind": "", "text": text]
-        }
-    }
+    private var triggerRow: JSONDict { trigger.lensRow }
 
     /// How the turn ended: its last words, a message it sent, or a finished task.
     private var outcomeRow: JSONDict {

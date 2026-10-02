@@ -20,6 +20,8 @@ final class TerminalController: NSObject, TerminalSink, @preconcurrency Terminal
     private var attachedOnce = false
     private var lastSentSize: [Int] = []
     private var resizeTask: Task<Void, Never>?
+    /// Why attaching failed (a linked bot's machine is offline), or nil once attached.
+    var onFailure: ((String?) -> Void)?
 
     init(botId: String, store: AppStore) {
         self.botId = botId
@@ -53,7 +55,17 @@ final class TerminalController: NSObject, TerminalSink, @preconcurrency Terminal
     private func attach() {
         var fields: JSONDict = ["bot_id": botId]
         if let lastSeq { fields["after_seq"] = lastSeq }
-        Task { _ = try? await store.client.request("attach", fields) }
+        Task {
+            do {
+                _ = try await store.client.request("attach", fields)
+                onFailure?(nil)
+            } catch let error as DaemonError where error.code == "unavailable" {
+                let machine = store.bot(botId)?.peerName ?? "Its computer"
+                onFailure?("\(machine) is offline. The terminal shows here again when it is back.")
+            } catch let error as DaemonError where error.code != "not_connected" {
+                onFailure?(error.message)
+            } catch {}
+        }
     }
 
     func reattach() { attach() }
@@ -134,6 +146,7 @@ struct TerminalScreen: View {
     @Environment(AppStore.self) private var store
     let botId: String
     @State private var controller: TerminalController?
+    @State private var failure: String?
     @State private var draft = ""
     /// Height of the controls with a one-line compose field.
     @State private var barHeight: CGFloat = 0
@@ -158,6 +171,13 @@ struct TerminalScreen: View {
                 }
             }
             .padding(.bottom, barHeight)
+            .overlay {
+                if let failure {
+                    ContentUnavailableView("Terminal unavailable", systemImage: "terminal", description: Text(failure))
+                        .environment(\.colorScheme, .dark)
+                        .background(Color(red: 0.07, green: 0.07, blue: 0.09))
+                }
+            }
             Group {
                 if store.canControl { controls } else { readOnlyNote }
             }
@@ -167,7 +187,11 @@ struct TerminalScreen: View {
         }
         .background(Color(red: 0.07, green: 0.07, blue: 0.09))
         .onAppear {
-            if controller == nil { controller = TerminalController(botId: botId, store: store) }
+            if controller == nil {
+                let made = TerminalController(botId: botId, store: store)
+                made.onFailure = { failure = $0 }
+                controller = made
+            }
         }
         .onDisappear {
             controller?.close()

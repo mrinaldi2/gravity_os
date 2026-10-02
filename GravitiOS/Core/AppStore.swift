@@ -54,6 +54,18 @@ final class AppStore {
     var inBackground = false
     /// Bumped by bus traffic and routine runs: tasks open and close with them.
     var busRevision = 0
+    /// Bumped by messages one bot sends another, for the Conversations view.
+    var botMessageRevision = 0
+    /// bot id → bumped whenever its chat changes (`chat_turns`): its commands,
+    /// browser activity and memory are reread then.
+    var chatRevision: [String: Int] = [:]
+
+    /// The bot whose browser this connection watches (one at a time), with
+    /// the tab picked, if any; nil follows the bot's own tab.
+    private(set) var watchedBrowser: (botId: String, tabId: String?)?
+    /// Its tabs and newest screen, as the daemon pushes them.
+    var browserTabs: BrowserTabs?
+    var browserFrame: BrowserFrame?
     /// Set when the phone knows several computers: notifications name this one.
     @ObservationIgnored var notificationTag: String?
     /// The pending-decision counts changed (for the app icon's badge).
@@ -74,6 +86,18 @@ final class AppStore {
     var hasLinkedProjects: Bool { capabilities.contains("linked_projects") }
     /// Bots can run Claude Code or Codex.
     var hasEngines: Bool { capabilities.contains("bot_runtime") }
+
+    /// The Browser pane, for a bot here or one running on a linked machine.
+    func hasBrowser(_ bot: Bot) -> Bool {
+        capabilities.contains(bot.isLinked ? "peer_browser" : "bot_browser")
+    }
+
+    /// A linked bot's terminal is mirrored here (`peer_terminal`).
+    func hasTerminal(_ bot: Bot) -> Bool { !bot.isLinked || capabilities.contains("peer_terminal") }
+    var hasCommands: Bool { capabilities.contains("bot_commands") }
+    var hasConversations: Bool { capabilities.contains("agent_conversations") }
+    /// Restart and Clear chat; they change state, so they need `control` too.
+    var canRestart: Bool { capabilities.contains("restart_bot") && canControl }
 
     init(defaults: ComputerDefaults) {
         self.defaults = defaults
@@ -101,6 +125,8 @@ final class AppStore {
     private func clear() {
         grants = []
         capabilities = []
+        browserTabs = nil
+        browserFrame = nil
         projects = []
         bots = []
         activity = [:]
@@ -118,6 +144,8 @@ final class AppStore {
         guard status == .connected else { return }
         Task { await refresh() }
         for sink in sinks.values { sink.reattach() }
+        // A new connection watches nothing yet: pick the bot's browser back up.
+        if let watched = watchedBrowser { watchBrowser(watched.botId, tabId: watched.tabId) }
     }
 
     private func helloReceived(_ hello: JSONDict) {
@@ -196,10 +224,20 @@ final class AppStore {
         case "message_new":
             if let message = frame.dict("message").map(BusMessage.init) { append(message) }
             busRevision += 1
+            if frame.dict("message")?.dict("sender")?.str("kind") == "bot" { botMessageRevision += 1 }
         case "routine_run_update":
             busRevision += 1
         case "chat_turns":
             onChatTurns?(frame.str("bot_id"), frame.list("turns"))
+            chatRevision[frame.str("bot_id"), default: 0] += 1
+        case "browser_tabs":
+            let tabs = BrowserTabs(frame)
+            guard tabs.botId == watchedBrowser?.botId else { return }
+            browserTabs = tabs
+            if browserFrame.map({ !$0.belongs(to: tabs) }) ?? false { browserFrame = nil }
+        case "browser_frame":
+            guard let next = BrowserFrame(frame), next.botId == watchedBrowser?.botId else { return }
+            browserFrame = next
         case "approval_pending":
             approvalPending(frame)
         case "notify":
@@ -394,6 +432,72 @@ final class AppStore {
         let bot = Bot(row)
         upsert(bot)
         return bot
+    }
+
+    // MARK: A bot's browser
+
+    /// Starts streaming the bot's browser here; a second call replaces the
+    /// first. With `tabId`, that tab is shown; without, the bot's own.
+    func watchBrowser(_ botId: String, tabId: String? = nil) {
+        if watchedBrowser?.botId != botId {
+            browserTabs = nil
+            browserFrame = nil
+        }
+        watchedBrowser = (botId, tabId)
+        guard status == .connected else { return }
+        var fields: JSONDict = ["bot_id": botId]
+        if let tabId { fields["tab_id"] = tabId }
+        Task { _ = try? await client.request("watch_browser", fields) }
+    }
+
+    func unwatchBrowser() {
+        guard watchedBrowser != nil else { return }
+        watchedBrowser = nil
+        browserTabs = nil
+        browserFrame = nil
+        guard status == .connected else { return }
+        Task { _ = try? await client.request("unwatch_browser") }
+    }
+
+    func browserActivity(botId: String) async throws -> [BrowserAction] {
+        let reply = try await client.request("list_browser_activity", ["bot_id": botId])
+        return reply.list("activity").map(BrowserAction.init)
+    }
+
+    /// Whether the bot may also drive the owner's own Chrome. Restarts it.
+    func setUserChrome(botId: String, enabled: Bool) async throws {
+        let reply = try await client.request("set_bot_user_chrome", ["bot_id": botId, "enabled": enabled])
+        if let bot = reply.dict("bot").map(Bot.init) { upsert(bot) }
+    }
+
+    // MARK: Commands, sessions, conversations
+
+    func botCommands(botId: String) async throws -> [BotCommand] {
+        let reply = try await client.request("list_bot_commands", ["bot_id": botId])
+        return reply.list("commands").map(BotCommand.init)
+    }
+
+    /// The session restarts and picks its conversation back up.
+    func restartBot(_ botId: String) async throws {
+        _ = try await client.request("restart_bot", ["bot_id": botId])
+    }
+
+    /// A fresh conversation; files, memory and tasks are kept.
+    func clearBotSession(_ botId: String) async throws {
+        _ = try await client.request("clear_bot_session", ["bot_id": botId])
+    }
+
+    func agentConversations(projectId: String) async throws -> (conversations: [AgentConversation], bots: [AgentBot]) {
+        let reply = try await client.request("list_agent_conversations", ["project_id": projectId])
+        return (reply.list("conversations").map(AgentConversation.init), reply.list("bots").map(AgentBot.init))
+    }
+
+    func agentConversation(projectId: String, botIds: [String], before: Int?) async throws
+        -> (messages: [AgentMessage], hasMore: Bool, bots: [AgentBot]) {
+        var fields: JSONDict = ["project_id": projectId, "bot_ids": botIds]
+        if let before { fields["before"] = before }
+        let reply = try await client.request("list_agent_conversation", fields)
+        return (reply.list("messages").map(AgentMessage.init), reply.bool("has_more"), reply.list("bots").map(AgentBot.init))
     }
 
     // MARK: Peers and linked projects

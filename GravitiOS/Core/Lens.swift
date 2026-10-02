@@ -453,6 +453,15 @@ final class LensStore {
         _ = try await chatPage(botId, before: nil, limit: 30)
     }
 
+    /// After the bot's conversation was cleared: forget its turns and load the new, empty chat.
+    func resetChat(_ botId: String) async {
+        chats[botId] = nil
+        chatHasMore[botId] = nil
+        latest[botId] = nil
+        rebuildFeed()
+        try? await loadChat(botId)
+    }
+
     func loadOlderChat(_ botId: String) async throws {
         guard let first = chats[botId]?.first else { return try await loadChat(botId) }
         _ = try await chatPage(botId, before: first.id, limit: 30)
