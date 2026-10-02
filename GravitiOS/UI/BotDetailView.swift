@@ -254,7 +254,10 @@ private struct BotInfoView: View {
                     HStack(spacing: 12) {
                         AvatarView(avatar: bot.avatar, name: bot.name, size: 52)
                         VStack(alignment: .leading, spacing: 4) {
-                            Text(bot.name).font(.title3.weight(.semibold))
+                            HStack(spacing: 6) {
+                                Text(bot.name).font(.title3.weight(.semibold))
+                                if bot.temporary { WorkerTag() }
+                            }
                             Text(store.projectName(bot.projectId)).font(.subheadline).foregroundStyle(.secondary)
                         }
                     }
@@ -262,7 +265,12 @@ private struct BotInfoView: View {
                     if !bot.stateReason.isEmpty {
                         LabeledContent("Reason", value: bot.stateReason)
                     }
-                    if let creator = bot.createdByBotId.flatMap(store.bot) {
+                    if bot.temporary {
+                        Label("Temporary worker spawned by \(bot.createdByBotId.flatMap(store.bot)?.name ?? "a bot"); removed when its task closes",
+                              systemImage: "hammer")
+                            .font(.footnote)
+                            .foregroundStyle(.secondary)
+                    } else if let creator = bot.createdByBotId.flatMap(store.bot) {
                         LabeledContent("Created by", value: creator.name)
                     }
                 }

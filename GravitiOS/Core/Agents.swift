@@ -311,3 +311,84 @@ enum AgentConversations {
         return "\(bot(last.fromBotId, in: bots).name): \(body)"
     }
 }
+
+// MARK: Workers
+
+/// A temporary worker a bot spawned (`list_workers`): queued for a slot,
+/// running, or finished.
+struct Worker: Identifiable, Equatable {
+    let id: String
+    let projectId: String
+    let name: String
+    /// queued, running, done, cancelled, expired or failed.
+    let state: String
+    let queuePosition: Int?
+    /// "here", or the linked computer it runs on.
+    let machine: String?
+    let parentBotId: String
+    let parentName: String?
+    /// The opening of its task.
+    let brief: String
+    let taskId: String?
+    /// Why it waits, failed or was cancelled.
+    let note: String?
+    /// Its bot, once placed.
+    let botId: String?
+    let createdAt: Date?
+    let startedAt: Date?
+    let finishedAt: Date?
+
+    init(_ d: JSONDict) {
+        id = d.str("id")
+        projectId = d.str("project_id")
+        name = d.str("name")
+        state = d.str("state")
+        queuePosition = d.optInt("queue_position")
+        machine = d.optStr("machine")
+        parentBotId = d.str("parent_bot_id")
+        parentName = d.optStr("parent_name")
+        brief = d.str("brief")
+        taskId = d.optStr("task_id")
+        note = d.optStr("note")
+        botId = d.optStr("bot_id")
+        createdAt = d.date("created_at")
+        startedAt = d.date("started_at")
+        finishedAt = d.date("finished_at")
+    }
+
+    var isActive: Bool { state == "queued" || state == "running" }
+
+    /// "#2 in queue", "running", "running on win-pc", "done", …
+    var chip: String {
+        switch state {
+        case "queued": return queuePosition.map { "#\($0) in queue" } ?? "queued"
+        case "running":
+            guard let machine, machine != "here" else { return "running" }
+            return "running on \(machine)"
+        default: return state
+        }
+    }
+
+    /// When it last moved: finished, started, or was spawned.
+    var when: Date? { finishedAt ?? startedAt ?? createdAt }
+
+    /// Running, then the queue, then what finished, each in the daemon's order.
+    static func sections(_ workers: [Worker]) -> (running: [Worker], queued: [Worker], finished: [Worker]) {
+        (workers.filter { $0.state == "running" },
+         workers.filter { $0.state == "queued" },
+         workers.filter { !$0.isActive })
+    }
+}
+
+/// A project's workers and how many of its slots are busy on this computer.
+struct WorkerListing: Equatable {
+    let workers: [Worker]
+    let runningHere: Int
+    let maxHere: Int
+
+    init(_ d: JSONDict) {
+        workers = d.list("workers").map(Worker.init)
+        runningHere = d.int("running_here")
+        maxHere = d.int("max_workers_here")
+    }
+}

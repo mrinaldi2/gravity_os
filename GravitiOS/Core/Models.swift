@@ -12,12 +12,18 @@ struct Project: Identifiable, Equatable {
     var dirName: String
     /// Projects on other daemons this one is linked with: one team across machines.
     var links: [ProjectLink]
+    /// The shared git repository workers check out and push to, if any.
+    var repo: ProjectRepo?
 
     init(_ d: JSONDict) {
         id = d.str("id")
         name = d.str("name")
         dirName = d.optStr("dir_name") ?? d.str("name")
         links = d.list("links").map(ProjectLink.init)
+        // null or absent: no repository.
+        repo = d.dict("repo").flatMap { row in
+            row.optStr("url").map { ProjectRepo(url: $0, branch: row.optStr("branch") ?? "main") }
+        }
         leadBotId = d.optStr("lead_bot_id")
         deletedAt = d.date("deleted_at")
     }
@@ -50,6 +56,12 @@ enum BotState: String {
 
     /// The bot is blocked until the owner does something.
     var needsOwner: Bool { self == .waitingForUser || self == .waitingForApproval }
+}
+
+/// A project's shared git repository: workers start from its branch and push back to it.
+struct ProjectRepo: Equatable {
+    let url: String
+    let branch: String
 }
 
 /// A project on a peer daemon that this project is linked with.
@@ -145,6 +157,8 @@ struct Bot: Identifiable, Equatable {
     var peerOnline: Bool
     /// May also drive the owner's own Chrome, besides its own browser.
     var userChrome: Bool
+    /// A worker: created for one task, archived once that task closes.
+    var temporary: Bool
 
     var isLinked: Bool { peerName != nil }
     var engine: BotEngine? { runtime.flatMap(BotEngine.init(rawValue:)) }
@@ -156,6 +170,7 @@ struct Bot: Identifiable, Equatable {
         peerName = peer?.optStr("name")
         peerOnline = peer?.bool("online") ?? false
         userChrome = d.bool("user_chrome")
+        temporary = d.bool("temporary")
         projectId = d.str("project_id")
         name = d.str("name")
         description = d.str("description")

@@ -5,6 +5,7 @@ struct BotsView: View {
     @State private var path = NavigationPath()
     @State private var creating: Creating?
     @State private var linking: ProjectRef?
+    @State private var editingRepo: ProjectRef?
     @State private var showingNetwork = false
 
     struct ProjectRef: Identifiable {
@@ -49,19 +50,33 @@ struct BotsView: View {
                                     .textCase(nil)
                             }
                             Spacer()
-                            if store.canControl {
+                            // Reading is open to every device; changing things needs control.
+                            if store.canControl || store.hasWorkers || store.hasConversations {
                                 Menu {
-                                    Button { creating = .bot(projectId: project.id) } label: {
-                                        Label("New bot", systemImage: "person.badge.plus")
+                                    if store.canControl {
+                                        Button { creating = .bot(projectId: project.id) } label: {
+                                            Label("New bot", systemImage: "person.badge.plus")
+                                        }
+                                    }
+                                    if store.hasWorkers {
+                                        Button { path.append(WorkersLink(projectId: project.id)) } label: {
+                                            Label("Workers", systemImage: "person.3.sequence")
+                                        }
+                                        Button { editingRepo = ProjectRef(id: project.id) } label: {
+                                            Label(project.repo.map { "Shared repository · \($0.branch)" } ?? "Shared repository",
+                                                  systemImage: "arrow.triangle.branch")
+                                        }
                                     }
                                     if store.hasConversations {
                                         Button { path.append(ConversationsLink(projectId: project.id)) } label: {
                                             Label("Conversations", systemImage: "bubble.left.and.bubble.right")
                                         }
                                     }
-                                    Button { linking = ProjectRef(id: project.id) } label: {
-                                        Label(project.links.isEmpty ? "Link with another computer" : "Linked computers",
-                                              systemImage: "link")
+                                    if store.canControl {
+                                        Button { linking = ProjectRef(id: project.id) } label: {
+                                            Label(project.links.isEmpty ? "Link with another computer" : "Linked computers",
+                                                  systemImage: "link")
+                                        }
                                     }
                                 } label: {
                                     Image(systemName: "ellipsis.circle")
@@ -125,17 +140,22 @@ struct BotsView: View {
                 }
             }
             .sheet(item: $linking) { LinkProjectSheet(projectId: $0.id) }
+            .sheet(item: $editingRepo) { RepoSheet(projectId: $0.id) }
             .sheet(isPresented: $showingNetwork) { NetworkView() }
             .navigationDestination(for: String.self) { BotDetailView(botId: $0) }
             .navigationDestination(for: ConversationsLink.self) { ConversationsView(projectId: $0.projectId) }
+            .navigationDestination(for: WorkersLink.self) { WorkersView(projectId: $0.projectId) }
             #if DEBUG
             // Screenshots of the demo: -openConversations opens the first project's,
-            // -openBot <name> that bot.
+            // -openWorkers the Workers of the one with a repository, -openBot <name> that bot.
             .task(id: store.bots.count) {
                 guard path.isEmpty else { return }
                 if let name = UserDefaults.standard.string(forKey: "openBot"),
                    let bot = store.bots.first(where: { $0.name == name }) {
                     path.append(bot.id)
+                } else if UserDefaults.standard.bool(forKey: "openWorkers"),
+                          let project = store.sortedProjects.first(where: { $0.repo != nil }) ?? store.sortedProjects.first {
+                    path.append(WorkersLink(projectId: project.id))
                 } else if UserDefaults.standard.bool(forKey: "openConversations"),
                           let first = store.sortedProjects.first {
                     path.append(ConversationsLink(projectId: first.id))
@@ -167,6 +187,7 @@ private struct BotRow: View {
             VStack(alignment: .leading, spacing: 3) {
                 HStack {
                     Text(bot.name).font(.headline)
+                    if bot.temporary { WorkerTag() }
                     if store.isUnread(bot) {
                         Circle().fill(.tint).frame(width: 8, height: 8)
                     }

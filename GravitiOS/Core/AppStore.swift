@@ -56,6 +56,8 @@ final class AppStore {
     var busRevision = 0
     /// Bumped by messages one bot sends another, for the Conversations view.
     var botMessageRevision = 0
+    /// project id → bumped when its worker queue changes (`workers_updated`).
+    var workersRevision: [String: Int] = [:]
     /// bot id → bumped whenever its chat changes (`chat_turns`): its commands,
     /// browser activity and memory are reread then.
     var chatRevision: [String: Int] = [:]
@@ -95,6 +97,8 @@ final class AppStore {
     /// A linked bot's terminal is mirrored here (`peer_terminal`).
     func hasTerminal(_ bot: Bot) -> Bool { !bot.isLinked || capabilities.contains("peer_terminal") }
     var hasCommands: Bool { capabilities.contains("bot_commands") }
+    /// Bots spawn temporary workers, and projects can share a git repository.
+    var hasWorkers: Bool { capabilities.contains("workers") }
     var hasConversations: Bool { capabilities.contains("agent_conversations") }
     /// Restart and Clear chat; they change state, so they need `control` too.
     var canRestart: Bool { capabilities.contains("restart_bot") && canControl }
@@ -230,6 +234,8 @@ final class AppStore {
         case "chat_turns":
             onChatTurns?(frame.str("bot_id"), frame.list("turns"))
             chatRevision[frame.str("bot_id"), default: 0] += 1
+        case "workers_updated":
+            workersRevision[frame.str("project_id"), default: 0] += 1
         case "browser_tabs":
             let tabs = BrowserTabs(frame)
             guard tabs.botId == watchedBrowser?.botId else { return }
@@ -498,6 +504,25 @@ final class AppStore {
         if let before { fields["before"] = before }
         let reply = try await client.request("list_agent_conversation", fields)
         return (reply.list("messages").map(AgentMessage.init), reply.bool("has_more"), reply.list("bots").map(AgentBot.init))
+    }
+
+    // MARK: Workers
+
+    func listWorkers(projectId: String) async throws -> WorkerListing {
+        WorkerListing(try await client.request("list_workers", ["project_id": projectId]))
+    }
+
+    /// A queued spawn is dropped; a running worker is told to stop and retires.
+    func cancelWorker(_ workerId: String) async throws {
+        _ = try await client.request("cancel_worker", ["worker_id": workerId])
+    }
+
+    /// Sets the project's shared repository, or clears it with a nil url.
+    func setProjectRepo(_ projectId: String, url: String?, branch: String) async throws {
+        var fields: JSONDict = ["project_id": projectId, "url": url ?? NSNull()]
+        if url != nil { fields["branch"] = branch }
+        let reply = try await client.request("set_project_repo", fields)
+        if let project = reply.dict("project").map(Project.init) { upsert(project) }
     }
 
     // MARK: Peers and linked projects

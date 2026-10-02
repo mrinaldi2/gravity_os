@@ -29,7 +29,9 @@ struct SendToBotSheet: View {
                         Text("Choose…").tag("")
                         ForEach(store.sortedProjects) { project in
                             Section(project.name) {
-                                ForEach(store.bots(in: project)) { Text($0.name).tag($0.id) }
+                                ForEach(store.bots(in: project)) { bot in
+                                    Text(bot.temporary ? "\(bot.name) · worker" : bot.name).tag(bot.id)
+                                }
                             }
                         }
                     }

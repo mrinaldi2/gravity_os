@@ -124,12 +124,12 @@ def start_daemon(gravityd: str, out: str, port: int) -> subprocess.Popen:
     raise SystemExit(f"the demo daemon did not start; see {out}/gravityd.log")
 
 
-def bot_tool(port: int, home: str, bot_id: str, name: str, **arguments: Any) -> Dict[str, Any]:
+def bot_tool(port: int, home: str, bot_id: str, tool: str, **arguments: Any) -> Dict[str, Any]:
     """What bots do on the bus (decisions, tasks) goes through their MCP tools, with the bot's token."""
     with open(os.path.join(home, "secrets", f"bot-{bot_id}.token")) as handle:
         token = handle.read().strip()
     body = json.dumps({"jsonrpc": "2.0", "id": 1, "method": "tools/call",
-                       "params": {"name": name, "arguments": arguments}}).encode()
+                       "params": {"name": tool, "arguments": arguments}}).encode()
     request = urllib.request.Request(f"http://127.0.0.1:{port}/mcp", data=body, headers={
         "Authorization": f"Bearer {token}", "Content-Type": "application/json",
         "Accept": "application/json, text/event-stream"})
@@ -138,6 +138,57 @@ def bot_tool(port: int, home: str, bot_id: str, name: str, **arguments: Any) -> 
         return json.loads(reply["result"]["content"][0]["text"])
     except (KeyError, IndexError, ValueError):
         return {}
+
+
+def spawn_workers(ws: "Socket", port: int, home: str, out: str, bots: Dict[str, Dict[str, str]]) -> None:
+    """Temporary workers for daemons that have them: Aurora Notes shares a git
+    repository, Tech Writer splits the user guide into chapters past the cap
+    of four, one chapter is finished and pushed, one is cancelled, and two
+    wait in the queue."""
+    if not shutil.which("git"):
+        return
+    repo = os.path.join(out, "notes-repo.git")
+    seed = os.path.join(out, "notes-seed")
+    git = ["git", "-c", "user.name=Demo", "-c", "user.email=demo@example.com"]
+    subprocess.run(["git", "init", "-q", "--bare", "-b", "main", repo], check=True)
+    subprocess.run(["git", "init", "-q", "-b", "main", seed], check=True)
+    with open(os.path.join(seed, "README.md"), "w") as handle:
+        handle.write("# Aurora Notes\n\nThe user guide lives in docs/guide.\n")
+    subprocess.run(git + ["-C", seed, "add", "."], check=True)
+    subprocess.run(git + ["-C", seed, "commit", "-qm", "Start the guide"], check=True)
+    subprocess.run(["git", "-C", seed, "push", "-q", repo, "main"], check=True)
+    shutil.rmtree(seed)
+
+    project = next(p for p in ws.request("list_projects")["projects"] if p["name"] == "Aurora Notes")
+    ws.request("set_project_repo", project_id=project["id"], url=repo, branch="main")
+    chapters = ["Getting started", "Sync across devices", "Working offline", "When edits conflict",
+                "Sharing a notebook", "Search", "Shortcuts", "Privacy and backups"]
+    for number, title in enumerate(chapters, 1):
+        bot_tool(port, home, bots["Tech Writer"]["id"], "spawn_worker", name=f"ch-{number}",
+                 task=f"Write chapter {number} of the user guide, \"{title}\", in docs/guide/ch-{number}.md. "
+                      "Plain words, one screenshot at most, under 600 words.")
+
+    def running(name: str) -> Dict[str, Any]:
+        workers = ws.request("list_workers", project_id=project["id"])["workers"]
+        return next(w for w in workers if w["name"] == name)
+
+    def write(worker: Dict[str, Any], text: str) -> None:
+        bot = next(b for b in ws.request("list_bots")["bots"] if b["id"] == worker["bot_id"])
+        folder = os.path.join(bot["workspace_path"], "repo", "docs", "guide")
+        os.makedirs(folder, exist_ok=True)
+        with open(os.path.join(folder, f"{worker['name']}.md"), "w") as handle:
+            handle.write(text)
+
+    # Chapter 1 is finished: the daemon commits it, pushes it, and says so in the result.
+    first = running("ch-1")
+    write(first, "# Getting started\n\nCreate a notebook, then a note.\n")
+    bot_tool(port, home, first["bot_id"], "complete_task", task_id=first["task_id"],
+             result="Chapter 1 is written: creating a notebook and a first note, in docs/guide/ch-1.md.")
+    # Chapter 2 is cancelled halfway: its work is saved on a branch of its own.
+    second = running("ch-2")
+    write(second, "# Sync across devices\n\nDraft.\n")
+    ws.request("cancel_worker", worker_id=second["id"], reason="The sync chapter waits for the new engine.")
+    time.sleep(4)
 
 
 def raise_decision(port: int, home: str, bot_id: str, **arguments: Any) -> None:
@@ -542,7 +593,7 @@ def main() -> None:
     with open(os.path.join(home, "secrets", "client.token")) as handle:
         token = handle.read().strip()
     ws = Socket(args.port)
-    ws.request("hello", protocol_version=2, token=token, client="gravitios-demo")
+    hello = ws.request("hello", protocol_version=2, token=token, client="gravitios-demo")
 
     bots: Dict[str, Dict[str, str]] = {}
     artifacts: Dict[str, str] = {}
@@ -577,6 +628,8 @@ def main() -> None:
                    options=[{"key": "yes", "label": "Yes, go live Monday"}, {"key": "wait", "label": "Wait for sharing"}],
                    body="The page is built and staged.")
     hand_out_tasks(args.port, home, bots)
+    if "workers" in hello.get("capabilities", []):
+        spawn_workers(ws, args.port, home, out, bots)
     ws.request("send_user_message", to_bot_id=bots["iOS Dev"]["id"],
                body="Nice work on the banner. Keep it behind the flag until QA signs off.")
 

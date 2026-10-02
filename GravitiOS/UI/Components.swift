@@ -100,6 +100,19 @@ struct StateBadge: View {
     }
 }
 
+/// Marks a temporary worker wherever bots are listed.
+struct WorkerTag: View {
+    var body: some View {
+        Text("worker")
+            .font(.caption2.weight(.semibold))
+            .padding(.horizontal, 6)
+            .padding(.vertical, 1)
+            .foregroundStyle(.teal)
+            .background(Color.teal.opacity(0.15), in: Capsule())
+            .accessibilityLabel("Temporary worker")
+    }
+}
+
 /// Thin bar under the navigation bar whenever the daemon is unreachable.
 struct ConnectionBanner: View {
     @Environment(AppStore.self) private var store
