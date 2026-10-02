@@ -184,6 +184,12 @@ struct BotCommand: Identifiable, Equatable {
         (commands.filter(\.isRunning), commands.filter { !$0.isRunning })
     }
 
+    /// The output worth a Copy control: none when there is nothing to copy.
+    var copyableOutput: String? {
+        guard let output, !output.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return nil }
+        return output
+    }
+
     /// A background command still writing output is worth polling.
     static func needsPolling(_ commands: [BotCommand]) -> Bool {
         commands.contains { $0.isRunning && $0.background }

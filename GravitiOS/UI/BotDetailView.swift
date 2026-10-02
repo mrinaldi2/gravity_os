@@ -130,6 +130,12 @@ struct BotDetailView: View {
         .onAppear {
             store.markSeen(botId)
             watchBrowser()
+            #if DEBUG
+            // Screenshots of the demo: -openPane Commands opens that pane.
+            if choice == nil, let name = UserDefaults.standard.string(forKey: "openPane") {
+                choice = Pane(rawValue: name)
+            }
+            #endif
         }
         .onDisappear {
             store.markSeen(botId)

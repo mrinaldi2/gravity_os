@@ -84,37 +84,112 @@ private struct CommandRow: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
-            Button { withAnimation(.snappy) { open.toggle() } } label: {
-                HStack(alignment: .firstTextBaseline, spacing: 8) {
-                    Circle().fill(dot).frame(width: 8, height: 8)
-                    Text(command.title).font(.subheadline.weight(.medium)).lineLimit(2)
-                    Spacer(minLength: 4)
-                    if command.background { Badge(text: "background", tint: .purple) }
-                    if let outcome = command.outcome {
-                        Badge(text: outcome, tint: command.status == "failed" || outcome.hasPrefix("exit") ? .red : .secondary)
-                    }
-                    Image(systemName: open ? "chevron.up" : "chevron.down").font(.caption).foregroundStyle(.tertiary)
+            // A tap gesture, not a Button: beside the Copy buttons, a List hands
+            // a plain button's taps to the row's other buttons.
+            HStack(alignment: .firstTextBaseline, spacing: 8) {
+                Circle().fill(dot).frame(width: 8, height: 8)
+                Text(command.title).font(.subheadline.weight(.medium)).lineLimit(2)
+                Spacer(minLength: 4)
+                if command.background { Badge(text: "background", tint: .purple) }
+                if let outcome = command.outcome {
+                    Badge(text: outcome, tint: command.status == "failed" || outcome.hasPrefix("exit") ? .red : .secondary)
                 }
+                Image(systemName: open ? "chevron.up" : "chevron.down").font(.caption).foregroundStyle(.tertiary)
             }
-            .buttonStyle(.plain)
-            Text(command.command)
-                .font(.caption.monospaced())
-                .foregroundStyle(.secondary)
-                .lineLimit(open ? nil : 2)
-                .textSelection(.enabled)
-            Text(command.when(TaskTime.text)).font(.caption2).foregroundStyle(.secondary)
+            .contentShape(Rectangle())
+            .onTapGesture { withAnimation(.snappy) { open.toggle() } }
+            .accessibilityElement(children: .combine)
+            .accessibilityAddTraits(.isButton)
+            .accessibilityHint(open ? "Hides the output" : "Shows the whole command and its output")
             if open {
-                ScrollView(.horizontal) {
-                    Text(command.output?.isEmpty == false ? command.output! : "No output yet.")
-                        .font(.system(size: 11, design: .monospaced))
-                        .textSelection(.enabled)
-                        .padding(8)
+                CopyableBlock(title: "Command", text: command.command)
+                if let output = command.copyableOutput {
+                    CopyableBlock(title: "Output", text: output)
+                } else {
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text("Output").font(.caption2.weight(.semibold)).foregroundStyle(.secondary)
+                        Text("No output yet.").font(.caption).foregroundStyle(.secondary)
+                    }
                 }
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .background(Color(.secondarySystemBackground), in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+            } else {
+                HStack(alignment: .firstTextBaseline, spacing: 6) {
+                    Text(command.command)
+                        .font(.caption.monospaced())
+                        .foregroundStyle(.secondary)
+                        .lineLimit(2)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .contextMenu { CopyMenuItem(text: command.command) }
+                    CopyButton(text: command.command, label: "Copy the command")
+                }
             }
+            Text(command.when(TaskTime.text)).font(.caption2).foregroundStyle(.secondary)
         }
         .padding(.vertical, 2)
+    }
+}
+
+/// A command or its output, in full, under a small heading with its own Copy.
+private struct CopyableBlock: View {
+    let title: String
+    let text: String
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            HStack {
+                Text(title).font(.caption2.weight(.semibold)).foregroundStyle(.secondary)
+                Spacer()
+                CopyButton(text: text, label: "Copy the \(title.lowercased())")
+            }
+            // Wrapped, so nothing is cut off at the screen's edge.
+            Text(text)
+                .font(.system(size: 11, design: .monospaced))
+                .fixedSize(horizontal: false, vertical: true)
+                .textSelection(.enabled)
+                .padding(8)
+                .frame(maxWidth: .infinity, alignment: .leading)
+            .background(Color(.secondarySystemBackground), in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+            .contextMenu { CopyMenuItem(text: text) }
+        }
+    }
+}
+
+/// Puts the exact text on the clipboard and says so for a moment.
+private struct CopyButton: View {
+    let text: String
+    let label: String
+    @State private var copied = false
+
+    var body: some View {
+        Button {
+            UIPasteboard.general.string = text
+            UINotificationFeedbackGenerator().notificationOccurred(.success)
+            withAnimation(.snappy) { copied = true }
+        } label: {
+            Label(copied ? "Copied" : "Copy", systemImage: copied ? "checkmark" : "doc.on.doc")
+                .font(.caption2.weight(.semibold))
+                .foregroundStyle(copied ? Color.green : Color.accentColor)
+        }
+        // Its own tap target in a List row, not the row's.
+        .buttonStyle(.borderless)
+        .accessibilityLabel(copied ? "Copied" : label)
+        .task(id: copied) {
+            guard copied else { return }
+            try? await Task.sleep(for: .seconds(1.5))
+            withAnimation(.snappy) { copied = false }
+        }
+    }
+}
+
+/// Long-press to copy.
+private struct CopyMenuItem: View {
+    let text: String
+
+    var body: some View {
+        Button {
+            UIPasteboard.general.string = text
+        } label: {
+            Label("Copy", systemImage: "doc.on.doc")
+        }
     }
 }
 
