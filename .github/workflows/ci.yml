@@ -48,3 +48,10 @@ jobs:
             -destination 'generic/platform=iOS Simulator' \
             -derivedDataPath build CODE_SIGNING_ALLOWED=NO build | tail -20
           test ${PIPESTATUS[0]} -eq 0
+      - name: Unit tests
+        run: |
+          device=$(xcrun simctl list devices available | grep -m1 -oE 'iPhone[^(]*\(([0-9A-F-]{36})\)' | grep -oE '[0-9A-F-]{36}')
+          xcodebuild test -project GravitiOS.xcodeproj -scheme GravitiOS \
+            -destination "platform=iOS Simulator,id=$device" \
+            -derivedDataPath build CODE_SIGNING_ALLOWED=NO | grep -E "Test Case|Executed|error:|TEST (SUCCEEDED|FAILED)"
+          test ${PIPESTATUS[0]} -eq 0

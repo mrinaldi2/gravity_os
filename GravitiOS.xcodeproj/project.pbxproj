@@ -15,12 +15,28 @@
 		6A0000000000000000000010 /* GravitiOS.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = GravitiOS.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		6A0000000000000000000011 /* Config/Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Config/Info.plist; sourceTree = "<group>"; };
 		6A0000000000000000000012 /* Config/Signing.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = Config/Signing.xcconfig; sourceTree = "<group>"; };
+		6A0000000000000000000013 /* GravitiOSTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = GravitiOSTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
+
+/* Begin PBXContainerItemProxy section */
+		6A0000000000000000000053 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 6A0000000000000000000060 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = 6A0000000000000000000050;
+			remoteInfo = GravitiOS;
+		};
+/* End PBXContainerItemProxy section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
 		6A0000000000000000000020 /* GravitiOS */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
 			path = GravitiOS;
+			sourceTree = "<group>";
+		};
+		6A0000000000000000000021 /* GravitiOSTests */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			path = GravitiOSTests;
 			sourceTree = "<group>";
 		};
 /* End PBXFileSystemSynchronizedRootGroup section */
@@ -35,6 +51,13 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		6A0000000000000000000034 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 /* End PBXFrameworksBuildPhase section */
 
 /* Begin PBXGroup section */
@@ -42,6 +65,7 @@
 			isa = PBXGroup;
 			children = (
 				6A0000000000000000000020 /* GravitiOS */,
+				6A0000000000000000000021 /* GravitiOSTests */,
 				6A0000000000000000000011 /* Config/Info.plist */,
 				6A0000000000000000000012 /* Config/Signing.xcconfig */,
 				6A0000000000000000000041 /* Products */,
@@ -52,6 +76,7 @@
 			isa = PBXGroup;
 			children = (
 				6A0000000000000000000010 /* GravitiOS.app */,
+				6A0000000000000000000013 /* GravitiOSTests.xctest */,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -83,6 +108,27 @@
 			productReference = 6A0000000000000000000010 /* GravitiOS.app */;
 			productType = "com.apple.product-type.application";
 		};
+		6A0000000000000000000051 /* GravitiOSTests */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 6A0000000000000000000072 /* Build configuration list for PBXNativeTarget "GravitiOSTests" */;
+			buildPhases = (
+				6A0000000000000000000033 /* Sources */,
+				6A0000000000000000000034 /* Frameworks */,
+				6A0000000000000000000035 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				6A0000000000000000000052 /* PBXTargetDependency */,
+			);
+			fileSystemSynchronizedGroups = (
+				6A0000000000000000000021 /* GravitiOSTests */,
+			);
+			name = GravitiOSTests;
+			productName = GravitiOSTests;
+			productReference = 6A0000000000000000000013 /* GravitiOSTests.xctest */;
+			productType = "com.apple.product-type.bundle.unit-test";
+		};
 /* End PBXNativeTarget section */
 
 /* Begin PBXProject section */
@@ -95,6 +141,10 @@
 				TargetAttributes = {
 					6A0000000000000000000050 = {
 						CreatedOnToolsVersion = 27.0;
+					};
+					6A0000000000000000000051 = {
+						CreatedOnToolsVersion = 27.0;
+						TestTargetID = 6A0000000000000000000050;
 					};
 				};
 			};
@@ -117,12 +167,20 @@
 			projectRoot = "";
 			targets = (
 				6A0000000000000000000050 /* GravitiOS */,
+				6A0000000000000000000051 /* GravitiOSTests */,
 			);
 		};
 /* End PBXProject section */
 
 /* Begin PBXResourcesBuildPhase section */
 		6A0000000000000000000032 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		6A0000000000000000000035 /* Resources */ = {
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
@@ -139,7 +197,22 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		6A0000000000000000000033 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 /* End PBXSourcesBuildPhase section */
+
+/* Begin PBXTargetDependency section */
+		6A0000000000000000000052 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = 6A0000000000000000000050 /* GravitiOS */;
+			targetProxy = 6A0000000000000000000053 /* PBXContainerItemProxy */;
+		};
+/* End PBXTargetDependency section */
 
 /* Begin XCBuildConfiguration section */
 		6A0000000000000000000080 /* Debug */ = {
@@ -243,6 +316,42 @@
 			};
 			name = Release;
 		};
+		6A0000000000000000000084 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			baseConfigurationReference = 6A0000000000000000000012 /* Config/Signing.xcconfig */;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				GENERATE_INFOPLIST_FILE = YES;
+				MARKETING_VERSION = 0.1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = "$(inherited).tests";
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SWIFT_EMIT_LOC_STRINGS = NO;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/GravitiOS.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/GravitiOS";
+			};
+			name = Debug;
+		};
+		6A0000000000000000000085 /* Release */ = {
+			isa = XCBuildConfiguration;
+			baseConfigurationReference = 6A0000000000000000000012 /* Config/Signing.xcconfig */;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				GENERATE_INFOPLIST_FILE = YES;
+				MARKETING_VERSION = 0.1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = "$(inherited).tests";
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SWIFT_EMIT_LOC_STRINGS = NO;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/GravitiOS.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/GravitiOS";
+			};
+			name = Release;
+		};
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
@@ -260,6 +369,15 @@
 			buildConfigurations = (
 				6A0000000000000000000080 /* Debug */,
 				6A0000000000000000000081 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		6A0000000000000000000072 /* Build configuration list for PBXNativeTarget "GravitiOSTests" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				6A0000000000000000000084 /* Debug */,
+				6A0000000000000000000085 /* Release */,
 			);
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;
