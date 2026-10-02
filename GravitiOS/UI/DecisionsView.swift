@@ -5,6 +5,9 @@ struct DecisionsView: View {
     @Environment(AppStore.self) private var store
     @Binding var openDecision: String?
     @State private var path: [String] = []
+    @State private var openBot: String?
+    /// A prompt to scroll to, from a tapped notification.
+    var focusPermission: Binding<String?> = .constant(nil)
 
     private var pending: [Decision] {
         store.decisions.filter(\.pending).sorted { lhs, rhs in
@@ -21,14 +24,33 @@ struct DecisionsView: View {
 
     var body: some View {
         NavigationStack(path: $path) {
+            ScrollViewReader { proxy in
             List {
+                if store.hasPermissions, !store.permissions.isEmpty {
+                    Section {
+                        ForEach(store.permissions) { request in
+                            PermissionCard(request: request) { openBot = $0 }
+                                .listRowInsets(EdgeInsets(top: 6, leading: 8, bottom: 6, trailing: 8))
+                                .listRowBackground(Color.clear)
+                                .id(request.id)
+                        }
+                    } header: {
+                        Text("Permission prompts")
+                    }
+                }
                 section("Waiting on you", pending)
                 section("On hold", held)
                 section("Settled", closed)
             }
             .listStyle(.insetGrouped)
+            .onChange(of: focusPermission.wrappedValue) { _, id in
+                guard let id else { return }
+                withAnimation { proxy.scrollTo(id, anchor: .top) }
+                focusPermission.wrappedValue = nil
+            }
+            }
             .overlay {
-                if store.decisions.isEmpty {
+                if store.decisions.isEmpty, store.permissions.isEmpty {
                     ContentUnavailableView("Nothing to decide", systemImage: "checkmark.circle",
                                            description: Text("Bots raise decisions here when they need your ruling."))
                 }
@@ -38,6 +60,7 @@ struct DecisionsView: View {
             .navigationTitle("Decisions")
             .toolbar { ToolbarItem(placement: .topBarTrailing) { ComputerSwitcher() } }
             .navigationDestination(for: String.self) { DecisionDetailView(decisionId: $0) }
+            .navigationDestination(item: $openBot) { BotDetailView(botId: $0) }
         }
         .onChange(of: openDecision) { _, id in
             guard let id else { return }

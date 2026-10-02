@@ -41,6 +41,10 @@ enum ConnectionStatus: Equatable {
 final class DaemonClient {
     static let protocolVersion = 2
     static let clientId = "gravitios/0.1.0"
+    /// What this app can do for the daemon: it shows bots' permission prompts
+    /// and answers them, so the daemon holds a prompt for it instead of
+    /// leaving it in the bot's terminal.
+    static let features = ["permission_cards"]
 
     private(set) var status: ConnectionStatus = .idle {
         didSet { if status != oldValue { onStatus?(status) } }
@@ -167,6 +171,7 @@ final class DaemonClient {
                 "type": "hello", "req_id": newRequestId(),
                 "protocol_version": Self.protocolVersion,
                 "token": token, "client": Self.clientId,
+                "features": Self.features,
             ]
             try await socket.send(.string(JSONText.encode(hello) ?? "{}"))
             let first = try await receive(socket)

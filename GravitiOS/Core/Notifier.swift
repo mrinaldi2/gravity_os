@@ -1,4 +1,5 @@
 import Foundation
+import Observation
 import UserNotifications
 
 /// Local notifications for things that need the owner. These only fire while
@@ -9,16 +10,58 @@ enum Notifier {
         UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .sound, .badge]) { _, _ in }
     }
 
-    static func post(title: String, body: String, id: String = UUID().uuidString) {
+    /// `info` comes back to `NotificationRouter` when the owner taps it.
+    /// `inForeground`: show it even while the app is open.
+    static func post(title: String, body: String, id: String = UUID().uuidString,
+                     info: [String: String] = [:], inForeground: Bool = false) {
         let content = UNMutableNotificationContent()
         content.title = title
         content.body = String(body.prefix(240))
         content.sound = .default
+        var userInfo: [String: String] = info
+        if inForeground { userInfo["foreground"] = "1" }
+        content.userInfo = userInfo
         let request = UNNotificationRequest(identifier: id, content: content, trigger: nil)
         UNUserNotificationCenter.current().add(request)
     }
 
+    /// Takes back a notification whose reason has passed, e.g. a prompt answered elsewhere.
+    static func withdraw(_ id: String) {
+        UNUserNotificationCenter.current().removeDeliveredNotifications(withIdentifiers: [id])
+        UNUserNotificationCenter.current().removePendingNotificationRequests(withIdentifiers: [id])
+    }
+
     static func setBadge(_ count: Int) {
         UNUserNotificationCenter.current().setBadgeCount(count)
+    }
+}
+
+/// Where a tapped notification leads: a permission prompt on a computer.
+@MainActor
+@Observable
+final class NotificationRouter: NSObject, UNUserNotificationCenterDelegate {
+    static let shared = NotificationRouter()
+
+    struct Target: Equatable {
+        let computerId: String
+        let permissionId: String
+    }
+
+    /// Set when the owner taps a prompt's notification; the root view opens it.
+    var target: Target?
+
+    nonisolated func userNotificationCenter(_ center: UNUserNotificationCenter,
+                                            willPresent notification: UNNotification) async
+        -> UNNotificationPresentationOptions {
+        // Most notifications are posted only in the background; a prompt for a
+        // bot that is not on screen also shows while the app is open.
+        notification.request.content.userInfo["foreground"] == nil ? [] : [.banner, .list, .sound]
+    }
+
+    nonisolated func userNotificationCenter(_ center: UNUserNotificationCenter,
+                                            didReceive response: UNNotificationResponse) async {
+        let info = response.notification.request.content.userInfo
+        guard let computer = info["computer"] as? String, let permission = info["permission"] as? String else { return }
+        await MainActor.run { target = Target(computerId: computer, permissionId: permission) }
     }
 }

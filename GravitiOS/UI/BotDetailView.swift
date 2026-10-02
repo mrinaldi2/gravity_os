@@ -55,7 +55,19 @@ struct BotDetailView: View {
         VStack(spacing: 0) {
             PaneStrip(panes: panes, selection: Binding(get: { pane }, set: { choice = $0 }), browserOpen: browserOpen)
 
-            if let detail = store.approvals[botId] {
+            // Its tools waiting on the owner, answered right here.
+            if store.hasPermissions, !store.permissions(for: botId).isEmpty {
+                ScrollView {
+                    VStack(spacing: 8) {
+                        ForEach(store.permissions(for: botId)) { PermissionCard(request: $0) }
+                    }
+                    .padding(.horizontal, 12)
+                    .padding(.bottom, 8)
+                }
+                .scrollBounceBehavior(.basedOnSize)
+                .frame(maxHeight: 340)
+                .fixedSize(horizontal: false, vertical: true)
+            } else if let detail = store.approvals[botId] {
                 Label(detail, systemImage: "hand.raised.fill")
                     .font(.footnote)
                     .foregroundStyle(.orange)
@@ -129,6 +141,7 @@ struct BotDetailView: View {
         // open, so the Browser pane is live the moment it is chosen.
         .onAppear {
             store.markSeen(botId)
+            store.botOnScreen = botId
             watchBrowser()
             #if DEBUG
             // Screenshots of the demo: -openPane Commands opens that pane.
@@ -139,6 +152,7 @@ struct BotDetailView: View {
         }
         .onDisappear {
             store.markSeen(botId)
+            if store.botOnScreen == botId { store.botOnScreen = nil }
             if store.watchedBrowser?.botId == botId { store.unwatchBrowser() }
         }
         .onChange(of: scenePhase) { _, phase in

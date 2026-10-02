@@ -7,6 +7,8 @@ struct RootView: View {
     @Environment(LensStore.self) private var lens
     @State private var tab = Tab.activity
     @State private var openDecision: String?
+    @State private var focusPermission: String?
+    private var router: NotificationRouter { .shared }
 
     enum Tab { case activity, bots, decisions, reports, computer }
 
@@ -18,9 +20,9 @@ struct RootView: View {
             BotsView()
                 .tabItem { Label("Bots", systemImage: "person.2") }
                 .tag(Tab.bots)
-            DecisionsView(openDecision: $openDecision)
+            DecisionsView(openDecision: $openDecision, focusPermission: $focusPermission)
                 .tabItem { Label("Decisions", systemImage: "checklist") }
-                .badge(store.pendingCounts.total)
+                .badge(store.decisionsBadge)
                 .tag(Tab.decisions)
             ReportsView()
                 .tabItem { Label("Reports", systemImage: "doc.richtext") }
@@ -35,6 +37,14 @@ struct RootView: View {
         .animation(.snappy, value: fleet.notice?.1)
         .task { Notifier.requestPermission() }
         .task(id: computer.id) { await lens.poll() }
+        // A tapped "needs your permission" notification: its computer, its card.
+        .onChange(of: router.target, initial: true) { _, target in
+            guard let target, let source = fleet.computers.first(where: { $0.id == target.computerId }) else { return }
+            fleet.select(source)
+            tab = .decisions
+            focusPermission = target.permissionId
+            router.target = nil
+        }
     }
 
     @ViewBuilder private var noticeBanner: some View {

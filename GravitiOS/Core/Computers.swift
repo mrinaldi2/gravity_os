@@ -263,7 +263,7 @@ final class Fleet {
     }
 
     /// Decisions waiting on every computer, for the app icon.
-    var pendingTotal: Int { computers.reduce(0) { $0 + $1.store.pendingCounts.total } }
+    var pendingTotal: Int { computers.reduce(0) { $0 + $1.store.decisionsBadge } }
 
     /// The first banner any computer wants to show, with its computer.
     var notice: (Computer, Notice)? {

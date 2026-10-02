@@ -392,3 +392,50 @@ struct WorkerListing: Equatable {
         maxHere = d.int("max_workers_here")
     }
 }
+
+// MARK: Permission prompts
+
+/// A bot's tool waiting on the owner's answer (`list_permissions`,
+/// `permission_request`). Unanswered by `expiresAt`, it is denied.
+struct PermissionRequest: Identifiable, Equatable {
+    let id: String
+    let botId: String
+    let tool: String
+    /// One line saying what the tool would do.
+    let summary: String
+    /// The tool's input, pretty-printed JSON, truncated.
+    let input: String
+    let createdAt: Date?
+    let expiresAt: Date?
+
+    init(_ d: JSONDict) {
+        id = d.str("id")
+        botId = d.str("bot_id")
+        tool = d.str("tool")
+        summary = d.str("summary")
+        input = d.str("input")
+        createdAt = d.date("created_at")
+        expiresAt = d.date("expires_at")
+    }
+
+    /// The owner's answer. A reason goes back to the bot with a deny only.
+    enum Answer: String, CaseIterable {
+        case allowOnce = "allow_once"
+        case allowSession = "allow_session"
+        case deny
+
+        var label: String {
+            switch self {
+            case .allowOnce: "Allow once"
+            case .allowSession: "Allow for this session"
+            case .deny: "Deny"
+            }
+        }
+    }
+
+    /// Waiting prompts, oldest first, one per id: a list merged with a new prompt.
+    static func adding(_ request: PermissionRequest, to list: [PermissionRequest]) -> [PermissionRequest] {
+        (list.filter { $0.id != request.id } + [request])
+            .sorted { ($0.createdAt ?? .distantPast) < ($1.createdAt ?? .distantPast) }
+    }
+}

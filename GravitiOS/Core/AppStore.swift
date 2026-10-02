@@ -34,6 +34,10 @@ final class AppStore {
     var deviceId: String?
     /// The daemon's stable id, as its peers know it (newer daemons).
     var daemonId: String?
+    /// Permission prompts waiting on the owner, oldest first.
+    var permissions: [PermissionRequest] = []
+    /// The bot whose screen is open, so its prompts need no notification.
+    @ObservationIgnored var botOnScreen: String?
     /// Daemons this one is paired with; loaded by the network screen.
     var peers: [Peer] = []
 
@@ -99,6 +103,13 @@ final class AppStore {
     var hasCommands: Bool { capabilities.contains("bot_commands") }
     /// Bots spawn temporary workers, and projects can share a git repository.
     var hasWorkers: Bool { capabilities.contains("workers") }
+    /// Bots' permission prompts wait here for an answer.
+    var hasPermissions: Bool { capabilities.contains("permissions") }
+
+    /// What the Decisions tab counts: waiting prompts are urgent too.
+    var decisionsBadge: Int { pendingCounts.total + permissions.count }
+
+    func permissions(for botId: String) -> [PermissionRequest] { permissions.filter { $0.botId == botId } }
     var hasConversations: Bool { capabilities.contains("agent_conversations") }
     /// Restart and Clear chat; they change state, so they need `control` too.
     var canRestart: Bool { capabilities.contains("restart_bot") && canControl }
@@ -129,6 +140,7 @@ final class AppStore {
     private func clear() {
         grants = []
         capabilities = []
+        permissions = []
         browserTabs = nil
         browserFrame = nil
         projects = []
@@ -182,6 +194,29 @@ final class AppStore {
                 uniquingKeysWith: { _, newest in newest })
         }
         await refreshDecisions()
+        await refreshPermissions()
+    }
+
+    /// Every prompt still waiting: on connecting, so none is missed while away.
+    func refreshPermissions() async {
+        guard hasPermissions, let reply = try? await client.request("list_permissions") else { return }
+        permissions = reply.list("permissions").map(PermissionRequest.init)
+            .sorted { ($0.createdAt ?? .distantPast) < ($1.createdAt ?? .distantPast) }
+        onCountsChanged?()
+    }
+
+    /// Answers a prompt. The card goes at once; `permission_resolved` would remove it too.
+    func answerPermission(_ request: PermissionRequest, _ answer: PermissionRequest.Answer, reason: String?) async throws {
+        var fields: JSONDict = ["request_id": request.id, "decision": answer.rawValue]
+        if answer == .deny, let reason, !reason.isEmpty { fields["reason"] = reason }
+        do {
+            _ = try await client.request("answer_permission", fields)
+        } catch {
+            // No longer waiting (answered elsewhere, expired): the card is stale either way.
+            await refreshPermissions()
+            throw error
+        }
+        resolvePermission(request.id)
     }
 
     func refreshDecisions() async {
@@ -211,7 +246,7 @@ final class AppStore {
 
     // MARK: Pushes
 
-    private func pushReceived(_ type: String, _ frame: JSONDict) {
+    func pushReceived(_ type: String, _ frame: JSONDict) {
         switch type {
         case "term":
             sinks[frame.str("bot_id")]?.output(seq: frame.int("seq"), data: frame.str("data"))
@@ -234,6 +269,10 @@ final class AppStore {
         case "chat_turns":
             onChatTurns?(frame.str("bot_id"), frame.list("turns"))
             chatRevision[frame.str("bot_id"), default: 0] += 1
+        case "permission_request":
+            if let row = frame.dict("request") { permissionArrived(PermissionRequest(row)) }
+        case "permission_resolved":
+            resolvePermission(frame.str("request_id"))
         case "workers_updated":
             workersRevision[frame.str("project_id"), default: 0] += 1
         case "browser_tabs":
@@ -273,6 +312,22 @@ final class AppStore {
         }
     }
 
+    private func permissionArrived(_ request: PermissionRequest) {
+        permissions = PermissionRequest.adding(request, to: permissions)
+        onCountsChanged?()
+        // Its bot is on screen: the card is already in front of the owner.
+        guard inBackground || botOnScreen != request.botId else { return }
+        notify("\(bot(request.botId)?.name ?? "A bot") needs your permission", request.summary,
+               id: "permission-\(request.id)", info: ["permission": request.id], always: true)
+    }
+
+    private func resolvePermission(_ id: String) {
+        guard permissions.contains(where: { $0.id == id }) else { return }
+        permissions.removeAll { $0.id == id }
+        Notifier.withdraw(defaults.key("permission-\(id)"))
+        onCountsChanged?()
+    }
+
     private func approvalPending(_ frame: JSONDict) {
         let id = frame.str("bot_id")
         let detail = frame.str("detail")
@@ -292,9 +347,13 @@ final class AppStore {
         }
     }
 
-    private func notify(_ title: String, _ body: String, id: String = UUID().uuidString) {
+    /// `info` comes back when the notification is tapped, with this computer's id.
+    private func notify(_ title: String, _ body: String, id: String = UUID().uuidString,
+                        info: [String: String] = [:], always: Bool = false) {
         let tagged = notificationTag.map { "\($0): \(title)" } ?? title
-        Notifier.post(title: tagged, body: body, id: defaults.key(id))
+        var info = info
+        info["computer"] = defaults.id
+        Notifier.post(title: tagged, body: body, id: defaults.key(id), info: info, inForeground: always)
     }
 
     private func upsert(_ bot: Bot) {

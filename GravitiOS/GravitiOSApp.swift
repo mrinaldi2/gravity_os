@@ -1,8 +1,13 @@
 import SwiftUI
+import UserNotifications
 
 @main
 struct GravitiOSApp: App {
     @State private var fleet = Fleet()
+
+    init() {
+        UNUserNotificationCenter.current().delegate = NotificationRouter.shared
+    }
     @Environment(\.scenePhase) private var scenePhase
 
     var body: some Scene {

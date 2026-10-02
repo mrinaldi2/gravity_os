@@ -22,6 +22,7 @@ import shutil
 import socket
 import subprocess
 import sys
+import threading
 import time
 import urllib.request
 import uuid
@@ -113,7 +114,9 @@ def start_daemon(gravityd: str, out: str, port: int) -> subprocess.Popen:
         # user_home: where the daemon reads Claude Code transcripts (~/.claude/projects),
         # for daemons that serve the chat themselves.
         handle.write(f'home = "{home}"\nuser_home = "{os.path.join(out, "user-home")}"\n'
-                     f'bind = ["127.0.0.1"]\nport = {port}\nnegotiate_port = false\nruntime = "double"\n')
+                     f'bind = ["127.0.0.1"]\nport = {port}\nnegotiate_port = false\nruntime = "double"\n'
+                     # Prompts wait an hour, long enough to look at them.
+                     'permission_timeout_seconds = 3600\n')
     log = open(os.path.join(out, "gravityd.log"), "ab")
     daemon = subprocess.Popen([gravityd, "--config", config], stdout=log, stderr=log)
     for _ in range(50):
@@ -189,6 +192,34 @@ def spawn_workers(ws: "Socket", port: int, home: str, out: str, bots: Dict[str, 
     write(second, "# Sync across devices\n\nDraft.\n")
     ws.request("cancel_worker", worker_id=second["id"], reason="The sync chapter waits for the new engine.")
     time.sleep(4)
+
+
+def ask_permissions(port: int, home: str, bots: Dict[str, Dict[str, str]]) -> None:
+    """Bots waiting on the owner: each posts a prompt the way Claude Code's
+    PermissionRequest hook does, and the daemon holds it for an app to answer.
+    Each request blocks until answered, so each gets a thread."""
+    prompts = [
+        ("Backend Dev", "Bash", {"command": "rm -rf build/ && npm ci",
+                                 "description": "Clean install before the release build"}),
+        ("iOS Dev", "Write", {"file_path": "Sources/Sync/ConflictBanner.swift",
+                              "content": "import SwiftUI\n\nstruct ConflictBanner: View {\n    // …\n}\n"}),
+        ("Web Dev", "WebFetch", {"url": "https://example.com/pricing", "prompt": "Compare the plans"}),
+    ]
+
+    def ask(bot: str, tool: str, tool_input: Dict[str, Any]) -> None:
+        with open(os.path.join(home, "secrets", f"bot-{bots[bot]['id']}.token")) as handle:
+            token = handle.read().strip()
+        body = json.dumps({"tool_name": tool, "tool_input": tool_input, "permission_suggestions": []}).encode()
+        request = urllib.request.Request(f"http://127.0.0.1:{port}/hook/permission", data=body, headers={
+            "Authorization": f"Bearer {token}", "Content-Type": "application/json"})
+        try:
+            urllib.request.urlopen(request, timeout=3700).read()
+        except OSError:
+            pass
+
+    for number, prompt in enumerate(prompts):
+        threading.Thread(target=ask, args=prompt, daemon=True).start()
+        time.sleep(1.2 if number < len(prompts) - 1 else 0.5)
 
 
 def raise_decision(port: int, home: str, bot_id: str, **arguments: Any) -> None:
@@ -593,7 +624,9 @@ def main() -> None:
     with open(os.path.join(home, "secrets", "client.token")) as handle:
         token = handle.read().strip()
     ws = Socket(args.port)
-    hello = ws.request("hello", protocol_version=2, token=token, client="gravitios-demo")
+    # It answers permission prompts, so the daemon holds them while the demo runs.
+    hello = ws.request("hello", protocol_version=2, token=token, client="gravitios-demo",
+                       features=["permission_cards"])
 
     bots: Dict[str, Dict[str, str]] = {}
     artifacts: Dict[str, str] = {}
@@ -648,6 +681,8 @@ def main() -> None:
                                  {"id": 1, "main": True, "x": 0, "y": 0, "width": 1920, "height": 1200},
                                  {"id": 2, "main": False, "x": 1920, "y": 0, "width": 1920, "height": 1200}])])
     print(f"  Gravity Lens: 127.0.0.1:{args.lens_port}\nServing. Ctrl-C stops both.")
+    if "permissions" in hello.get("capabilities", []):
+        ask_permissions(args.port, home, bots)
     try:
         daemon.wait()
     except KeyboardInterrupt:
