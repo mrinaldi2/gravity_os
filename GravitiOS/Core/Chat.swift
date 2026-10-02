@@ -114,6 +114,8 @@ struct ArtifactFile: Identifiable, Hashable {
     let mime: String
     /// A markdown file's first heading.
     let title: String?
+    /// Who made the file, when the daemon can tell.
+    let createdBy: FileCreator?
 
     var id: String { path }
 
@@ -125,6 +127,45 @@ struct ArtifactFile: Identifiable, Hashable {
         modified = d.date("modified")
         mime = d.str("mime")
         title = d.optStr("title")
+        createdBy = d.dict("created_by").map(FileCreator.init)
+    }
+}
+
+/// Who made an artifact (`created_by` in `list_artifacts`): a bot, or the
+/// owner when there is no `bot_id`.
+struct FileCreator: Hashable {
+    let botId: String?
+    let name: String
+    /// Empty for the owner.
+    let avatar: String
+    /// The peer the bot runs on, for one on another machine.
+    let machine: String?
+    /// wrote, edited, command, upload or sent.
+    let via: String
+
+    init(_ d: JSONDict) {
+        botId = d.optStr("bot_id")
+        name = d.str("name")
+        avatar = d.str("avatar")
+        machine = d.optStr("machine")
+        via = d.str("via")
+    }
+
+    /// The owner made it (an upload from the app): no avatar.
+    var isOwner: Bool { botId == nil }
+
+    /// "written by lead", "sent by windev @ win-pc", "uploaded by you".
+    var label: String {
+        let base: String
+        switch via {
+        case "wrote": base = "written by \(name)"
+        case "edited": base = "first edited by \(name)"
+        case "command": base = "made by a command of \(name)"
+        case "upload": base = "uploaded by you"
+        case "sent": base = "sent by \(name)"
+        default: base = "made by \(name)"
+        }
+        return machine.map { "\(base) @ \($0)" } ?? base
     }
 }
 

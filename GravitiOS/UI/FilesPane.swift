@@ -75,6 +75,16 @@ private struct FileRow: View {
                 }
                 .font(.caption)
                 .foregroundStyle(.secondary)
+                if let creator = file.createdBy {
+                    HStack(spacing: 5) {
+                        if !creator.isOwner {
+                            AvatarView(avatar: creator.avatar, name: creator.name, size: 16)
+                        }
+                        Text(creator.label).lineLimit(1)
+                    }
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                }
             }
         }
     }
