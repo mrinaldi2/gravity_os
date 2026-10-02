@@ -201,7 +201,7 @@ struct RepoSheet: View {
                 } header: {
                     Text("Branch")
                 } footer: {
-                    Text("Each worker a bot spawns starts from the tip of this branch and pushes its work back when it finishes, or to a branch of its own if that conflicts. Each computer uses its own git credentials.")
+                    Text("Each worker a bot spawns clones this branch when it starts and pushes its work back before it reports. Whatever a worker leaves unpushed is saved to a branch of its own. Each computer uses its own git credentials.")
                 }
                 if project?.repo != nil {
                     Section {
