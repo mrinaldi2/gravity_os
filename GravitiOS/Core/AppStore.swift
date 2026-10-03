@@ -26,6 +26,9 @@ final class AppStore {
     var computerName = ""
     var kind = ComputerKind.mac
     var status: ConnectionStatus = .idle
+    /// Whether to tell the owner the computer is unreachable. A drop on the
+    /// move usually heals in a second or two, so this waits a moment first.
+    var connectionTrouble = false
     var endpoint: Endpoint?
     var grants: Set<String> = []
     /// What the daemon serves, from `hello_ok`.
@@ -82,6 +85,9 @@ final class AppStore {
     @ObservationIgnored let client = DaemonClient()
     @ObservationIgnored private let defaults: ComputerDefaults
     @ObservationIgnored private var sinks: [String: TerminalSink] = [:]
+    @ObservationIgnored private var troubleTask: Task<Void, Never>?
+    /// How long a drop lasts before `connectionTrouble` shows it.
+    @ObservationIgnored var troubleDelay: Duration = .seconds(3)
 
     var canControl: Bool { grants.contains("control") }
     var canApprove: Bool { grants.contains("approve") }
@@ -157,11 +163,36 @@ final class AppStore {
 
     private func statusChanged(_ status: ConnectionStatus) {
         self.status = status
+        noteTrouble(status)
         guard status == .connected else { return }
         Task { await refresh() }
         for sink in sinks.values { sink.reattach() }
         // A new connection watches nothing yet: pick the bot's browser back up.
         if let watched = watchedBrowser { watchBrowser(watched.botId, tabId: watched.tabId) }
+    }
+
+    private func noteTrouble(_ status: ConnectionStatus) {
+        switch status {
+        case .connected:
+            troubleTask?.cancel()
+            troubleTask = nil
+            connectionTrouble = false
+        case .connecting, .disconnected:
+            // Already shown, or already counting down: retries flip between
+            // these two and must not restart the wait.
+            guard !connectionTrouble, troubleTask == nil else { return }
+            let delay = troubleDelay
+            troubleTask = Task { [weak self] in
+                try? await Task.sleep(for: delay)
+                guard !Task.isCancelled, let self else { return }
+                self.troubleTask = nil
+                self.connectionTrouble = true
+            }
+        case .idle, .authFailed, .versionMismatch:
+            troubleTask?.cancel()
+            troubleTask = nil
+            connectionTrouble = true
+        }
     }
 
     private func helloReceived(_ hello: JSONDict) {

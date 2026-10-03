@@ -113,12 +113,13 @@ struct WorkerTag: View {
     }
 }
 
-/// Thin bar under the navigation bar whenever the daemon is unreachable.
+/// Thin bar under the navigation bar while the daemon is unreachable for
+/// more than a moment.
 struct ConnectionBanner: View {
     @Environment(AppStore.self) private var store
 
     var body: some View {
-        if store.status != .connected {
+        if store.connectionTrouble, store.status != .connected {
             HStack(spacing: 8) {
                 if store.status == .connecting { ProgressView().controlSize(.small) }
                 Text(store.status.label).font(.footnote.weight(.medium))

@@ -68,6 +68,20 @@ final class DaemonClient {
     private var reconnectAttempt = 0
     private var reconnectTask: Task<Void, Never>?
     private var pingTask: Task<Void, Never>?
+    private var probeTask: Task<Void, Never>?
+    /// When the daemon was last heard from: any frame or pong.
+    private var lastHeard = ContinuousClock.now
+
+    /// A moving phone (cell handovers, tunnels) loses its link without the
+    /// socket failing: a dead link just goes quiet. These turn quiet into a
+    /// reconnect within seconds instead of the minutes TCP takes to give up.
+    private static let pingInterval: Duration = .seconds(10)
+    /// Silence this long, with pings going out every `pingInterval`, means the link is dead.
+    private static let silenceLimit: Duration = .seconds(25)
+    /// How long a check of a link that may have broken waits for an answer.
+    private static let probeTimeout: Duration = .seconds(4)
+    /// A socket that opens but never answers the hello is given up on.
+    private static let handshakeTimeout: Duration = .seconds(10)
 
     init() {
         let configuration = URLSessionConfiguration.default
@@ -89,12 +103,38 @@ final class DaemonClient {
         status = .idle
     }
 
-    /// Skip the backoff wait, e.g. when the app returns to the foreground.
+    /// Skip the backoff wait (the banner's Retry).
     func reconnectNow() {
         guard wantConnected else { return }
         switch status {
         case .connected, .connecting: return
         default: reconnectAttempt = 0; open()
+        }
+    }
+
+    /// Back in the foreground: iOS may have closed the socket while the app
+    /// was suspended without the app hearing of it.
+    func appBecameActive() {
+        guard wantConnected else { return }
+        switch status {
+        case .connected:
+            // Time spent suspended is not silence: the probe decides.
+            lastHeard = .now
+            probe()
+        case .connecting: return
+        default: reconnectNow()
+        }
+    }
+
+    /// The phone moved to another network (a new interface, signal back): an
+    /// open socket may be stuck on the old path, and so may an attempt under
+    /// way, whose retransmits back off for many seconds.
+    func networkChanged() {
+        guard wantConnected else { return }
+        switch status {
+        case .connected: probe()
+        case .connecting, .disconnected: reconnectAttempt = 0; open()
+        case .idle, .authFailed, .versionMismatch: return
         }
     }
 
@@ -119,7 +159,10 @@ final class DaemonClient {
             }
             Task { @MainActor [weak self] in
                 try? await Task.sleep(for: .seconds(15))
-                self?.fail(id, DaemonError(code: "timeout", message: "The daemon did not answer \(type)."))
+                guard let self, self.pending[id] != nil else { return }
+                self.fail(id, DaemonError(code: "timeout", message: "The daemon did not answer \(type)."))
+                // A reply this late usually means the link is stuck, not the daemon.
+                self.probe()
             }
         }
     }
@@ -152,6 +195,12 @@ final class DaemonClient {
         let current = generation
         socket.resume()
         Task { await run(socket, generation: current, token: endpoint.token) }
+        Task { [weak self] in
+            try? await Task.sleep(for: Self.handshakeTimeout)
+            guard let self, current == self.generation, self.status == .connecting else { return }
+            // The receive loop throws and the reconnect path takes over.
+            socket.cancel(with: .abnormalClosure, reason: nil)
+        }
     }
 
     private func teardown() {
@@ -160,6 +209,8 @@ final class DaemonClient {
         reconnectTask = nil
         pingTask?.cancel()
         pingTask = nil
+        probeTask?.cancel()
+        probeTask = nil
         task?.cancel(with: .goingAway, reason: nil)
         task = nil
         failAll(DaemonError(code: "not_connected", message: "Connection closed."))
@@ -181,12 +232,14 @@ final class DaemonClient {
                 return
             }
             reconnectAttempt = 0
+            lastHeard = .now
             onHello?(first)
             status = .connected
             startPing(socket, generation: current)
             while true {
                 let frame = try await receive(socket)
                 guard current == generation else { return }
+                lastHeard = .now
                 handle(frame)
             }
         } catch {
@@ -236,26 +289,68 @@ final class DaemonClient {
     private func startPing(_ socket: URLSessionWebSocketTask, generation current: Int) {
         pingTask = Task { [weak self] in
             while !Task.isCancelled {
-                try? await Task.sleep(for: .seconds(20))
+                try? await Task.sleep(for: Self.pingInterval)
                 guard let self, current == self.generation else { return }
-                socket.sendPing { error in
-                    // A dead tunnel never errors on its own; cancelling makes
-                    // the receive loop throw and the reconnect path take over.
-                    if error != nil { socket.cancel(with: .abnormalClosure, reason: nil) }
+                // A dead link never fails a ping, it only never answers one:
+                // silence is the signal.
+                if ContinuousClock.now - self.lastHeard > Self.silenceLimit {
+                    self.restart()
+                    return
                 }
+                self.ping(socket, generation: current)
             }
         }
+    }
+
+    private func ping(_ socket: URLSessionWebSocketTask, generation current: Int) {
+        socket.sendPing { [weak self] error in
+            Task { @MainActor in
+                guard let self, current == self.generation else { return }
+                if error == nil { self.lastHeard = .now } else { self.restart() }
+            }
+        }
+    }
+
+    /// Checks at once that a connection which looks open still answers;
+    /// one that does not is replaced.
+    private func probe() {
+        guard probeTask == nil, status == .connected, let socket = task else { return }
+        let current = generation
+        let asked = ContinuousClock.now
+        ping(socket, generation: current)
+        probeTask = Task { [weak self] in
+            try? await Task.sleep(for: Self.probeTimeout)
+            guard !Task.isCancelled, let self, current == self.generation else { return }
+            self.probeTask = nil
+            // Anything at all since asking (a push, a reply, the pong) will do.
+            if self.lastHeard <= asked { self.restart() }
+        }
+    }
+
+    /// The link stopped answering: start over on a fresh socket now rather
+    /// than wait for the stuck one to fail.
+    private func restart() {
+        guard wantConnected else { return }
+        reconnectAttempt = 0
+        open()
     }
 
     private func scheduleReconnect() {
         guard wantConnected else { return }
         reconnectAttempt += 1
-        let delay = min(15, 1 << min(reconnectAttempt - 1, 4))
+        let delay = Self.reconnectDelay(attempt: reconnectAttempt)
         reconnectTask = Task { [weak self] in
-            try? await Task.sleep(for: .seconds(delay))
+            try? await Task.sleep(for: delay)
             guard !Task.isCancelled, let self, self.wantConnected else { return }
             self.open()
         }
+    }
+
+    /// Short waits: on the move the link is usually back within seconds, and
+    /// a network change or returning to the app skips the wait anyway.
+    static func reconnectDelay(attempt: Int) -> Duration {
+        let steps: [Duration] = [.milliseconds(500), .seconds(1), .seconds(2), .seconds(4)]
+        return steps.indices.contains(attempt - 1) ? steps[attempt - 1] : .seconds(5)
     }
 
     private func newRequestId() -> String {

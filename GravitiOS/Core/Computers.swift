@@ -1,4 +1,5 @@
 import Foundation
+import Network
 import Observation
 
 /// What a computer runs: it decides the screen's keys and how it is named.
@@ -159,6 +160,8 @@ final class Fleet {
     private(set) var selectedId: String?
     /// Launched with test arguments: nothing is saved.
     @ObservationIgnored private var ephemeral = false
+    @ObservationIgnored private let network = NWPathMonitor()
+    @ObservationIgnored private var lastPath: NWPath?
 
     private static let recordsKey = "computers"
     private static let selectedKey = "selectedComputer"
@@ -166,6 +169,7 @@ final class Fleet {
     var selected: Computer? { computers.first { $0.id == selectedId } ?? computers.first }
 
     init() {
+        watchNetwork()
         #if DEBUG
         let debug = Self.debugComputers()
         if !debug.isEmpty {
@@ -258,8 +262,25 @@ final class Fleet {
     func setBackground(_ background: Bool) {
         for computer in computers {
             computer.store.inBackground = background
-            if !background { computer.store.client.reconnectNow() }
+            if !background { computer.store.client.appBecameActive() }
         }
+    }
+
+    /// Cell to Wi-Fi, a new interface, signal back after a dead zone: every
+    /// connection checks itself at once instead of waiting on its timers.
+    private func watchNetwork() {
+        network.pathUpdateHandler = { [weak self] path in
+            Task { @MainActor in self?.networkChanged(path) }
+        }
+        network.start(queue: .main)
+    }
+
+    private func networkChanged(_ path: NWPath) {
+        let previous = lastPath
+        lastPath = path
+        // The first path is where the connections started, not a change.
+        guard let previous, path != previous, path.status == .satisfied else { return }
+        for computer in computers { computer.store.client.networkChanged() }
     }
 
     /// Decisions waiting on every computer, for the app icon.
