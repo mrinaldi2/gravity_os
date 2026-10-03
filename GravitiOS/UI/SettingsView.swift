@@ -70,6 +70,21 @@ struct SettingsView: View {
                 } footer: {
                     Text("Opening a bot's terminal resizes it to fit this screen. The terminal is shared, so Gravity on the computer shows that size too until it resizes it again.")
                 }
+
+                Section {
+                    LabeledContent("Version", value: AppInfo.label)
+                        .textSelection(.enabled)
+                    if let commit = AppInfo.commit {
+                        LabeledContent("Commit", value: commit)
+                            .textSelection(.enabled)
+                    }
+                    Link("Source code", destination: AppInfo.sourceURL)
+                    Link("Licenses", destination: AppInfo.noticesURL)
+                } header: {
+                    Text("About")
+                } footer: {
+                    Text("GravitiOS is an independent project under the MIT License. It is not made by, affiliated with or endorsed by the Gravity authors.")
+                }
             }
             .navigationTitle("Settings")
             .toolbar {

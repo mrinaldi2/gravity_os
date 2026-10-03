@@ -7,6 +7,8 @@
 //
 // The simulator builds without either.
 
+#include "Version.xcconfig"
+
 PRODUCT_BUNDLE_IDENTIFIER = com.example.gravitios
 DEVELOPMENT_TEAM =
 

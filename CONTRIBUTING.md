@@ -25,6 +25,14 @@ No signing is needed for the simulator. For a device, put your team in `Config/L
 - UI changes come with a before/after screenshot from the demo world, never from real bots.
 - No personal data in commits: tokens, Tailscale addresses, team IDs, real bot logs or screenshots.
 
+## Versions
+
+The version lives in `Config/Version.xcconfig` and shows in Settings → About. Bump it with
+`scripts/bump-version.sh`: with no argument for a new build of the same version (every build that
+goes to a phone gets its own build number), or with `patch`, `minor` or `major` for a release.
+`scripts/build-for-phone.sh` builds a development-signed install page for your own iPhone and
+stamps the commit it was built from into About.
+
 ## Where things are
 
 - `GravitiOS/Core/DaemonClient.swift`: the WebSocket client for Gravity's

@@ -40,7 +40,7 @@ enum ConnectionStatus: Equatable {
 @MainActor
 final class DaemonClient {
     static let protocolVersion = 2
-    static let clientId = "gravitios/0.1.0"
+    static let clientId = "gravitios/\(AppInfo.version)"
     /// What this app can do for the daemon: it shows bots' permission prompts
     /// and answers them, so the daemon holds a prompt for it instead of
     /// leaving it in the bot's terminal.
