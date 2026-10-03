@@ -52,8 +52,6 @@ struct TurnCard: View {
     var showBot = false
     /// For a bot's own list, where turns do not carry the bot id.
     var botIdFallback = ""
-    /// Home's version: no picture, no tally, a shorter outcome.
-    var compact = false
 
     private var botId: String { turn.botId ?? "" }
 
@@ -89,7 +87,7 @@ struct TurnCard: View {
                     .lineLimit(1)
             }
             outcome
-            if !compact, let cover = turn.cover, let bot = turn.botId ?? Optional(botIdFallback) {
+            if let cover = turn.cover, let bot = turn.botId ?? Optional(botIdFallback) {
                 LensImageView(source: .bot(bot, cover))
                     .frame(maxWidth: .infinity)
                     .frame(height: 150)
@@ -104,7 +102,7 @@ struct TurnCard: View {
                         }
                     }
             }
-            if !compact, !turn.stats.line.isEmpty || turn.stats.errors > 0 {
+            if !turn.stats.line.isEmpty || turn.stats.errors > 0 {
                 HStack(spacing: 8) {
                     Text(turn.stats.line)
                     if turn.stats.errors > 0 {
@@ -138,7 +136,7 @@ struct TurnCard: View {
                     Label("Task completed", systemImage: "checkmark.seal.fill")
                         .font(.caption.weight(.semibold)).foregroundStyle(.green)
                 }
-                Text(plain(turn.outcome.text)).font(.callout).lineLimit(compact ? 2 : 4)
+                Text(plain(turn.outcome.text)).font(.callout).lineLimit(4)
             }
             .padding(10)
             .frame(maxWidth: .infinity, alignment: .leading)
@@ -181,9 +179,7 @@ struct FeedView: View {
                 if !recent.isEmpty {
                     Section {
                         ForEach(recent) { turn in
-                            NavigationLink(value: TurnLink(botId: turn.botId ?? "", turnId: turn.id)) {
-                                TurnCard(turn: turn, showBot: true, compact: true)
-                            }
+                            NavigationLink(value: TurnLink(botId: turn.botId ?? "", turnId: turn.id)) { RecentRow(turn: turn) }
                         }
                     } header: {
                         SectionTitle("Recent")
@@ -200,6 +196,39 @@ struct FeedView: View {
                 ToolbarItem(placement: .topBarTrailing) { SettingsButton() }
             }
             .navigationDestination(for: TurnLink.self) { TurnDetailView(botId: $0.botId, turnId: $0.turnId) }
+        }
+    }
+}
+
+/// A finished turn on Home: who, what came of it, what started it and when.
+private struct RecentRow: View {
+    @Environment(AppStore.self) private var store
+    let turn: LensTurn
+
+    private var summary: String {
+        let text = turn.outcome.kind == "none" ? turn.trigger.text : turn.outcome.text
+        let plain = text.replacingOccurrences(of: "**", with: "").replacingOccurrences(of: "`", with: "")
+        if turn.outcome.kind == "message", !turn.outcome.to.isEmpty { return "To \(turn.outcome.to): \(plain)" }
+        return plain
+    }
+
+    private var detail: String {
+        var parts = [turn.trigger.headline]
+        if let at = turn.updated { parts.append(at.relative) }
+        if turn.stats.errors > 0 { parts.append("\(turn.stats.errors) error\(turn.stats.errors == 1 ? "" : "s")") }
+        return parts.joined(separator: " · ")
+    }
+
+    var body: some View {
+        let bot = store.bot(turn.botId ?? "")
+        ItemRow(title: bot?.name ?? turn.botName ?? "A bot", subtitle: summary, detail: detail, subtitleLines: 2) {
+            if let bot {
+                AvatarView(avatar: bot.avatar, name: bot.name, size: 36)
+            } else {
+                IconTile(systemImage: "person")
+            }
+        } trailing: {
+            if turn.outcome.kind == "completed" { Pill(text: "done", tone: .ready) }
         }
     }
 }

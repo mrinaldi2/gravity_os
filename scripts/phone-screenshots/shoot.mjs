@@ -179,14 +179,16 @@ async function tour(driver, botName, shoot) {
     }
     throw new Error(`no ${what} on screen`);
   };
-  await step("Home", async () => { await tap(driver, button("Home"), "Home"); await pause(3000); await snap("home"); await scrollShots("home", 1); });
-  await step("Settings", async () => { await tap(driver, button("Settings"), "Settings"); await pause(1500); await snap("settings"); await dismiss(driver); });
+  // Other tabs stay alive offscreen: tap the tab bar's own, visible button.
+  const tab = async label => { (await firstShown(button(label), `the ${label} tab`)).click(); await pause(2000); };
+  await step("Home", async () => { await tab("Home"); await pause(3000); await snap("home"); await scrollShots("home", 1); });
+  await step("Settings", async () => { await (await firstShown(button("Settings"), "Settings")).click(); await pause(1500); await snap("settings"); await dismiss(driver); });
   await step("computer switcher", async () => {
     await tap(driver, 'type == "XCUIElementTypeButton" AND label BEGINSWITH "Computer: "', "the computer switcher");
     await pause(1200); await snap("computer-switcher"); await dismiss(driver);
   });
-  await step("Bots", async () => { await tap(driver, button("Bots"), "Bots"); await pause(2000); await snap("bots"); await scrollShots("bots", 1); });
-  await step("Create", async () => { await tap(driver, button("Create"), "Create"); await pause(1200); await snap("create-menu"); await dismiss(driver); });
+  await step("Bots", async () => { await tab("Bots"); await pause(2000); await snap("bots"); await scrollShots("bots", 1); });
+  await step("Create", async () => { await (await firstShown(button("Create"), "Create")).click(); await pause(1200); await snap("create-menu"); await dismiss(driver); });
   await step("project", async () => {
     await driver.execute("mobile: swipe", { direction: "down" }).catch(() => {});
     await (await firstShown('label ENDSWITH "Open the project"', "project header")).click();
@@ -194,11 +196,11 @@ async function tour(driver, botName, shoot) {
   });
   if (botName) {
     await step("bot", async () => {
-      await tap(driver, `label BEGINSWITH "${q(botName)}"`, botName); await pause(2500);
+      await (await firstShown(`type == "XCUIElementTypeButton" AND label BEGINSWITH "${q(botName)}"`, botName)).click(); await pause(2500);
       for (const pane of ["Chat", "Work", "Files", "More", "Activity", "Messages"]) {
         await step(pane, async () => {
-          const el = await driver.$(`-ios predicate string:${button(pane)}`);
-          if (!(await el.isExisting())) return;
+          const el = await firstShown(button(pane), pane).catch(() => null);
+          if (!el) return;
           await el.click(); await pause(3500); await snap(`bot-${pane.toLowerCase()}`);
           if (pane === "Work" || pane === "More") await scrollShots(`bot-${pane.toLowerCase()}`, 1);
         });
@@ -206,16 +208,16 @@ async function tour(driver, botName, shoot) {
       await back(driver);
     });
   }
-  await step("Decisions", async () => { await tap(driver, button("Decisions"), "Decisions"); await pause(2500); await snap("decisions"); await scrollShots("decisions", 1); });
+  await step("Decisions", async () => { await tab("Decisions"); await pause(2500); await snap("decisions"); await scrollShots("decisions", 1); });
   await step("Files", async () => {
-    await tap(driver, button("Files"), "Files"); await pause(2500); await snap("files");
+    await tab("Files"); await pause(2500); await snap("files");
     await step("a report", async () => {
       const cell = await driver.$('-ios predicate string:type == "XCUIElementTypeCell"');
       await cell.click(); await pause(3000); await snap("report"); await back(driver);
     });
   });
   await step("Computers", async () => {
-    await tap(driver, button("Computers"), "Computers"); await pause(2500); await snap("computers");
+    await tab("Computers"); await pause(2500); await snap("computers");
     await step("a computer", async () => {
       const cell = await driver.$('-ios predicate string:type == "XCUIElementTypeCell"');
       await cell.click(); await pause(3500); await snap("computer"); await scrollShots("computer", 3); await back(driver);
@@ -225,7 +227,7 @@ async function tour(driver, botName, shoot) {
       await pause(3000); await snap("network"); await back(driver);
     });
   });
-  await step("back home", async () => { await tap(driver, button("Home"), "Home"); });
+  await step("back home", async () => { await tab("Home"); });
 }
 
 async function main() {
