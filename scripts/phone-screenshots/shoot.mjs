@@ -10,8 +10,8 @@
 //   node shoot.mjs bot "Architect" Chat Tasks     ...or the panes named
 //   node shoot.mjs panes [Commands Files ...]      the bot already open on the phone
 //   BOTTOM=1 node shoot.mjs ...                    also the end of each pane's list
-//   node shoot.mjs tour "Eval-Engineer"           every tab, that bot's panes, the
-//                                                 network, create, settings and switcher
+//   node shoot.mjs tour "Eval-Engineer"           every tab, a project, that bot's panes,
+//                                                 a computer, the network, settings, switcher
 //
 // The phone must be unlocked, on the same Wi-Fi as this Mac (or on USB), and
 // paired with Xcode. Found automatically, or set:
@@ -173,58 +173,59 @@ async function tour(driver, botName, shoot) {
     if (await (await driver.$(`-ios predicate string:${button("Decisions")}`)).isExisting()) break;
     await back(driver);
   }
-  await step("Activity", async () => { await tap(driver, button("Activity"), "Activity"); await pause(2500); await snap("activity"); await scrollShots("activity", 1); });
-  await step("Bots", async () => { await tap(driver, button("Bots"), "Bots"); await pause(2000); await snap("bots"); await scrollShots("bots", 2); });
-  await step("Network", async () => { await tap(driver, button("Network"), "Network"); await pause(2500); await snap("network"); await dismiss(driver); });
-  await step("Create", async () => { await tap(driver, button("Create"), "Create"); await pause(1500); await snap("create-menu"); await dismiss(driver); });
-  await step("Project actions", async () => {
-    await driver.execute("mobile: swipe", { direction: "down" }).catch(() => {});
-    let menu;
-    for (const el of await driver.$$('-ios predicate string:type == "XCUIElementTypeButton" AND label ENDSWITH " actions"')) {
-      if (await el.isDisplayed()) { menu = el; break; }
+  const firstShown = async (predicate, what) => {
+    for (const el of await driver.$$(`-ios predicate string:${predicate}`)) {
+      if (await el.isDisplayed()) return el;
     }
-    if (!menu) throw new Error("no project's actions button on screen");
-    await menu.click();
-    await pause(1200); await snap("project-actions"); await dismiss(driver);
+    throw new Error(`no ${what} on screen`);
+  };
+  await step("Home", async () => { await tap(driver, button("Home"), "Home"); await pause(3000); await snap("home"); await scrollShots("home", 1); });
+  await step("Settings", async () => { await tap(driver, button("Settings"), "Settings"); await pause(1500); await snap("settings"); await dismiss(driver); });
+  await step("computer switcher", async () => {
+    await tap(driver, 'type == "XCUIElementTypeButton" AND label BEGINSWITH "Computer: "', "the computer switcher");
+    await pause(1200); await snap("computer-switcher"); await dismiss(driver);
+  });
+  await step("Bots", async () => { await tap(driver, button("Bots"), "Bots"); await pause(2000); await snap("bots"); await scrollShots("bots", 1); });
+  await step("Create", async () => { await tap(driver, button("Create"), "Create"); await pause(1200); await snap("create-menu"); await dismiss(driver); });
+  await step("project", async () => {
+    await driver.execute("mobile: swipe", { direction: "down" }).catch(() => {});
+    await (await firstShown('label ENDSWITH "Open the project"', "project header")).click();
+    await pause(2500); await snap("project"); await scrollShots("project", 1); await back(driver);
   });
   if (botName) {
     await step("bot", async () => {
       await tap(driver, `label BEGINSWITH "${q(botName)}"`, botName); await pause(2500);
-      for (const pane of ["Chat", "Activity", "Terminal", "Browser", "Messages", "Tasks", "Commands", "Files", "Memory", "Info"]) {
+      for (const pane of ["Chat", "Work", "Files", "More", "Activity", "Messages"]) {
         await step(pane, async () => {
           const el = await driver.$(`-ios predicate string:${button(pane)}`);
           if (!(await el.isExisting())) return;
-          if (!(await el.isDisplayed())) await driver.execute("mobile: scrollToElement", { elementId: el.elementId }).catch(() => {});
           await el.click(); await pause(3500); await snap(`bot-${pane.toLowerCase()}`);
+          if (pane === "Work" || pane === "More") await scrollShots(`bot-${pane.toLowerCase()}`, 1);
         });
       }
-      await step("Session menu", async () => { await tap(driver, button("Session"), "Session"); await pause(1200); await snap("bot-session-menu"); await dismiss(driver); });
       await back(driver);
     });
   }
-  await step("Decisions", async () => { await tap(driver, button("Decisions"), "Decisions"); await pause(2500); await snap("decisions"); });
-  await step("Reports", async () => {
-    await tap(driver, button("Reports"), "Reports"); await pause(2500); await snap("reports");
+  await step("Decisions", async () => { await tap(driver, button("Decisions"), "Decisions"); await pause(2500); await snap("decisions"); await scrollShots("decisions", 1); });
+  await step("Files", async () => {
+    await tap(driver, button("Files"), "Files"); await pause(2500); await snap("files");
     await step("a report", async () => {
       const cell = await driver.$('-ios predicate string:type == "XCUIElementTypeCell"');
       await cell.click(); await pause(3000); await snap("report"); await back(driver);
     });
   });
-  await step("computer tab", async () => {
-    const tab = await driver.$('-ios predicate string:type == "XCUIElementTypeButton" AND (label == "Mac" OR label == "PC")');
-    await tab.click(); await pause(3500); await snap("computer-screen");
-    await step("computer files", async () => { await tap(driver, button("Files"), "Files"); await pause(3000); await snap("computer-files"); });
+  await step("Computers", async () => {
+    await tap(driver, button("Computers"), "Computers"); await pause(2500); await snap("computers");
+    await step("a computer", async () => {
+      const cell = await driver.$('-ios predicate string:type == "XCUIElementTypeCell"');
+      await cell.click(); await pause(3500); await snap("computer"); await scrollShots("computer", 3); await back(driver);
+    });
+    await step("network", async () => {
+      await tap(driver, 'label BEGINSWITH "Links between computers"', "Links between computers");
+      await pause(3000); await snap("network"); await back(driver);
+    });
   });
-  await step("Settings", async () => {
-    await tap(driver, button("Activity"), "Activity"); await pause(1500);
-    await tap(driver, button("Settings"), "Settings"); await pause(2000); await snap("settings");
-    await scrollShots("settings", 4);
-    await dismiss(driver);
-  });
-  await step("computer switcher", async () => {
-    await tap(driver, 'type == "XCUIElementTypeButton" AND label BEGINSWITH "Computer: "', "the computer switcher");
-    await pause(1200); await snap("computer-switcher"); await dismiss(driver);
-  });
+  await step("back home", async () => { await tap(driver, button("Home"), "Home"); });
 }
 
 async function main() {
