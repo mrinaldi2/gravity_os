@@ -103,6 +103,22 @@ struct DaemonFile {
 
 /// A file in a project's shared artifacts folder (`list_artifacts`),
 /// including files that arrived from bots on another computer.
+/// One page of a project's files (`list_artifacts`).
+struct ArtifactPage {
+    let files: [ArtifactFile]
+    let hasMore: Bool
+    /// Opaque: passed back as `before` for the next page.
+    let nextBefore: String?
+
+    /// `page` folded into what is loaded, newest first. A file is known by
+    /// its place in the folder, so an edited one moves up instead of doubling.
+    static func merge(_ loaded: [ArtifactFile], _ page: [ArtifactFile]) -> [ArtifactFile] {
+        let fresh = Set(page.map(\.rel))
+        return (loaded.filter { !fresh.contains($0.rel) } + page)
+            .sorted { ($0.modified ?? .distantPast) > ($1.modified ?? .distantPast) }
+    }
+}
+
 struct ArtifactFile: Identifiable, Hashable {
     /// Absolute, on the computer that holds it.
     let path: String

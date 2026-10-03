@@ -694,9 +694,15 @@ final class AppStore {
     // MARK: Files
 
     /// The project's shared artifacts, newest first.
-    func listArtifacts(projectId: String) async throws -> [ArtifactFile] {
-        let reply = try await client.request("list_artifacts", ["project_id": projectId])
-        return reply.list("artifacts").map(ArtifactFile.init)
+    /// A page of the project's files, newest first. `before` is the previous
+    /// page's `nextBefore`. A daemon that does not page them sends every file
+    /// and no `has_more`, which reads as nothing more to load.
+    func listArtifacts(projectId: String, before: String? = nil) async throws -> ArtifactPage {
+        var fields: JSONDict = ["project_id": projectId, "limit": Page.size]
+        if let before { fields["before"] = before }
+        let reply = try await client.request("list_artifacts", fields)
+        return ArtifactPage(files: reply.list("artifacts").map(ArtifactFile.init),
+                            hasMore: reply.bool("has_more"), nextBefore: reply.optStr("next_before"))
     }
 
     /// A file under the bot's own folder or its project's artifacts.
@@ -710,9 +716,14 @@ final class AppStore {
 
     // MARK: Tasks
 
-    func listTasks(botId: String, limit: Int) async throws -> [BotTask] {
-        let reply = try await client.request("list_tasks", ["bot_id": botId, "limit": limit])
-        return reply.list("tasks").map(BotTask.init)
+    /// Every open task, and a page of closed ones; `moreClosed` when the page was full.
+    func listTasks(botId: String, closedLimit: Int) async throws -> (tasks: [BotTask], moreClosed: Bool) {
+        async let openReply = client.request("list_tasks", ["bot_id": botId, "state": "open"])
+        async let closedReply = client.request("list_tasks", ["bot_id": botId, "state": "closed", "limit": closedLimit])
+        let open = try await openReply.list("tasks").map(BotTask.init)
+        let closed = try await closedReply.list("tasks").map(BotTask.init)
+        // A daemon without the filter sends both kinds to each: keep each its own.
+        return (open.filter(\.isOpen) + closed.filter { !$0.isOpen }, closed.count >= closedLimit)
     }
 
     /// The task with its whole request and result.

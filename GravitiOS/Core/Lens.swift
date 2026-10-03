@@ -203,6 +203,8 @@ final class LensStore {
     var latest: [String: LensTurn] = [:]
     var feed: [LensTurn] = []
     var artifacts: [LensArtifact] = []
+    /// project id → the cursor of its next page of files, while it has more.
+    var artifactCursors: [String: String] = [:]
     /// From the daemon's chat: bot id → its loaded turns, oldest first.
     var chats: [String: [ChatTurn]] = [:]
     /// bot id → older turns exist than the ones loaded.
@@ -557,22 +559,46 @@ final class LensStore {
 
     private static let reportSuffixes = [".md", ".markdown", ".txt", ".json", ".csv", ".log", ".yaml", ".yml", ".toml"]
 
+    /// Each project's newest page of files, keeping the reports among them.
     private func loadDaemonArtifacts() async {
         var found: [LensArtifact] = []
+        var cursors: [String: String] = [:]
         for project in app.projects {
-            guard let reply = try? await app.client.request("list_artifacts", ["project_id": project.id]) else { continue }
-            for row in reply.list("artifacts") {
-                let rel = row.str("rel").isEmpty ? row.str("name") : row.str("rel")
-                guard Self.reportSuffixes.contains(where: { rel.lowercased().hasSuffix($0) }) else { continue }
-                let name = row.str("name")
-                found.append(LensArtifact(
-                    project: project.id, name: rel,
-                    title: row.optStr("title") ?? (name as NSString).deletingPathExtension,
-                    size: row.int("size"), modifiedAt: row.str("modified")))
-            }
+            guard let page = await artifactPage(project.id, before: nil) else { continue }
+            found += page.reports
+            if let next = page.next { cursors[project.id] = next }
         }
         artifacts = found.sorted { $0.modifiedAt > $1.modifiedAt }
+        artifactCursors = cursors
         status = .ok
+    }
+
+    /// The next page of every project that has more.
+    func loadMoreArtifacts() async {
+        var found = artifacts
+        for (project, cursor) in artifactCursors {
+            guard let page = await artifactPage(project, before: cursor) else { continue }
+            let fresh = Set(page.reports.map(\.id))
+            found = found.filter { !fresh.contains($0.id) } + page.reports
+            artifactCursors[project] = page.next
+        }
+        artifacts = found.sorted { $0.modifiedAt > $1.modifiedAt }
+    }
+
+    private func artifactPage(_ projectId: String, before: String?) async -> (reports: [LensArtifact], next: String?)? {
+        var fields: JSONDict = ["project_id": projectId, "limit": Page.size]
+        if let before { fields["before"] = before }
+        guard let reply = try? await app.client.request("list_artifacts", fields) else { return nil }
+        let reports: [LensArtifact] = reply.list("artifacts").compactMap { row in
+            let rel = row.str("rel").isEmpty ? row.str("name") : row.str("rel")
+            guard Self.reportSuffixes.contains(where: { rel.lowercased().hasSuffix($0) }) else { return nil }
+            let name = row.str("name")
+            return LensArtifact(project: projectId, name: rel,
+                                title: row.optStr("title") ?? (name as NSString).deletingPathExtension,
+                                size: row.int("size"), modifiedAt: row.str("modified"))
+        }
+        // An older daemon sends every file and no `has_more`: nothing more to load.
+        return (reports, reply.bool("has_more") ? reply.optStr("next_before") : nil)
     }
 
     /// Keeps the feed and "now doing" lines fresh while the app is open.

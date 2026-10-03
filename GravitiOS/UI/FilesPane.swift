@@ -8,8 +8,11 @@ struct BotFilesPane: View {
     @Environment(AppStore.self) private var store
     let botId: String
     @State private var files: [ArtifactFile] = []
-    /// The daemon lists every file; the newest are shown, more on request.
+    /// How many are shown. An older daemon sends every file at once, so the
+    /// newest are shown and more on request either way.
     @State private var shown = Page.size
+    /// The next page's cursor, while the daemon has more.
+    @State private var next: String?
     @State private var error: String?
     @State private var loaded = false
 
@@ -24,13 +27,16 @@ struct BotFilesPane: View {
             ForEach(files.prefix(shown)) { file in
                 NavigationLink(value: file) { FileRow(file: file) }
             }
-            if files.count > shown {
-                ShowMoreButton { shown += Page.size }
+            if files.count > shown || next != nil {
+                ShowMoreButton {
+                    if files.count <= shown { await loadMore() }
+                    shown += Page.size
+                }
             }
         }
         .listStyle(.plain)
-        .refreshable { await load() }
-        .task(id: store.status) { await load() }
+        .refreshable { await load(fresh: true) }
+        .task(id: store.status) { await load(fresh: true) }
         // Files land when bots finish work: look again once bus traffic settles.
         .task(id: store.busRevision) {
             guard loaded else { return }
@@ -41,15 +47,35 @@ struct BotFilesPane: View {
         .navigationDestination(for: ArtifactFile.self) { FilePreview(botId: botId, file: $0) }
     }
 
-    private func load() async {
+    /// The newest page. Fresh, it replaces the list; otherwise (bus traffic)
+    /// it is merged in and pages already loaded stay.
+    private func load(fresh: Bool = false) async {
         guard store.status == .connected, let projectId = store.bot(botId)?.projectId else { return }
         do {
-            files = try await store.listArtifacts(projectId: projectId)
+            let page = try await store.listArtifacts(projectId: projectId)
+            if fresh || files.isEmpty {
+                files = page.files
+                next = page.hasMore ? page.nextBefore : nil
+                shown = Page.size
+            } else {
+                files = ArtifactPage.merge(files, page.files)
+            }
             error = nil
         } catch {
             self.error = error.localizedDescription
         }
         loaded = true
+    }
+
+    private func loadMore() async {
+        guard let next, let projectId = store.bot(botId)?.projectId else { return }
+        do {
+            let page = try await store.listArtifacts(projectId: projectId, before: next)
+            files = ArtifactPage.merge(files, page.files)
+            self.next = page.hasMore ? page.nextBefore : nil
+        } catch {
+            self.error = error.localizedDescription
+        }
     }
 }
 

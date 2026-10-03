@@ -36,8 +36,11 @@ struct ReportsView: View {
                         }
                     }
                 }
-                if matching.count > count {
-                    ShowMoreButton { count += Page.size }
+                if matching.count > count || !lens.artifactCursors.isEmpty {
+                    ShowMoreButton {
+                        if matching.count <= count { await lens.loadMoreArtifacts() }
+                        count += Page.size
+                    }
                 }
             }
             .overlay { if lens.artifacts.isEmpty { LensEmptyState() } }
