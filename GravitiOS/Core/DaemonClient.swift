@@ -78,6 +78,10 @@ final class DaemonClient {
     private static let pingInterval: Duration = .seconds(10)
     /// Silence this long, with pings going out every `pingInterval`, means the link is dead.
     private static let silenceLimit: Duration = .seconds(25)
+    /// The same while a reply is awaited. Only whole messages count as heard
+    /// (a WebSocket task reports no bytes until a message is complete), and a
+    /// large reply on a slow link holds back everything behind it, pongs too.
+    private static let busySilenceLimit: Duration = .seconds(45)
     /// How long a check of a link that may have broken waits for an answer.
     private static let probeTimeout: Duration = .seconds(4)
     /// A socket that opens but never answers the hello is given up on.
@@ -157,12 +161,10 @@ final class DaemonClient {
                 guard let error else { return }
                 Task { @MainActor in self?.fail(id, error) }
             }
+            // Long enough for a page to crawl in over a weak mobile link.
             Task { @MainActor [weak self] in
-                try? await Task.sleep(for: .seconds(15))
-                guard let self, self.pending[id] != nil else { return }
-                self.fail(id, DaemonError(code: "timeout", message: "The daemon did not answer \(type)."))
-                // A reply this late usually means the link is stuck, not the daemon.
-                self.probe()
+                try? await Task.sleep(for: .seconds(30))
+                self?.fail(id, DaemonError(code: "timeout", message: "The daemon did not answer \(type)."))
             }
         }
     }
@@ -293,7 +295,8 @@ final class DaemonClient {
                 guard let self, current == self.generation else { return }
                 // A dead link never fails a ping, it only never answers one:
                 // silence is the signal.
-                if ContinuousClock.now - self.lastHeard > Self.silenceLimit {
+                let limit = self.pending.isEmpty ? Self.silenceLimit : Self.busySilenceLimit
+                if ContinuousClock.now - self.lastHeard > limit {
                     self.restart()
                     return
                 }
