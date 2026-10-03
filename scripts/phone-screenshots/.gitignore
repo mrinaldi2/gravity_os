@@ -1,0 +1,5 @@
+node_modules/
+.appium/
+shots/
+.devicectl.json
+.wda-build/
