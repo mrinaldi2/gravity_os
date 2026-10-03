@@ -30,11 +30,17 @@ struct CommandRow: View {
         return parts.filter { !$0.isEmpty }.joined(separator: " · ")
     }
 
+    private func firstLine(_ text: String) -> String {
+        text.split(separator: "\n", omittingEmptySubsequences: false).first.map(String.init) ?? text
+    }
+
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
             // A tap gesture, not a Button: beside the Copy button, a List hands
             // a plain button's taps to the row's other buttons.
-            ItemRow(title: command.title, subtitle: command.command, detail: detail, monoSubtitle: true) {
+            // With no description, the command itself is the title: once is enough.
+            ItemRow(title: command.description ?? firstLine(command.unwrapped),
+                    subtitle: command.description == nil ? nil : command.unwrapped, detail: detail, monoSubtitle: true) {
                 IconTile(systemImage: command.status == "running" ? "play.fill" : "terminal", tone: tone)
             } trailing: {
                 CopyButton(text: command.command, label: "Copy the command", compact: true)

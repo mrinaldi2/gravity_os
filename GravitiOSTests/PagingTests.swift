@@ -22,3 +22,21 @@ final class PagingTests: XCTestCase {
         XCTAssertEqual(merged.map(\.rel), ["a.md", "b.md"])
     }
 }
+
+/// Commands shown on the phone without the shell they were handed to.
+final class CommandTitleTests: XCTestCase {
+    func testUnwrapsPowerShell() {
+        let command = #""C:\Program Files\PowerShell\7\pwsh.exe" -Command "Get-Content -LiteralPath report.md""#
+        XCTAssertEqual(BotCommand.unwrap(command), "Get-Content -LiteralPath report.md")
+    }
+
+    func testUnwrapsBash() {
+        XCTAssertEqual(BotCommand.unwrap("bash -lc 'npm test'"), "npm test")
+        XCTAssertEqual(BotCommand.unwrap("/bin/zsh -c \"ls -la\""), "ls -la")
+    }
+
+    func testLeavesPlainCommands() {
+        XCTAssertEqual(BotCommand.unwrap("swift build -c release"), "swift build -c release")
+        XCTAssertEqual(BotCommand.unwrap("cmd /c dir"), "dir")
+    }
+}

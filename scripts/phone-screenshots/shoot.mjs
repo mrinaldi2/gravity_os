@@ -173,30 +173,43 @@ async function tour(driver, botName, shoot) {
     if (await (await driver.$(`-ios predicate string:${button("Decisions")}`)).isExisting()) break;
     await back(driver);
   }
+  // The first match that is on screen, tapped by position: some controls
+  // (the floating tab bar, toolbar buttons) report themselves as hidden.
   const firstShown = async (predicate, what) => {
     for (const el of await driver.$$(`-ios predicate string:${predicate}`)) {
-      if (await el.isDisplayed()) return el;
+      const r = await driver.getElementRect(el.elementId).catch(() => null);
+      if (r && r.width > 0 && r.height > 0 && r.y >= 0 && r.y + r.height <= 960) {
+        return { click: () => driver.execute("mobile: tap", { x: r.x + r.width / 2, y: r.y + r.height / 2 }) };
+      }
     }
     throw new Error(`no ${what} on screen`);
   };
   // Other tabs stay alive offscreen: tap the tab bar's own, visible button.
-  const tab = async label => { (await firstShown(button(label), `the ${label} tab`)).click(); await pause(2000); };
+  const tab = async label => {
+    // The floating tab bar reports its buttons as hidden; the lowest one on
+    // screen is the tab bar's.
+    let best;
+    for (const el of await driver.$$(`-ios predicate string:${button(label)}`)) {
+      const r = await driver.getElementRect(el.elementId).catch(() => null);
+      if (r && r.width > 0 && (!best || r.y > best.y)) best = r;
+    }
+    if (!best) throw new Error(`no ${label} tab`);
+    await driver.execute("mobile: tap", { x: best.x + best.width / 2, y: best.y + best.height / 2 });
+    await pause(2000);
+  };
   await step("Home", async () => { await tab("Home"); await pause(3000); await snap("home"); await scrollShots("home", 1); });
   await step("Settings", async () => { await (await firstShown(button("Settings"), "Settings")).click(); await pause(1500); await snap("settings"); await dismiss(driver); });
-  await step("computer switcher", async () => {
-    await tap(driver, 'type == "XCUIElementTypeButton" AND label BEGINSWITH "Computer: "', "the computer switcher");
-    await pause(1200); await snap("computer-switcher"); await dismiss(driver);
-  });
   await step("Bots", async () => { await tab("Bots"); await pause(2000); await snap("bots"); await scrollShots("bots", 1); });
-  await step("Create", async () => { await (await firstShown(button("Create"), "Create")).click(); await pause(1200); await snap("create-menu"); await dismiss(driver); });
+  await step("Create", async () => { await (await firstShown('label == "Create"', "Create")).click(); await pause(1200); await snap("create-menu"); await dismiss(driver); });
   await step("project", async () => {
     await driver.execute("mobile: swipe", { direction: "down" }).catch(() => {});
-    await (await firstShown('label ENDSWITH "Open the project"', "project header")).click();
+    await (await firstShown('label CONTAINS "Open the project"', "project header")).click();
     await pause(2500); await snap("project"); await scrollShots("project", 1); await back(driver);
   });
   if (botName) {
     await step("bot", async () => {
-      await (await firstShown(`type == "XCUIElementTypeButton" AND label BEGINSWITH "${q(botName)}"`, botName)).click(); await pause(2500);
+      await tab("Bots");
+      await (await firstShown(`label BEGINSWITH "${q(botName)}"`, botName)).click(); await pause(2500);
       for (const pane of ["Chat", "Work", "Files", "More", "Activity", "Messages"]) {
         await step(pane, async () => {
           const el = await firstShown(button(pane), pane).catch(() => null);
@@ -219,15 +232,19 @@ async function tour(driver, botName, shoot) {
   await step("Computers", async () => {
     await tab("Computers"); await pause(2500); await snap("computers");
     await step("a computer", async () => {
-      const cell = await driver.$('-ios predicate string:type == "XCUIElementTypeCell"');
-      await cell.click(); await pause(3500); await snap("computer"); await scrollShots("computer", 3); await back(driver);
+      await (await firstShown('label BEGINSWITH "Windows" OR label BEGINSWITH "Mac"', "a computer")).click(); await pause(3500); await snap("computer"); await scrollShots("computer", 3); await back(driver);
     });
     await step("network", async () => {
-      await tap(driver, 'label BEGINSWITH "Links between computers"', "Links between computers");
+      await (await firstShown('label BEGINSWITH "Links between computers"', "Links between computers")).click();
       await pause(3000); await snap("network"); await back(driver);
     });
   });
   await step("back home", async () => { await tab("Home"); });
+  await step("computer switcher", async () => {
+    await (await firstShown('label BEGINSWITH "Computer: "', "the computer switcher")).click();
+    await pause(1200); await snap("computer-switcher"); await dismiss(driver);
+  });
+
 }
 
 async function main() {

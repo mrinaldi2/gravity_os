@@ -212,7 +212,11 @@ struct ComputerPage: View {
         .listStyle(.insetGrouped)
         .navigationTitle(computer.name)
         .navigationBarTitleDisplayMode(.inline)
-        .task(id: store.status) { await loadDiagnostics() }
+        .task(id: store.status) {
+            await loadDiagnostics()
+            // Only the computer on screen elsewhere keeps its Lens checked.
+            if lens.status == .unknown, store.status == .connected { await lens.refresh() }
+        }
         .refreshable { await loadDiagnostics() }
         .navigationDestination(item: $opening) { place in
             switch place {

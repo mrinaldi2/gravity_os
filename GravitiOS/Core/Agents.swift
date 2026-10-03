@@ -156,6 +156,28 @@ struct BotCommand: Identifiable, Equatable {
     /// What it is for, or its first line.
     var title: String { description ?? command.split(separator: "\n", omittingEmptySubsequences: false).first.map(String.init) ?? "" }
 
+    /// The command without the shell it was handed to: Codex on Windows runs
+    /// everything as `"…\\pwsh.exe" -Command "…"`, which says nothing on a phone.
+    var unwrapped: String { Self.unwrap(command) }
+
+    static func unwrap(_ command: String) -> String {
+        let text = command.trimmingCharacters(in: .whitespacesAndNewlines)
+        let wrappers = [
+            #"^"?[^"]*?(?:pwsh|powershell)(?:\.exe)?"?\s+(?:-NoProfile\s+|-NoLogo\s+)*-Command\s+"#,
+            #"^(?:/usr/bin/|/bin/)?(?:bash|zsh|sh)\s+-l?c\s+"#,
+            #"^cmd(?:\.exe)?\s+/c\s+"#,
+        ]
+        for pattern in wrappers {
+            guard let range = text.range(of: pattern, options: [.regularExpression, .caseInsensitive]) else { continue }
+            var inner = String(text[range.upperBound...]).trimmingCharacters(in: .whitespaces)
+            if let first = inner.first, first == "\"" || first == "'", inner.count > 1, inner.last == first {
+                inner = String(inner.dropFirst().dropLast())
+            }
+            return inner.isEmpty ? text : inner
+        }
+        return text
+    }
+
     /// A finished command's outcome: its status, or the exit code when that says more.
     var outcome: String? {
         guard !isRunning else { return nil }
