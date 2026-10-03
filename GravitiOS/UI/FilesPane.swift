@@ -8,6 +8,8 @@ struct BotFilesPane: View {
     @Environment(AppStore.self) private var store
     let botId: String
     @State private var files: [ArtifactFile] = []
+    /// The daemon lists every file; the newest are shown, more on request.
+    @State private var shown = Page.size
     @State private var error: String?
     @State private var loaded = false
 
@@ -19,17 +21,20 @@ struct BotFilesPane: View {
             if loaded, error == nil, files.isEmpty {
                 Text("No artifacts in this project yet.").font(.callout).foregroundStyle(.secondary)
             }
-            ForEach(files) { file in
+            ForEach(files.prefix(shown)) { file in
                 NavigationLink(value: file) { FileRow(file: file) }
+            }
+            if files.count > shown {
+                ShowMoreButton { shown += Page.size }
             }
         }
         .listStyle(.plain)
         .refreshable { await load() }
         .task(id: store.status) { await load() }
-        // Files land when bots finish work: look again after bus traffic settles.
+        // Files land when bots finish work: look again once bus traffic settles.
         .task(id: store.busRevision) {
             guard loaded else { return }
-            try? await Task.sleep(for: .seconds(1))
+            try? await Task.sleep(for: .seconds(3))
             guard !Task.isCancelled else { return }
             await load()
         }

@@ -13,11 +13,21 @@ struct ChatView: View {
         return store.messages[conversation.id] ?? []
     }
 
+    private var hasMore: Bool {
+        store.conversations[botId].flatMap { store.messagesHaveMore[$0.id] } ?? false
+    }
+
     var body: some View {
         VStack(spacing: 0) {
             ScrollViewReader { proxy in
                 ScrollView {
                     LazyVStack(spacing: 10) {
+                        if hasMore {
+                            ShowMoreButton(title: "Load earlier messages") {
+                                await store.loadOlderMessages(botId: botId)
+                            }
+                            .font(.callout)
+                        }
                         ForEach(thread) { message in
                             MessageBubble(message: message).id(message.id)
                         }

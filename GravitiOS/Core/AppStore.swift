@@ -51,7 +51,11 @@ final class AppStore {
     var conversations: [String: Conversation] = [:]
     /// conversation id → messages, oldest first.
     var messages: [String: [BusMessage]] = [:]
+    /// conversation id → whether older messages than the loaded ones exist.
+    var messagesHaveMore: [String: Bool] = [:]
     var decisions: [Decision] = []
+    /// How many settled decisions to keep loaded; "Show more" raises it.
+    var settledLimit = Page.size
     var pendingCounts = PendingCounts()
     /// bot id → what its native permission prompt is asking.
     var approvals: [String: String] = [:]
@@ -154,6 +158,7 @@ final class AppStore {
         activity = [:]
         conversations = [:]
         messages = [:]
+        messagesHaveMore = [:]
         decisions = []
         pendingCounts = PendingCounts()
         approvals = [:]
@@ -255,7 +260,7 @@ final class AppStore {
         // held and recently settled ones are asked for by name.
         async let pendingReply = try? client.request("list_decisions", ["limit": 200])
         async let heldReply = try? client.request("list_decisions", ["state": "held", "limit": 100])
-        async let settledReply = try? client.request("list_decisions", ["state": "settled", "limit": 40])
+        async let settledReply = try? client.request("list_decisions", ["state": "settled", "limit": settledLimit])
         let replies = await [pendingReply, heldReply, settledReply]
         if replies.contains(where: { $0 != nil }) {
             let known = Dictionary(decisions.map { ($0.id, $0.comments) }, uniquingKeysWith: { first, _ in first })
@@ -483,13 +488,32 @@ final class AppStore {
 
     // MARK: Messages
 
+    /// The newest page of the bot's DM thread, merged into what is loaded.
     func loadMessages(botId: String) async {
         if conversations[botId] == nil { await refreshConversations() }
+        guard let conversation = conversations[botId] else { return }
+        let wasEmpty = messages[conversation.id]?.isEmpty ?? true
+        guard let page = await messagePage(conversation.id, before: nil) else { return }
+        // Only a page that reaches the oldest loaded message says whether more exist.
+        if wasEmpty { messagesHaveMore[conversation.id] = page.count >= Page.size }
+    }
+
+    func loadOlderMessages(botId: String) async {
         guard let conversation = conversations[botId],
-              let reply = try? await client.request("list_messages", ["conversation_id": conversation.id, "limit": 100])
-        else { return }
-        messages[conversation.id] = reply.list("messages").map(BusMessage.init)
+              let oldest = messages[conversation.id]?.first,
+              let page = await messagePage(conversation.id, before: oldest.id) else { return }
+        messagesHaveMore[conversation.id] = page.count >= Page.size
+    }
+
+    private func messagePage(_ conversationId: String, before: String?) async -> [BusMessage]? {
+        var fields: JSONDict = ["conversation_id": conversationId, "limit": Page.size]
+        if let before { fields["before_id"] = before }
+        guard let reply = try? await client.request("list_messages", fields) else { return nil }
+        let page = reply.list("messages").map(BusMessage.init)
+        let fresh = Set(page.map(\.id))
+        messages[conversationId] = ((messages[conversationId] ?? []).filter { !fresh.contains($0.id) } + page)
             .sorted { ($0.createdAt ?? .distantPast) < ($1.createdAt ?? .distantPast) }
+        return page
     }
 
     func sendMessage(botId: String, body: String) async throws {
@@ -555,8 +579,8 @@ final class AppStore {
         Task { _ = try? await client.request("unwatch_browser") }
     }
 
-    func browserActivity(botId: String) async throws -> [BrowserAction] {
-        let reply = try await client.request("list_browser_activity", ["bot_id": botId])
+    func browserActivity(botId: String, limit: Int) async throws -> [BrowserAction] {
+        let reply = try await client.request("list_browser_activity", ["bot_id": botId, "limit": limit])
         return reply.list("activity").map(BrowserAction.init)
     }
 
@@ -568,8 +592,8 @@ final class AppStore {
 
     // MARK: Commands, sessions, conversations
 
-    func botCommands(botId: String) async throws -> [BotCommand] {
-        let reply = try await client.request("list_bot_commands", ["bot_id": botId])
+    func botCommands(botId: String, limit: Int) async throws -> [BotCommand] {
+        let reply = try await client.request("list_bot_commands", ["bot_id": botId, "limit": limit])
         return reply.list("commands").map(BotCommand.init)
     }
 
@@ -590,7 +614,7 @@ final class AppStore {
 
     func agentConversation(projectId: String, botIds: [String], before: Int?) async throws
         -> (messages: [AgentMessage], hasMore: Bool, bots: [AgentBot]) {
-        var fields: JSONDict = ["project_id": projectId, "bot_ids": botIds]
+        var fields: JSONDict = ["project_id": projectId, "bot_ids": botIds, "limit": Page.size]
         if let before { fields["before"] = before }
         let reply = try await client.request("list_agent_conversation", fields)
         return (reply.list("messages").map(AgentMessage.init), reply.bool("has_more"), reply.list("bots").map(AgentBot.init))
@@ -686,8 +710,8 @@ final class AppStore {
 
     // MARK: Tasks
 
-    func listTasks(botId: String) async throws -> [BotTask] {
-        let reply = try await client.request("list_tasks", ["bot_id": botId])
+    func listTasks(botId: String, limit: Int) async throws -> [BotTask] {
+        let reply = try await client.request("list_tasks", ["bot_id": botId, "limit": limit])
         return reply.list("tasks").map(BotTask.init)
     }
 

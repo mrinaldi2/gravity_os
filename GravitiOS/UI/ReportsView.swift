@@ -5,30 +5,39 @@ struct ReportsView: View {
     @Environment(AppStore.self) private var store
     @Environment(LensStore.self) private var lens
     @State private var query = ""
+    @State private var count = Page.size
 
-    private var shown: [LensArtifact] {
+    private var matching: [LensArtifact] {
         guard !query.isEmpty else { return lens.artifacts }
         return lens.artifacts.filter {
             $0.title.localizedCaseInsensitiveContains(query) || $0.name.localizedCaseInsensitiveContains(query)
         }
     }
 
+    /// The newest reports; searching looks through all of them.
+    private var shown: [LensArtifact] { Array(matching.prefix(count)) }
+
     var body: some View {
         NavigationStack {
-            List(shown) { artifact in
-                NavigationLink(value: artifact) {
-                    VStack(alignment: .leading, spacing: 3) {
-                        Text(artifact.title).font(.subheadline.weight(.medium)).lineLimit(2)
-                        HStack(spacing: 6) {
-                            // From the daemon, artifacts name their project by id.
-                            Text(store.projects.first { $0.id == artifact.project }?.name ?? artifact.project)
-                            if let modified = artifact.modified { Text("·"); Text(modified.relative) }
-                            Text("·")
-                            Text(ByteCountFormatter.string(fromByteCount: Int64(artifact.size), countStyle: .file))
+            List {
+                ForEach(shown) { artifact in
+                    NavigationLink(value: artifact) {
+                        VStack(alignment: .leading, spacing: 3) {
+                            Text(artifact.title).font(.subheadline.weight(.medium)).lineLimit(2)
+                            HStack(spacing: 6) {
+                                // From the daemon, artifacts name their project by id.
+                                Text(store.projects.first { $0.id == artifact.project }?.name ?? artifact.project)
+                                if let modified = artifact.modified { Text("·"); Text(modified.relative) }
+                                Text("·")
+                                Text(ByteCountFormatter.string(fromByteCount: Int64(artifact.size), countStyle: .file))
+                            }
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
                         }
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
                     }
+                }
+                if matching.count > count {
+                    ShowMoreButton { count += Page.size }
                 }
             }
             .overlay { if lens.artifacts.isEmpty { LensEmptyState() } }

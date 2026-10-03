@@ -1,12 +1,14 @@
 import SwiftUI
 
 /// Everything the bot is running as commands, and what it ran: foreground and
-/// background, with each command's output. Refetched as the bot works, and
-/// polled while a background command is still writing output.
+/// background, with each command's output. The newest page at first, more on
+/// request. Refetched as the bot works, and polled while a background command
+/// is still writing output.
 struct CommandsPane: View {
     @Environment(AppStore.self) private var store
     let botId: String
     @State private var commands: [BotCommand] = []
+    @State private var limit = Page.size
     @State private var loaded = false
     @State private var error: String?
 
@@ -22,13 +24,22 @@ struct CommandsPane: View {
             }
             section("Running", sections.running)
             section("Finished", sections.finished)
+            // A full page means there may be older ones.
+            if commands.count >= limit {
+                ShowMoreButton {
+                    limit += Page.size
+                    await load()
+                }
+            }
         }
         .listStyle(.insetGrouped)
         .refreshable { await load() }
         .task(id: store.status) { await load() }
+        // A working bot changes its chat constantly: refetch once it pauses,
+        // not on every step, so a slow link is not kept full.
         .task(id: store.chatRevision[botId]) {
             guard loaded else { return }
-            try? await Task.sleep(for: .milliseconds(600))
+            try? await Task.sleep(for: .seconds(2))
             guard !Task.isCancelled else { return }
             await load()
         }
@@ -36,7 +47,7 @@ struct CommandsPane: View {
         .task(id: BotCommand.needsPolling(commands)) {
             guard BotCommand.needsPolling(commands) else { return }
             while !Task.isCancelled {
-                try? await Task.sleep(for: .seconds(3))
+                try? await Task.sleep(for: .seconds(10))
                 guard !Task.isCancelled else { return }
                 await load()
             }
@@ -59,7 +70,7 @@ struct CommandsPane: View {
     private func load() async {
         guard store.status == .connected else { return }
         do {
-            commands = try await store.botCommands(botId: botId)
+            commands = try await store.botCommands(botId: botId, limit: limit)
             error = nil
         } catch {
             self.error = error.localizedDescription

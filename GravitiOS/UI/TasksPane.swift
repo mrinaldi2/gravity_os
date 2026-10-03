@@ -6,6 +6,7 @@ struct BotTasksPane: View {
     @Environment(AppStore.self) private var store
     let botId: String
     @State private var tasks: [BotTask] = []
+    @State private var limit = Page.size
     @State private var routines: [Routine] = []
     @State private var error: String?
     @State private var loaded = false
@@ -38,6 +39,13 @@ struct BotTasksPane: View {
                 }
             }
             section("Done", done)
+            // A full page means there may be older ones.
+            if tasks.count >= limit {
+                ShowMoreButton {
+                    limit += Page.size
+                    await load()
+                }
+            }
         }
         .listStyle(.insetGrouped)
         .refreshable { await load() }
@@ -72,7 +80,7 @@ struct BotTasksPane: View {
     private func load() async {
         guard store.status == .connected else { return }
         do {
-            async let listed = store.listTasks(botId: botId)
+            async let listed = store.listTasks(botId: botId, limit: limit)
             async let scheduled = store.listRoutines(botId: botId)
             tasks = try await listed
             routines = try await scheduled

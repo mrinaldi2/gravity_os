@@ -7,6 +7,7 @@ struct BrowserPane: View {
     @Environment(AppStore.self) private var store
     let botId: String
     @State private var activity: [BrowserAction] = []
+    @State private var activityLimit = Page.size
     @State private var activityError: String?
     @State private var loaded = false
     @State private var zoomed = false
@@ -116,13 +117,21 @@ struct BrowserPane: View {
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .background(Color(.secondarySystemBackground), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
             }
+            // A full page means there may be older ones.
+            if activity.count >= activityLimit {
+                ShowMoreButton {
+                    activityLimit += Page.size
+                    await loadActivity()
+                }
+                .font(.callout)
+            }
         }
     }
 
     private func loadActivity() async {
         guard store.status == .connected else { return }
         do {
-            activity = try await store.browserActivity(botId: botId)
+            activity = try await store.browserActivity(botId: botId, limit: activityLimit)
             activityError = nil
         } catch {
             activityError = error.localizedDescription

@@ -19,7 +19,7 @@ struct DecisionsView: View {
     private var held: [Decision] { store.decisions.filter { $0.state == "held" } }
 
     private var closed: [Decision] {
-        Array(store.decisions.filter { $0.state == "settled" || $0.state == "withdrawn" }.prefix(40))
+        Array(store.decisions.filter { $0.state == "settled" || $0.state == "withdrawn" }.prefix(store.settledLimit))
     }
 
     var body: some View {
@@ -41,6 +41,13 @@ struct DecisionsView: View {
                 section("Waiting on you", pending)
                 section("On hold", held)
                 section("Settled", closed)
+                // Waiting and held ones all load; settled ones a page at a time.
+                if closed.count >= store.settledLimit {
+                    ShowMoreButton(title: "Show more settled") {
+                        store.settledLimit += Page.size
+                        await store.refreshDecisions()
+                    }
+                }
             }
             .listStyle(.insetGrouped)
             .onChange(of: focusPermission.wrappedValue) { _, id in

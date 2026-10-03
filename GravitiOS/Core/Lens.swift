@@ -285,13 +285,14 @@ final class LensStore {
 
     // MARK: Loading
 
+    /// Everything at once: on opening and on (re)connecting.
     func refresh() async {
         if fromDaemon {
-            await refreshChats()
+            await refreshChats(onlyNew: false)
             return
         }
         async let overview: OverviewReply? = try? get("/v1/overview")
-        async let recent: TurnsReply? = try? get("/v1/feed", ["limit": "60"])
+        async let recent: TurnsReply? = try? get("/v1/feed", ["limit": String(Page.size)])
         if let overview = await overview {
             latest = Dictionary(overview.bots.compactMap { row in row.lastTurn.map { (row.botId, $0) } },
                                 uniquingKeysWith: { first, _ in first })
@@ -301,10 +302,10 @@ final class LensStore {
 
     func turns(bot: String, before: String? = nil) async throws -> (turns: [LensTurn], hasMore: Bool) {
         if fromDaemon {
-            let page = try await chatPage(bot, before: before, limit: 25)
+            let page = try await chatPage(bot, before: before, limit: Page.turns)
             return (page.turns.reversed().compactMap { $0.lensTurn(botName: app.bot(bot)?.name) }, page.hasMore)
         }
-        var query = ["limit": "25"]
+        var query = ["limit": String(Page.turns)]
         if let before { query["before"] = before }
         let reply: TurnsReply = try await get("/v1/bots/\(encode(bot))/turns", query)
         return (reply.turns, reply.hasMore ?? false)
@@ -441,16 +442,21 @@ final class LensStore {
     // MARK: Daemon chat
 
     /// The newest turns of every bot. Listing a chat also makes the daemon
-    /// push its changes (`chat_turns`), so after this the feed follows by itself.
-    private func refreshChats() async {
+    /// push its changes (`chat_turns`), so after this the feed follows by
+    /// itself. A bot already loaded needs only its latest turn, to subscribe
+    /// again after a reconnect: every bot's last ten turns came to over half a
+    /// megabyte, a burst a phone on a mobile link pays on every reconnect.
+    private func refreshChats(onlyNew: Bool) async {
         for bot in app.bots {
-            _ = try? await chatPage(bot.id, before: nil, limit: 10)
+            let known = chats[bot.id] != nil
+            if onlyNew, known { continue }
+            _ = try? await chatPage(bot.id, before: nil, limit: known ? 1 : 3)
         }
     }
 
     /// A bot's chat for its Chat pane: the newest page, if nothing is loaded yet.
     func loadChat(_ botId: String) async throws {
-        _ = try await chatPage(botId, before: nil, limit: 30)
+        _ = try await chatPage(botId, before: nil, limit: Page.turns)
     }
 
     /// After the bot's conversation was cleared: forget its turns and load the new, empty chat.
@@ -464,7 +470,7 @@ final class LensStore {
 
     func loadOlderChat(_ botId: String) async throws {
         guard let first = chats[botId]?.first else { return try await loadChat(botId) }
-        _ = try await chatPage(botId, before: first.id, limit: 30)
+        _ = try await chatPage(botId, before: first.id, limit: Page.turns)
     }
 
     private func chatPage(_ botId: String, before: String?, limit: Int) async throws -> (turns: [ChatTurn], hasMore: Bool) {
@@ -578,8 +584,12 @@ final class LensStore {
             // The daemon pushes chat changes; a slow refresh only catches new bots.
             let interval: TimeInterval = fromDaemon ? 60 : (app.bots.contains { $0.state == .working } ? 4 : 10)
             // Straight away on (re)connecting, then on the interval.
-            if connected, !wasConnected || Date().timeIntervalSince(last) >= interval {
+            if connected, !wasConnected {
                 await refresh()
+                last = Date()
+            } else if connected, Date().timeIntervalSince(last) >= interval {
+                // Pushes keep loaded chats current: only new bots need a look.
+                if fromDaemon { await refreshChats(onlyNew: true) } else { await refresh() }
                 last = Date()
             }
             wasConnected = connected

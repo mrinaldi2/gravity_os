@@ -164,3 +164,37 @@ struct ErrorAlert: ViewModifier {
 extension View {
     func errorAlert(_ message: Binding<String?>) -> some View { modifier(ErrorAlert(message: message)) }
 }
+
+/// How much a list loads at first, and how much each "Show more" adds: enough
+/// to see what is new without pulling a bot's whole history over a slow link.
+enum Page {
+    static let size = 20
+    /// Chat turns carry every step of the turn, so a page holds fewer.
+    static let turns = 15
+}
+
+/// The last row of a list that loads a page at a time.
+struct ShowMoreButton: View {
+    var title = "Show more"
+    let action: () async -> Void
+    @State private var loading = false
+
+    var body: some View {
+        Button {
+            Task {
+                loading = true
+                await action()
+                loading = false
+            }
+        } label: {
+            HStack {
+                Text(title)
+                if loading {
+                    Spacer()
+                    ProgressView().controlSize(.small)
+                }
+            }
+        }
+        .disabled(loading)
+    }
+}
