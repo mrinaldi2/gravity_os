@@ -32,22 +32,17 @@ struct DecisionsView: View {
                             PermissionCard(request: request) { openBot = $0 }
                                 .listRowInsets(EdgeInsets(top: 6, leading: 8, bottom: 6, trailing: 8))
                                 .listRowBackground(Color.clear)
+                                .listRowSeparator(.hidden)
                                 .id(request.id)
                         }
                     } header: {
-                        Text("Permission prompts")
+                        SectionTitle("Permission prompts", count: store.permissions.count)
                     }
                 }
                 section("Waiting on you", pending)
                 section("On hold", held)
-                section("Settled", closed)
                 // Waiting and held ones all load; settled ones a page at a time.
-                if closed.count >= store.settledLimit {
-                    ShowMoreButton(title: "Show more settled") {
-                        store.settledLimit += Page.size
-                        await store.refreshDecisions()
-                    }
-                }
+                section("Settled", closed, more: closed.count >= store.settledLimit)
             }
             .listStyle(.insetGrouped)
             .onChange(of: focusPermission.wrappedValue) { _, id in
@@ -65,7 +60,7 @@ struct DecisionsView: View {
             .safeAreaInset(edge: .top, spacing: 0) { ConnectionBanner() }
             .refreshable { await store.refreshDecisions() }
             .navigationTitle("Decisions")
-            .toolbar { ToolbarItem(placement: .topBarTrailing) { ComputerSwitcher() } }
+            .toolbar { ToolbarItem(placement: .topBarLeading) { ComputerSwitcher() } }
             .navigationDestination(for: String.self) { DecisionDetailView(decisionId: $0) }
             .navigationDestination(item: $openBot) { BotDetailView(botId: $0) }
         }
@@ -77,12 +72,20 @@ struct DecisionsView: View {
     }
 
     @ViewBuilder
-    private func section(_ title: String, _ decisions: [Decision]) -> some View {
+    private func section(_ title: String, _ decisions: [Decision], more: Bool = false) -> some View {
         if !decisions.isEmpty {
-            Section(title) {
+            Section {
                 ForEach(decisions) { decision in
                     NavigationLink(value: decision.id) { DecisionRow(decision: decision) }
                 }
+                if more {
+                    ListEnd(hasMore: true, noun: "decisions", loaded: decisions.count) {
+                        store.settledLimit += Page.size
+                        await store.refreshDecisions()
+                    }
+                }
+            } header: {
+                SectionTitle(title, count: more ? nil : decisions.count)
             }
         }
     }
@@ -92,35 +95,27 @@ private struct DecisionRow: View {
     @Environment(AppStore.self) private var store
     let decision: Decision
 
+    private var meta: String {
+        var parts = [decision.raisedByName, store.projectName(decision.projectId)]
+        if let at = decision.createdAt { parts.append(at.relative) }
+        return parts.filter { !$0.isEmpty }.joined(separator: " · ")
+    }
+
     var body: some View {
-        HStack(alignment: .top, spacing: 12) {
-            AvatarView(avatar: decision.raisedByAvatar, name: decision.raisedByName, size: 34)
-            VStack(alignment: .leading, spacing: 4) {
-                Text(decision.title).font(.headline).lineLimit(3)
-                HStack(spacing: 6) {
-                    Text(decision.raisedByName)
-                    Text("·")
-                    Text(store.projectName(decision.projectId))
-                    if let at = decision.createdAt {
-                        Text("·")
-                        Text(at.relative)
-                    }
-                }
-                .font(.caption)
-                .foregroundStyle(.secondary)
-                .lineLimit(1)
-                HStack(spacing: 6) {
-                    if decision.urgent { Chip(text: "Urgent", color: .red) }
-                    if decision.state == "answered" { Chip(text: "Draft answer", color: .blue) }
-                    if decision.state == "withdrawn" { Chip(text: "Withdrawn", color: .gray) }
-                    if let deadline = decision.deadlineAt, decision.pending {
-                        Chip(text: "Due \(deadline.relative)", color: .orange)
-                    }
-                    ForEach(decision.tags.prefix(2), id: \.self) { Chip(text: $0, color: .secondary) }
-                }
+        ItemRow(title: decision.title, subtitle: meta,
+                detail: decision.tags.prefix(3).map { "#\($0)" }.joined(separator: " "), titleLines: 2) {
+            AvatarView(avatar: decision.raisedByAvatar, name: decision.raisedByName, size: 36)
+        } trailing: {
+            if decision.urgent {
+                Pill(text: "Urgent", tone: .failed)
+            } else if let deadline = decision.deadlineAt, decision.pending {
+                Pill(text: "Due \(deadline.relative)", tone: .needsYou)
+            } else if decision.state == "answered" {
+                Pill(text: "Draft", tone: .working)
+            } else if decision.state == "withdrawn" {
+                Pill(text: "Withdrawn")
             }
         }
-        .padding(.vertical, 2)
     }
 }
 
@@ -134,6 +129,6 @@ struct Chip: View {
             .foregroundStyle(color)
             .padding(.horizontal, 7)
             .padding(.vertical, 2)
-            .background(color.opacity(0.14), in: Capsule())
+            .background(color.opacity(0.16), in: Capsule())
     }
 }

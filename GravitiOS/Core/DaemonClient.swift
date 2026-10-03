@@ -51,6 +51,8 @@ final class DaemonClient {
     }
 
     var onStatus: ((ConnectionStatus) -> Void)?
+    /// How long the last ping took to come back.
+    var onLatency: ((Duration) -> Void)?
     /// `hello_ok`, delivered before the status turns `connected`.
     var onHello: ((JSONDict) -> Void)?
     /// Every frame without a pending request, plus `attached` replies: those
@@ -306,10 +308,16 @@ final class DaemonClient {
     }
 
     private func ping(_ socket: URLSessionWebSocketTask, generation current: Int) {
+        let sent = ContinuousClock.now
         socket.sendPing { [weak self] error in
             Task { @MainActor in
                 guard let self, current == self.generation else { return }
-                if error == nil { self.lastHeard = .now } else { self.restart() }
+                if error == nil {
+                    self.lastHeard = .now
+                    self.onLatency?(ContinuousClock.now - sent)
+                } else {
+                    self.restart()
+                }
             }
         }
     }

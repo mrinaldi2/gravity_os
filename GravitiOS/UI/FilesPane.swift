@@ -22,19 +22,23 @@ struct BotFilesPane: View {
                 Text(error).font(.footnote).foregroundStyle(.red)
             }
             if loaded, error == nil, files.isEmpty {
-                Text("No artifacts in this project yet.").font(.callout).foregroundStyle(.secondary)
+                EmptyNote(text: "No files in this project yet.", systemImage: "doc")
             }
-            ForEach(files.prefix(shown)) { file in
-                NavigationLink(value: file) { FileRow(file: file) }
-            }
-            if files.count > shown || next != nil {
-                ShowMoreButton {
-                    if files.count <= shown { await loadMore() }
-                    shown += Page.size
+            if !files.isEmpty {
+                Section {
+                    ForEach(files.prefix(shown)) { file in
+                        NavigationLink(value: file) { FileRow(file: file) }
+                    }
+                    ListEnd(hasMore: files.count > shown || next != nil, noun: "files", loaded: min(shown, files.count)) {
+                        if files.count <= shown { try await loadMore() }
+                        shown += Page.size
+                    }
+                } header: {
+                    SectionTitle("Newest")
                 }
             }
         }
-        .listStyle(.plain)
+        .listStyle(.insetGrouped)
         .refreshable { await load(fresh: true) }
         .task(id: store.status) { await load(fresh: true) }
         // Files land when bots finish work: look again once bus traffic settles.
@@ -67,15 +71,11 @@ struct BotFilesPane: View {
         loaded = true
     }
 
-    private func loadMore() async {
+    private func loadMore() async throws {
         guard let next, let projectId = store.bot(botId)?.projectId else { return }
-        do {
-            let page = try await store.listArtifacts(projectId: projectId, before: next)
-            files = ArtifactPage.merge(files, page.files)
-            self.next = page.hasMore ? page.nextBefore : nil
-        } catch {
-            self.error = error.localizedDescription
-        }
+        let page = try await store.listArtifacts(projectId: projectId, before: next)
+        files = ArtifactPage.merge(files, page.files)
+        self.next = page.hasMore ? page.nextBefore : nil
     }
 }
 
@@ -90,33 +90,15 @@ private struct FileRow: View {
         return "doc"
     }
 
+    private var meta: String {
+        var parts = [file.title == nil ? file.rel : file.name, ByteCountFormatter.string(fromByteCount: Int64(file.size), countStyle: .file)]
+        if let modified = file.modified { parts.append(modified.relative) }
+        return parts.joined(separator: " · ")
+    }
+
     var body: some View {
-        HStack(spacing: 12) {
-            Image(systemName: symbol).foregroundStyle(.secondary).frame(width: 22)
-            VStack(alignment: .leading, spacing: 3) {
-                Text(file.title ?? file.name).font(.subheadline.weight(.medium)).lineLimit(2)
-                HStack(spacing: 4) {
-                    Text(file.title == nil ? file.rel : file.name).lineLimit(1).truncationMode(.middle)
-                    Text("·")
-                    Text(ByteCountFormatter.string(fromByteCount: Int64(file.size), countStyle: .file))
-                    if let modified = file.modified {
-                        Text("·")
-                        Text(modified.relative)
-                    }
-                }
-                .font(.caption)
-                .foregroundStyle(.secondary)
-                if let creator = file.createdBy {
-                    HStack(spacing: 5) {
-                        if !creator.isOwner {
-                            AvatarView(avatar: creator.avatar, name: creator.name, size: 16)
-                        }
-                        Text(creator.label).lineLimit(1)
-                    }
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                }
-            }
+        ItemRow(title: file.title ?? file.name, subtitle: meta, detail: file.createdBy?.label, titleLines: 2) {
+            IconTile(systemImage: symbol)
         }
     }
 }

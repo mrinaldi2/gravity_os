@@ -22,11 +22,8 @@ struct ChatView: View {
             ScrollViewReader { proxy in
                 ScrollView {
                     LazyVStack(spacing: 10) {
-                        if hasMore {
-                            ShowMoreButton(title: "Load earlier messages") {
-                                await store.loadOlderMessages(botId: botId)
-                            }
-                            .font(.callout)
+                        ListEnd(hasMore: hasMore, noun: "messages", loaded: thread.count) {
+                            await store.loadOlderMessages(botId: botId)
                         }
                         ForEach(thread) { message in
                             MessageBubble(message: message).id(message.id)

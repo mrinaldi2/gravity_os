@@ -10,12 +10,15 @@ struct RootView: View {
     @State private var focusPermission: String?
     private var router: NotificationRouter { .shared }
 
-    enum Tab { case activity, bots, decisions, reports, computer }
+    enum Tab { case activity, bots, decisions, reports, computers }
 
     var body: some View {
         TabView(selection: $tab) {
-            FeedView()
-                .tabItem { Label("Activity", systemImage: "list.bullet.rectangle") }
+            FeedView { computer in
+                fleet.select(computer)
+                tab = .decisions
+            }
+                .tabItem { Label("Home", systemImage: "house") }
                 .tag(Tab.activity)
             BotsView()
                 .tabItem { Label("Bots", systemImage: "person.2") }
@@ -25,11 +28,12 @@ struct RootView: View {
                 .badge(store.decisionsBadge)
                 .tag(Tab.decisions)
             ReportsView()
-                .tabItem { Label("Reports", systemImage: "doc.richtext") }
+                .tabItem { Label("Files", systemImage: "doc.on.doc") }
                 .tag(Tab.reports)
-            MacView()
-                .tabItem { Label(store.kind.label, systemImage: store.kind.symbol) }
-                .tag(Tab.computer)
+            ComputersView()
+                .tabItem { Label("Computers", systemImage: "desktopcomputer") }
+                .badge(fleet.computers.filter { $0.store.status != .connected && $0.store.status != .connecting }.count)
+                .tag(Tab.computers)
         }
         // Another computer: fresh navigation, since ids belong to one daemon.
         .id(computer.id)

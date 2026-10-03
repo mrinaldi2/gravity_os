@@ -52,6 +52,8 @@ struct TurnCard: View {
     var showBot = false
     /// For a bot's own list, where turns do not carry the bot id.
     var botIdFallback = ""
+    /// Home's version: no picture, no tally, a shorter outcome.
+    var compact = false
 
     private var botId: String { turn.botId ?? "" }
 
@@ -87,7 +89,7 @@ struct TurnCard: View {
                     .lineLimit(1)
             }
             outcome
-            if let cover = turn.cover, let bot = turn.botId ?? Optional(botIdFallback) {
+            if !compact, let cover = turn.cover, let bot = turn.botId ?? Optional(botIdFallback) {
                 LensImageView(source: .bot(bot, cover))
                     .frame(maxWidth: .infinity)
                     .frame(height: 150)
@@ -102,7 +104,7 @@ struct TurnCard: View {
                         }
                     }
             }
-            if !turn.stats.line.isEmpty || turn.stats.errors > 0 {
+            if !compact, !turn.stats.line.isEmpty || turn.stats.errors > 0 {
                 HStack(spacing: 8) {
                     Text(turn.stats.line)
                     if turn.stats.errors > 0 {
@@ -136,7 +138,7 @@ struct TurnCard: View {
                     Label("Task completed", systemImage: "checkmark.seal.fill")
                         .font(.caption.weight(.semibold)).foregroundStyle(.green)
                 }
-                Text(plain(turn.outcome.text)).font(.callout).lineLimit(4)
+                Text(plain(turn.outcome.text)).font(.callout).lineLimit(compact ? 2 : 4)
             }
             .padding(10)
             .frame(maxWidth: .infinity, alignment: .leading)
@@ -152,10 +154,13 @@ struct TurnCard: View {
     }
 }
 
-/// Every bot's recent turns, newest first: the "what is everyone doing" view.
+/// Home: what needs the owner on every computer, then what the bots on
+/// this one are doing and have just done.
 struct FeedView: View {
     @Environment(AppStore.self) private var store
     @Environment(LensStore.self) private var lens
+    /// Shows the Decisions tab for a computer.
+    var openDecisions: (Computer) -> Void = { _ in }
 
     private var working: [LensTurn] { lens.feed.filter(\.open) }
     private var recent: [LensTurn] { lens.feed.filter { !$0.open } }
@@ -163,30 +168,147 @@ struct FeedView: View {
     var body: some View {
         NavigationStack {
             List {
+                NeedsYouSection(openDecisions: openDecisions)
                 if !working.isEmpty {
-                    Section("Working now") { rows(working) }
+                    Section {
+                        ForEach(working) { turn in
+                            NavigationLink(value: TurnLink(botId: turn.botId ?? "", turnId: turn.id)) { WorkingRow(turn: turn) }
+                        }
+                    } header: {
+                        SectionTitle("Working now", count: working.count)
+                    }
                 }
                 if !recent.isEmpty {
-                    Section("Recent") { rows(recent) }
+                    Section {
+                        ForEach(recent) { turn in
+                            NavigationLink(value: TurnLink(botId: turn.botId ?? "", turnId: turn.id)) {
+                                TurnCard(turn: turn, showBot: true, compact: true)
+                            }
+                        }
+                    } header: {
+                        SectionTitle("Recent")
+                    }
                 }
             }
             .listStyle(.insetGrouped)
             .overlay { if lens.feed.isEmpty { LensEmptyState() } }
             .safeAreaInset(edge: .top, spacing: 0) { ConnectionBanner() }
             .refreshable { await lens.refresh() }
-            .navigationTitle("Activity")
+            .navigationTitle("Home")
             .toolbar {
-                ToolbarItem(placement: .topBarLeading) { SettingsButton() }
-                ToolbarItem(placement: .topBarTrailing) { ComputerSwitcher() }
+                ToolbarItem(placement: .topBarLeading) { ComputerSwitcher() }
+                ToolbarItem(placement: .topBarTrailing) { SettingsButton() }
             }
             .navigationDestination(for: TurnLink.self) { TurnDetailView(botId: $0.botId, turnId: $0.turnId) }
         }
     }
+}
 
-    private func rows(_ turns: [LensTurn]) -> some View {
-        ForEach(turns) { turn in
-            NavigationLink(value: TurnLink(botId: turn.botId ?? "", turnId: turn.id)) {
-                TurnCard(turn: turn, showBot: true)
+/// A bot at work: who, and the step it is on.
+private struct WorkingRow: View {
+    @Environment(AppStore.self) private var store
+    let turn: LensTurn
+
+    var body: some View {
+        let bot = store.bot(turn.botId ?? "")
+        ItemRow(title: bot?.name ?? turn.botName ?? "A bot",
+                subtitle: turn.current.isEmpty ? turn.trigger.headline : turn.current,
+                detail: turn.current.isEmpty ? nil : turn.trigger.headline) {
+            if let bot {
+                AvatarView(avatar: bot.avatar, name: bot.name, size: 36)
+            } else {
+                IconTile(systemImage: "person")
+            }
+        } trailing: {
+            StatusLabel(text: "Working", tone: .working, busy: true)
+        }
+    }
+}
+
+/// Everything waiting on the owner, from every computer the phone knows:
+/// tool prompts to answer here, bots asking in their terminal or stuck, and
+/// decisions waiting for a ruling.
+struct NeedsYouSection: View {
+    @Environment(Fleet.self) private var fleet
+    var openDecisions: (Computer) -> Void
+
+    private struct Waiting: Identifiable {
+        let computer: Computer
+        let bot: Bot
+        let line: String
+        let tone: Tone
+        var id: String { "\(computer.id)/\(bot.id)" }
+    }
+
+    /// Bots asking in their terminal, or crashed, or locked out.
+    private var waiting: [Waiting] {
+        fleet.computers.flatMap { computer in
+            computer.store.bots.compactMap { bot -> Waiting? in
+                guard !bot.isLinked else { return nil }
+                // A prompt answered by card is listed as the card.
+                if computer.store.permissions.contains(where: { $0.botId == bot.id }) { return nil }
+                if let detail = computer.store.approvals[bot.id] { return Waiting(computer: computer, bot: bot, line: detail, tone: .needsYou) }
+                switch bot.state {
+                case .waitingForUser, .waitingForApproval:
+                    return Waiting(computer: computer, bot: bot, line: bot.stateReason.isEmpty ? bot.state.label : bot.stateReason, tone: .needsYou)
+                case .crashed, .authFailed:
+                    return Waiting(computer: computer, bot: bot, line: bot.stateReason.isEmpty ? bot.state.label : bot.stateReason, tone: .failed)
+                default:
+                    return nil
+                }
+            }
+        }
+    }
+
+    private var decisions: [Computer] { fleet.computers.filter { $0.store.pendingCounts.total > 0 } }
+    private var prompts: Int { fleet.computers.reduce(0) { $0 + $1.store.permissions.count } }
+    private var count: Int { prompts + waiting.count + decisions.reduce(0) { $0 + $1.store.pendingCounts.total } }
+    private var many: Bool { fleet.computers.count > 1 }
+
+    var body: some View {
+        if prompts > 0 {
+            Section {
+                ForEach(fleet.computers) { computer in
+                    ForEach(computer.store.permissions) { request in
+                        PermissionCard(request: request)
+                            .computerEnvironment(computer)
+                            .listRowInsets(EdgeInsets(top: 6, leading: 0, bottom: 6, trailing: 0))
+                            .listRowBackground(Color.clear)
+                            .listRowSeparator(.hidden)
+                    }
+                }
+            } header: {
+                SectionTitle("Needs you", count: count)
+            }
+        }
+        if !waiting.isEmpty || !decisions.isEmpty {
+            Section {
+                ForEach(waiting) { item in
+                    NavigationLink {
+                        BotDetailView(botId: item.bot.id).computerEnvironment(item.computer)
+                    } label: {
+                        ItemRow(title: item.bot.name, subtitle: item.line, detail: many ? "on \(item.computer.name)" : nil, subtitleLines: 2) {
+                            AvatarView(avatar: item.bot.avatar, name: item.bot.name, size: 36)
+                        } trailing: {
+                            StatusLabel(text: item.tone == .failed ? "Stopped" : "Needs you", tone: item.tone)
+                        }
+                    }
+                }
+                ForEach(decisions) { computer in
+                    let pending = computer.store.pendingCounts
+                    Button { openDecisions(computer) } label: {
+                        ItemRow(title: pending.total == 1 ? "1 decision waiting" : "\(pending.total) decisions waiting",
+                                subtitle: pending.urgent > 0 ? "\(pending.urgent) urgent" : "Bots want your ruling",
+                                detail: many ? "on \(computer.name)" : nil) {
+                            IconTile(systemImage: "checklist", tone: pending.urgent > 0 ? .failed : .needsYou)
+                        } trailing: {
+                            Image(systemName: "chevron.right").font(.caption.weight(.semibold)).foregroundStyle(.tertiary)
+                        }
+                    }
+                    .buttonStyle(.plain)
+                }
+            } header: {
+                if prompts == 0 { SectionTitle("Needs you", count: count) }
             }
         }
     }

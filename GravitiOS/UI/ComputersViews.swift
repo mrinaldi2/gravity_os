@@ -1,78 +1,44 @@
 import SwiftUI
 
-/// The toolbar menu that picks which computer the tabs show. Hidden with
-/// only one computer.
+/// The chip at the top left of every main tab: which computer the tab
+/// shows, a dot for how each of the others is doing, and the menu to switch.
 struct ComputerSwitcher: View {
     @Environment(Fleet.self) private var fleet
     @Environment(Computer.self) private var current
     @State private var adding = false
 
-    /// Another computer has decisions waiting or a bot asking for approval.
-    private var othersNeedYou: Bool {
-        fleet.computers.contains { $0.id != current.id && needsYou($0) }
-    }
-
     var body: some View {
-        if fleet.computers.count > 1 {
-            Menu {
-                ForEach(fleet.computers) { computer in
-                    Button { fleet.select(computer) } label: {
-                        Label(title(computer), systemImage: computer.id == current.id ? "checkmark" : computer.kind.symbol)
+        Menu {
+            ForEach(fleet.computers) { computer in
+                Button { fleet.select(computer) } label: {
+                    Label(title(computer), systemImage: computer.id == current.id ? "checkmark" : computer.kind.symbol)
+                }
+            }
+            Divider()
+            Button { adding = true } label: { Label("Add a computer", systemImage: "plus") }
+        } label: {
+            HStack(spacing: 6) {
+                Image(systemName: current.kind.symbol).font(.footnote.weight(.semibold))
+                Text(current.name).font(.subheadline.weight(.semibold)).lineLimit(1)
+                if fleet.computers.count > 1 {
+                    HStack(spacing: 3) {
+                        ForEach(fleet.computers) { StatusDot(tone: $0.statusTone, size: 6) }
                     }
                 }
-                Divider()
-                Button { adding = true } label: { Label("Add a computer", systemImage: "plus") }
-            } label: {
-                HStack(spacing: 4) {
-                    Image(systemName: current.kind.symbol)
-                    Text(current.name).lineLimit(1)
-                    if othersNeedYou { Circle().fill(.orange).frame(width: 7, height: 7) }
-                }
-                .font(.subheadline.weight(.medium))
+                Image(systemName: "chevron.down").font(.caption2.weight(.bold)).foregroundStyle(.secondary)
             }
-            .accessibilityLabel("Computer: \(current.name)")
-            .sheet(isPresented: $adding) { ConnectView(adding: true) }
+            .foregroundStyle(.primary)
         }
-    }
-
-    private func needsYou(_ computer: Computer) -> Bool {
-        computer.store.pendingCounts.total > 0 || !computer.store.approvals.isEmpty
+        .accessibilityLabel("Computer: \(current.name)")
+        .sheet(isPresented: $adding) { ConnectView(adding: true) }
     }
 
     private func title(_ computer: Computer) -> String {
         var parts = [computer.name]
         if computer.store.status != .connected { parts.append(computer.store.status.label) }
-        let pending = computer.store.pendingCounts.total
-        if pending > 0 { parts.append(pending == 1 ? "1 decision" : "\(pending) decisions") }
+        let waiting = computer.store.decisionsBadge + computer.store.approvals.count
+        if waiting > 0 { parts.append("\(waiting) waiting") }
         return parts.joined(separator: " · ")
-    }
-}
-
-/// Every computer the phone knows, in Settings. The add sheet belongs to the
-/// Form's owner: a modifier on a Section is applied to each of its rows.
-struct ComputersSection: View {
-    @Environment(Fleet.self) private var fleet
-    @Binding var adding: Bool
-
-    var body: some View {
-        Section {
-            ForEach(fleet.computers) { computer in
-                NavigationLink {
-                    ComputerEditor(computer: computer)
-                } label: {
-                    HStack {
-                        Label(computer.name, systemImage: computer.kind.symbol)
-                        Spacer()
-                        Text(computer.store.status.label).font(.footnote).foregroundStyle(.secondary)
-                    }
-                }
-            }
-            Button { adding = true } label: { Label("Add a computer", systemImage: "plus") }
-        } header: {
-            Text("Computers")
-        } footer: {
-            Text("Every computer stays connected, so notifications and decisions come from all of them. The menu at the top of each tab picks the one on screen.")
-        }
     }
 }
 

@@ -28,9 +28,11 @@ struct FolderView: View {
 
     var body: some View {
         List {
-            ForEach(entries) { file in row(file) }
+            if !entries.isEmpty {
+                Section { ForEach(entries) { file in row(file) } }
+            }
         }
-        .listStyle(.plain)
+        .listStyle(.insetGrouped)
         .overlay { overlay }
         .searchable(text: $query, prompt: "Filter this folder")
         .navigationTitle(folder?.name ?? "Files")
@@ -161,27 +163,17 @@ private struct FileRow: View {
     @State private var thumbnail: UIImage?
 
     var body: some View {
-        HStack(spacing: 12) {
-            Group {
-                if let thumbnail {
-                    Image(uiImage: thumbnail).resizable().scaledToFill()
-                } else {
-                    Image(systemName: symbol)
-                        .font(.title3)
-                        .foregroundStyle(file.isFolder ? AnyShapeStyle(.tint) : AnyShapeStyle(.secondary))
-                }
+        ItemRow(title: file.name, subtitle: detail) {
+            if let thumbnail {
+                Image(uiImage: thumbnail).resizable().scaledToFill()
+                    .frame(width: 32, height: 32)
+                    .clipShape(RoundedRectangle(cornerRadius: 9, style: .continuous))
+            } else {
+                IconTile(systemImage: file.isFolder ? "folder.fill" : symbol, tone: file.isFolder ? .working : nil)
             }
-            .frame(width: 36, height: 36)
-            .clipShape(RoundedRectangle(cornerRadius: 6, style: .continuous))
-            VStack(alignment: .leading, spacing: 2) {
-                HStack(spacing: 4) {
-                    Text(file.name).lineLimit(1)
-                    if file.link { Image(systemName: "arrow.turn.up.right").font(.caption2).foregroundStyle(.secondary) }
-                }
-                Text(detail).font(.caption).foregroundStyle(.secondary)
-            }
-            Spacer(minLength: 4)
+        } trailing: {
             if loading { ProgressView() }
+            if file.link { Image(systemName: "arrow.turn.up.right").font(.caption2).foregroundStyle(.secondary) }
         }
         .contentShape(Rectangle())
         .task(id: file.path) {
@@ -190,7 +182,7 @@ private struct FileRow: View {
     }
 
     private var detail: String {
-        let date = file.modified?.formatted(date: .abbreviated, time: .shortened) ?? ""
+        let date = file.modified?.relative ?? ""
         if file.isFolder { return date }
         return ByteCountFormatter.string(fromByteCount: Int64(file.size), countStyle: .file) + " · " + date
     }
@@ -295,38 +287,4 @@ struct ShareSheet: UIViewControllerRepresentable {
         UIActivityViewController(activityItems: [url], applicationActivities: nil)
     }
     func updateUIViewController(_ controller: UIActivityViewController, context: Context) {}
-}
-
-/// The computer's tab: its screen or its files.
-struct MacView: View {
-    @State private var mode = Mode.screen
-    @State private var path = NavigationPath()
-
-    enum Mode: String, CaseIterable {
-        case screen = "Screen"
-        case files = "Files"
-    }
-
-    var body: some View {
-        NavigationStack(path: $path) {
-            Group {
-                switch mode {
-                case .screen: ScreenView()
-                case .files: FolderView(path: "")
-                }
-            }
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .principal) {
-                    Picker("Show", selection: $mode) {
-                        ForEach(Mode.allCases, id: \.self) { Text($0.rawValue) }
-                    }
-                    .pickerStyle(.segmented)
-                    .frame(width: 200)
-                }
-                ToolbarItem(placement: .topBarLeading) { ComputerSwitcher() }
-            }
-            .navigationDestination(for: FolderLink.self) { FolderView(path: $0.path) }
-        }
-    }
 }

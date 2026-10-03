@@ -71,45 +71,21 @@ struct AvatarView: View {
 }
 
 extension BotState {
-    var color: Color {
-        switch self {
-        case .working: .blue
-        case .ready: .green
-        case .waitingForUser, .waitingForApproval: .orange
-        case .rateLimited: .yellow
-        case .authFailed, .crashed: .red
-        case .starting, .stopping, .stopped, .unknown: .gray
-        }
-    }
+    var color: Color { tone.color }
 }
 
 struct StateBadge: View {
     let state: BotState
 
     var body: some View {
-        HStack(spacing: 5) {
-            if state == .working {
-                ProgressView().controlSize(.mini)
-            } else {
-                Circle().fill(state.color).frame(width: 8, height: 8)
-            }
-            Text(state.label)
-                .font(.caption.weight(.medium))
-                .foregroundStyle(state.needsOwner ? state.color : .secondary)
-        }
+        StatusLabel(text: state.label, tone: state.tone, busy: state == .working)
     }
 }
 
 /// Marks a temporary worker wherever bots are listed.
 struct WorkerTag: View {
     var body: some View {
-        Text("worker")
-            .font(.caption2.weight(.semibold))
-            .padding(.horizontal, 6)
-            .padding(.vertical, 1)
-            .foregroundStyle(.teal)
-            .background(Color.teal.opacity(0.15), in: Capsule())
-            .accessibilityLabel("Temporary worker")
+        Pill(text: "worker", tone: .worker).accessibilityLabel("Temporary worker")
     }
 }
 

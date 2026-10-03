@@ -11,36 +11,36 @@ struct BotDetailView: View {
     @State private var notice: String?
     @State private var failure: String?
 
+    /// Four panes at most: what the bot says, what it does, what it made,
+    /// and everything else (terminal, browser, memory, its settings).
     enum Pane: String, CaseIterable {
         case chat = "Chat"
         case activity = "Activity"
-        case terminal = "Terminal"
-        case browser = "Browser"
         case messages = "Messages"
-        case tasks = "Tasks"
-        case commands = "Commands"
+        case work = "Work"
         case files = "Files"
-        case memory = "Memory"
-        case info = "Info"
+        case more = "More"
+
+        var symbol: String {
+            switch self {
+            case .chat: "bubble.left"
+            case .activity: "list.bullet.rectangle"
+            case .messages: "envelope"
+            case .work: "hammer"
+            case .files: "doc"
+            case .more: "ellipsis.circle"
+            }
+        }
     }
 
     private var bot: Bot? { store.bot(botId) }
 
-    /// A daemon that serves chat gets Gravity's chat pane and the panes after
-    /// it, each as the daemon offers it; an older one keeps the Gravity Lens
-    /// activity and the message thread.
+    /// A daemon that serves chat gets Gravity's chat and the panes after it;
+    /// an older one keeps the Gravity Lens activity and the message thread.
     private var panes: [Pane] {
-        guard let bot else { return [.info] }
-        guard store.hasChat else {
-            return [.activity, .messages, .info] + (store.hasTerminal(bot) ? [.terminal] : [])
-        }
-        var panes: [Pane] = [.chat]
-        if store.hasTerminal(bot) { panes.append(.terminal) }
-        if store.hasBrowser(bot) { panes.append(.browser) }
-        panes.append(.tasks)
-        if store.hasCommands { panes.append(.commands) }
-        panes += [.files, .memory, .info]
-        return panes
+        guard bot != nil else { return [.more] }
+        guard store.hasChat else { return [.activity, .messages, .more] }
+        return [.chat, .work, .files, .more]
     }
 
     private var pane: Pane {
@@ -53,7 +53,7 @@ struct BotDetailView: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            PaneStrip(panes: panes, selection: Binding(get: { pane }, set: { choice = $0 }), browserOpen: browserOpen)
+            PaneSwitcher(panes: panes, selection: Binding(get: { pane }, set: { choice = $0 }), moreDot: browserOpen)
 
             // Its tools waiting on the owner, answered right here.
             if store.hasPermissions, !store.permissions(for: botId).isEmpty {
@@ -68,12 +68,16 @@ struct BotDetailView: View {
                 .frame(maxHeight: 340)
                 .fixedSize(horizontal: false, vertical: true)
             } else if let detail = store.approvals[botId] {
-                Label(detail, systemImage: "hand.raised.fill")
-                    .font(.footnote)
-                    .foregroundStyle(.orange)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .padding(.horizontal, 14)
-                    .padding(.bottom, 8)
+                // Its runtime's own prompt: answered in the terminal, one tap away.
+                Group {
+                    if let bot, store.hasTerminal(bot) {
+                        NavigationLink { TerminalScreen(botId: botId).navigationTitle("Terminal") } label: { approvalLabel(detail, link: true) }
+                    } else {
+                        approvalLabel(detail, link: false)
+                    }
+                }
+                .padding(.horizontal, 12)
+                .padding(.bottom, 8)
             }
             if let notice {
                 Label(notice, systemImage: "arrow.clockwise")
@@ -90,20 +94,17 @@ struct BotDetailView: View {
 
             switch pane {
             case .chat: BotChatPane(botId: botId, searching: $searching)
-            case .tasks: BotTasksPane(botId: botId)
-            case .browser: BrowserPane(botId: botId)
-            case .commands: CommandsPane(botId: botId)
+            case .work: WorkPane(botId: botId)
             case .files: BotFilesPane(botId: botId)
-            case .memory: MemoryPane(botId: botId)
             case .activity: BotActivityView(botId: botId)
-            case .terminal: TerminalScreen(botId: botId)
             case .messages: ChatView(botId: botId)
-            case .info: BotInfoView(botId: botId)
+            case .more: BotMorePane(botId: botId, browserOpen: browserOpen, confirming: $confirming)
             }
         }
         .navigationTitle(bot?.name ?? "Bot")
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
+            ToolbarItem(placement: .principal) { header }
             ToolbarItem(placement: .topBarTrailing) {
                 if let bot { StateBadge(state: bot.state) }
             }
@@ -111,18 +112,6 @@ struct BotDetailView: View {
                 ToolbarItem(placement: .topBarTrailing) {
                     Button { searching.toggle() } label: { Image(systemName: "magnifyingglass") }
                         .accessibilityLabel("Search this chat")
-                }
-            }
-            if store.canRestart {
-                ToolbarItem(placement: .topBarTrailing) {
-                    Menu {
-                        Button { confirming = .restart } label: { Label("Restart", systemImage: "arrow.clockwise") }
-                        Button { confirming = .clear } label: { Label("Clear chat", systemImage: "eraser") }
-                    } label: {
-                        Image(systemName: "ellipsis.circle")
-                    }
-                    .accessibilityLabel("Session")
-                    .disabled(store.status != .connected)
                 }
             }
         }
@@ -158,6 +147,35 @@ struct BotDetailView: View {
         .onChange(of: scenePhase) { _, phase in
             if phase == .active { watchBrowser() } else if store.watchedBrowser?.botId == botId { store.unwatchBrowser() }
         }
+    }
+
+    /// The bot, where it runs and which project it is in.
+    @ViewBuilder private var header: some View {
+        if let bot {
+            HStack(spacing: 8) {
+                AvatarView(avatar: bot.avatar, name: bot.name, size: 28)
+                VStack(alignment: .leading, spacing: 0) {
+                    Text(bot.name).font(.subheadline.weight(.semibold)).lineLimit(1)
+                    Text([bot.peerName ?? store.computerName, store.projectName(bot.projectId)].filter { !$0.isEmpty }.joined(separator: " · "))
+                        .font(.caption2).foregroundStyle(.secondary).lineLimit(1)
+                }
+            }
+            .accessibilityElement(children: .combine)
+        }
+    }
+
+    private func approvalLabel(_ detail: String, link: Bool) -> some View {
+        HStack(spacing: 10) {
+            IconTile(systemImage: "hand.raised.fill", tone: .needsYou, size: 28)
+            Text(detail).font(.footnote.weight(.medium)).foregroundStyle(.orange).lineLimit(2)
+            Spacer(minLength: 4)
+            if link {
+                Text("Terminal").font(.footnote.weight(.semibold))
+                Image(systemName: "chevron.right").font(.caption.weight(.semibold)).foregroundStyle(.tertiary)
+            }
+        }
+        .padding(10)
+        .background(Color.orange.opacity(0.1), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
     }
 
     private func watchBrowser() {
@@ -220,91 +238,127 @@ enum SessionAction {
     }
 }
 
-/// The bot's panes, one row that scrolls when they do not fit.
-private struct PaneStrip: View {
+/// The bot's panes: one segmented row, every pane always in view.
+private struct PaneSwitcher: View {
     let panes: [BotDetailView.Pane]
     @Binding var selection: BotDetailView.Pane
-    let browserOpen: Bool
+    /// The bot's browser is open: More, where the Browser is, shows a red dot.
+    let moreDot: Bool
 
     var body: some View {
-        ScrollViewReader { proxy in
-            ScrollView(.horizontal, showsIndicators: false) {
-                HStack(spacing: 6) {
-                    ForEach(panes, id: \.self) { pane in
-                        Button { selection = pane } label: {
-                            HStack(spacing: 4) {
-                                Text(pane.rawValue)
-                                if pane == .browser, browserOpen {
-                                    Circle().fill(.red).frame(width: 6, height: 6)
-                                }
-                            }
-                            .font(.subheadline.weight(selection == pane ? .semibold : .regular))
-                            .padding(.horizontal, 12)
-                            .padding(.vertical, 6)
-                            .foregroundStyle(selection == pane ? Color(.systemBackground) : .primary)
-                            .background(selection == pane ? Color.primary : Color(.tertiarySystemFill), in: Capsule())
-                        }
-                        .buttonStyle(.plain)
-                        .id(pane)
-                        .accessibilityAddTraits(selection == pane ? .isSelected : [])
+        HStack(spacing: 4) {
+            ForEach(panes, id: \.self) { pane in
+                let on = selection == pane
+                Button { selection = pane } label: {
+                    HStack(spacing: 5) {
+                        Image(systemName: pane.symbol).font(.footnote.weight(.semibold))
+                        Text(pane.rawValue).font(.subheadline.weight(.semibold))
+                        if pane == .more, moreDot { Circle().fill(.red).frame(width: 6, height: 6) }
                     }
+                    .frame(maxWidth: .infinity, minHeight: 36)
+                    .foregroundStyle(on ? Color(.systemBackground) : .primary)
+                    .background(on ? Color.primary : .clear, in: Capsule())
+                    .contentShape(Capsule())
                 }
-                .padding(.horizontal, 12)
-                .padding(.vertical, 8)
+                .buttonStyle(.plain)
+                .accessibilityLabel(pane.rawValue)
+                .accessibilityAddTraits(on ? .isSelected : [])
             }
-            .onChange(of: selection) { _, pane in withAnimation { proxy.scrollTo(pane, anchor: .center) } }
         }
+        .padding(4)
+        .background(Color(.secondarySystemGroupedBackground), in: Capsule())
+        .padding(.horizontal, 12)
+        .padding(.vertical, 8)
     }
 }
 
-private struct BotInfoView: View {
+/// Everything about the bot beyond its chat, work and files: its terminal,
+/// browser and memory, who it is, its routines, and its session.
+private struct BotMorePane: View {
     @Environment(AppStore.self) private var store
     let botId: String
+    let browserOpen: Bool
+    @Binding var confirming: SessionAction?
+    @State private var instructionsOpen = false
 
     var body: some View {
         List {
             if let bot = store.bot(botId) {
                 Section {
-                    HStack(spacing: 12) {
-                        AvatarView(avatar: bot.avatar, name: bot.name, size: 52)
-                        VStack(alignment: .leading, spacing: 4) {
-                            HStack(spacing: 6) {
-                                Text(bot.name).font(.title3.weight(.semibold))
-                                if bot.temporary { WorkerTag() }
-                            }
-                            Text(store.projectName(bot.projectId)).font(.subheadline).foregroundStyle(.secondary)
+                    if store.hasTerminal(bot) {
+                        NavigationLink { TerminalScreen(botId: botId).navigationTitle("Terminal").navigationBarTitleDisplayMode(.inline) } label: {
+                            ItemRow(title: "Terminal", subtitle: "The bot's live session") { IconTile(systemImage: "terminal") }
                         }
+                    }
+                    if store.hasBrowser(bot) {
+                        NavigationLink { BrowserPane(botId: botId).navigationTitle("Browser").navigationBarTitleDisplayMode(.inline) } label: {
+                            ItemRow(title: "Browser", subtitle: browserOpen ? "Open now" : "What the bot browsed") {
+                                IconTile(systemImage: "globe", tone: browserOpen ? .failed : nil)
+                            }
+                        }
+                    }
+                    if store.hasChat {
+                        NavigationLink { MemoryPane(botId: botId).navigationTitle("Memory").navigationBarTitleDisplayMode(.inline) } label: {
+                            ItemRow(title: "Memory", subtitle: MemoryPane.file) { IconTile(systemImage: "brain") }
+                        }
+                    }
+                } header: {
+                    SectionTitle("Also here")
+                }
+                Section {
+                    ItemRow(title: bot.name, subtitle: store.projectName(bot.projectId),
+                            detail: [bot.engine == .codex ? "Codex" : "Claude Code", bot.peerName.map { "runs on \($0)" } ?? "runs on \(store.computerName)"].joined(separator: " · ")) {
+                        AvatarView(avatar: bot.avatar, name: bot.name, size: 40)
+                    } trailing: {
+                        if bot.temporary { WorkerTag() }
                     }
                     LabeledContent("State") { StateBadge(state: bot.state) }
                     if !bot.stateReason.isEmpty {
                         LabeledContent("Reason", value: bot.stateReason)
                     }
                     if bot.temporary {
-                        Label("Temporary worker spawned by \(bot.createdByBotId.flatMap(store.bot)?.name ?? "a bot"); removed when its task closes",
-                              systemImage: "hammer")
-                            .font(.footnote)
-                            .foregroundStyle(.secondary)
+                        Text("Temporary worker spawned by \(bot.createdByBotId.flatMap(store.bot)?.name ?? "a bot"); removed when its task closes.")
+                            .font(.footnote).foregroundStyle(.secondary)
                     } else if let creator = bot.createdByBotId.flatMap(store.bot) {
                         LabeledContent("Created by", value: creator.name)
                     }
-                }
-                if !bot.description.isEmpty {
-                    Section("Description") { Text(bot.description) }
-                }
-                if !bot.instructions.isEmpty {
-                    Section("Instructions") {
-                        Text(bot.instructions).font(.callout).textSelection(.enabled)
+                    if !bot.description.isEmpty {
+                        Text(bot.description).font(.callout)
                     }
+                    if !bot.instructions.isEmpty {
+                        Text(bot.instructions)
+                            .font(.footnote)
+                            .foregroundStyle(.secondary)
+                            .lineLimit(instructionsOpen ? nil : 3)
+                            .textSelection(.enabled)
+                            .onTapGesture { withAnimation(.snappy) { instructionsOpen.toggle() } }
+                    }
+                } header: {
+                    SectionTitle("Profile")
                 }
                 if store.capabilities.contains("bot_browser"), !bot.isLinked {
                     ChromeAccessSection(bot: bot)
                 }
                 RoutinesSection(botId: botId)
-                Section("Workspace") {
-                    Text(bot.workspacePath).font(.caption.monospaced()).textSelection(.enabled)
+                if store.canRestart {
+                    Section {
+                        Button { confirming = .restart } label: { Label("Restart session", systemImage: "arrow.clockwise") }
+                        Button { confirming = .clear } label: { Label("Clear chat", systemImage: "eraser") }
+                    } header: {
+                        SectionTitle("Session")
+                    } footer: {
+                        Text("Files, memory and tasks are kept either way.")
+                    }
+                    .disabled(store.status != .connected)
+                }
+                Section {
+                    Text(bot.workspacePath).font(.caption.monospaced()).foregroundStyle(.secondary).textSelection(.enabled)
+                } header: {
+                    SectionTitle("Workspace")
                 }
             }
         }
+        .listStyle(.insetGrouped)
     }
 }
 
@@ -316,10 +370,9 @@ private struct RoutinesSection: View {
     @State private var error: String?
 
     var body: some View {
-        Section("Routines") {
+        Section {
           if loaded, routines.isEmpty {
-            Text("No routines. Ask the bot to schedule one, or add it in Gravity on that computer.")
-                .font(.footnote).foregroundStyle(.secondary)
+            EmptyNote(text: "No routines yet.", systemImage: "calendar")
           }
           ForEach(routines) { routine in
             VStack(alignment: .leading, spacing: 6) {
@@ -327,24 +380,24 @@ private struct RoutinesSection: View {
                     get: { routine.enabled },
                     set: { enabled in run { try await setEnabled(routine, enabled) } })
                 ) {
-                    Text(routine.name).font(.headline)
+                    ItemRow(title: routine.name, subtitle: routine.triggerSummary,
+                            detail: routine.enabled ? routine.nextRunAt.map { "Next run \($0.relative)" } : "Paused") {
+                        IconTile(systemImage: "calendar.badge.clock", tone: routine.enabled ? .working : nil)
+                    }
                 }
                 .disabled(!store.canControl)
-                Text(routine.triggerSummary).font(.subheadline).foregroundStyle(.secondary)
-                if let next = routine.nextRunAt, routine.enabled {
-                    Text("Next run \(next.relative)").font(.caption).foregroundStyle(.secondary)
-                }
                 Text(routine.prompt).font(.footnote).foregroundStyle(.secondary).lineLimit(3)
                 if store.canControl {
                     Button("Run now") {
                         run { _ = try await store.client.request("run_routine_now", ["routine_id": routine.id]) }
                     }
-                    .buttonStyle(.bordered)
-                    .controlSize(.small)
+                    .font(.footnote.weight(.semibold))
+                    .buttonStyle(.borderless)
                 }
             }
-            .padding(.vertical, 4)
           }
+        } header: {
+            SectionTitle("Routines")
         }
         .task(id: store.status) { await load() }
         .errorAlert($error)

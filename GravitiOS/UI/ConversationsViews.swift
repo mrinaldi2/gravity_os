@@ -26,19 +26,24 @@ struct ConversationsView: View {
                 Text(error).font(.footnote).foregroundStyle(.red)
             }
             if loaded, conversations.isEmpty, error == nil {
-                Text("When bots message each other, their conversations appear here.")
-                    .font(.callout).foregroundStyle(.secondary)
+                EmptyNote(text: "When bots message each other, their conversations appear here.", systemImage: "bubble.left.and.bubble.right")
             }
-            ForEach(conversations) { conversation in
-                let pair = AgentConversations.sides(conversation.botIds, order: order)
-                NavigationLink {
-                    ConversationThreadView(projectId: projectId, pair: pair, knownBots: bots)
-                } label: {
-                    PairRow(conversation: conversation, pair: pair, bots: bots)
+            if !conversations.isEmpty {
+                Section {
+                    ForEach(conversations) { conversation in
+                        let pair = AgentConversations.sides(conversation.botIds, order: order)
+                        NavigationLink {
+                            ConversationThreadView(projectId: projectId, pair: pair, knownBots: bots)
+                        } label: {
+                            PairRow(conversation: conversation, pair: pair, bots: bots)
+                        }
+                    }
+                } header: {
+                    SectionTitle("Between bots", count: conversations.count)
                 }
             }
         }
-        .listStyle(.plain)
+        .listStyle(.insetGrouped)
         .navigationTitle("Conversations")
         .navigationBarTitleDisplayMode(.inline)
         .refreshable { await load() }
@@ -72,28 +77,15 @@ private struct PairRow: View {
     let bots: [String: AgentBot]
 
     var body: some View {
-        HStack(spacing: 12) {
+        ItemRow(title: AgentConversations.title(pair, bots: bots), subtitle: AgentConversations.preview(conversation, bots: bots),
+                detail: conversation.lastAt?.relative, subtitleLines: 2) {
             ZStack(alignment: .bottomTrailing) {
-                face(pair.left).padding(.trailing, 14).padding(.bottom, 10)
+                face(pair.left).padding(.trailing, 12).padding(.bottom, 10)
                 face(pair.right)
             }
-            VStack(alignment: .leading, spacing: 3) {
-                HStack {
-                    Text(AgentConversations.title(pair, bots: bots)).font(.subheadline.weight(.semibold)).lineLimit(1)
-                    Spacer()
-                    if let at = conversation.lastAt { Text(at.relative).font(.caption).foregroundStyle(.secondary) }
-                }
-                Text(AgentConversations.preview(conversation, bots: bots))
-                    .font(.footnote).foregroundStyle(.secondary).lineLimit(2)
-            }
-            Text("\(conversation.messageCount)")
-                .font(.caption2.weight(.semibold))
-                .padding(.horizontal, 6)
-                .padding(.vertical, 2)
-                .background(Color(.tertiarySystemFill), in: Capsule())
-                .accessibilityLabel("\(conversation.messageCount) messages")
+        } trailing: {
+            Pill(text: "\(conversation.messageCount)").accessibilityLabel("\(conversation.messageCount) messages")
         }
-        .padding(.vertical, 2)
     }
 
     private func face(_ id: String) -> some View {

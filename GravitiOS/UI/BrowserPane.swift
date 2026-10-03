@@ -99,7 +99,7 @@ struct BrowserPane: View {
                 Text(activityError).font(.footnote).foregroundStyle(.red)
             }
             if loaded, groups.isEmpty, activityError == nil {
-                Text("No browsing yet.").font(.callout).foregroundStyle(.secondary)
+                EmptyNote(text: "No browsing yet.", systemImage: "globe")
             }
             ForEach(groups) { group in
                 VStack(alignment: .leading, spacing: 6) {
@@ -118,12 +118,9 @@ struct BrowserPane: View {
                 .background(Color(.secondarySystemBackground), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
             }
             // A full page means there may be older ones.
-            if activity.count >= activityLimit {
-                ShowMoreButton {
-                    activityLimit += Page.size
-                    await loadActivity()
-                }
-                .font(.callout)
+            ListEnd(hasMore: activity.count >= activityLimit, noun: "activity", loaded: activity.count) {
+                activityLimit += Page.size
+                await loadActivity()
             }
         }
     }

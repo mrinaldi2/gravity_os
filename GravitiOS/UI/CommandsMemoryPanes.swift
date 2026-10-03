@@ -1,117 +1,49 @@
 import SwiftUI
 
-/// Everything the bot is running as commands, and what it ran: foreground and
-/// background, with each command's output. The newest page at first, more on
-/// request. Refetched as the bot works, and polled while a background command
-/// is still writing output.
-struct CommandsPane: View {
-    @Environment(AppStore.self) private var store
-    let botId: String
-    @State private var commands: [BotCommand] = []
-    @State private var limit = Page.size
-    @State private var loaded = false
-    @State private var error: String?
-
-    var body: some View {
-        let sections = BotCommand.sections(commands)
-        List {
-            if let error {
-                Text(error).font(.footnote).foregroundStyle(.red)
-            }
-            if loaded, commands.isEmpty, error == nil {
-                Text("\(store.bot(botId)?.name ?? "This bot") has not run any commands yet.")
-                    .font(.callout).foregroundStyle(.secondary)
-            }
-            section("Running", sections.running)
-            section("Finished", sections.finished)
-            // A full page means there may be older ones.
-            if commands.count >= limit {
-                ShowMoreButton {
-                    limit += Page.size
-                    await load()
-                }
-            }
-        }
-        .listStyle(.insetGrouped)
-        .refreshable { await load() }
-        .task(id: store.status) { await load() }
-        // A working bot changes its chat constantly: refetch once it pauses,
-        // not on every step, so a slow link is not kept full.
-        .task(id: store.chatRevision[botId]) {
-            guard loaded else { return }
-            try? await Task.sleep(for: .seconds(2))
-            guard !Task.isCancelled else { return }
-            await load()
-        }
-        // A background command's output keeps growing: reread it every few seconds.
-        .task(id: BotCommand.needsPolling(commands)) {
-            guard BotCommand.needsPolling(commands) else { return }
-            while !Task.isCancelled {
-                try? await Task.sleep(for: .seconds(10))
-                guard !Task.isCancelled else { return }
-                await load()
-            }
-        }
-    }
-
-    @ViewBuilder private func section(_ title: String, _ list: [BotCommand]) -> some View {
-        if !list.isEmpty {
-            Section {
-                ForEach(list) { CommandRow(command: $0) }
-            } header: {
-                HStack(spacing: 6) {
-                    Text(title)
-                    Text("\(list.count)").foregroundStyle(.secondary)
-                }
-            }
-        }
-    }
-
-    private func load() async {
-        guard store.status == .connected else { return }
-        do {
-            commands = try await store.botCommands(botId: botId, limit: limit)
-            error = nil
-        } catch {
-            self.error = error.localizedDescription
-        }
-        loaded = true
-    }
-}
-
-/// One command: what it is for, the command line, and its output on demand.
-private struct CommandRow: View {
+/// One command: what it is for, the command line, how it ended; its whole
+/// command and output on a tap.
+struct CommandRow: View {
     let command: BotCommand
     @State private var open = false
 
-    private var dot: Color {
+    private var tone: Tone {
         switch command.status {
-        case "running": .accentColor
-        case "done": .green
-        case "failed": .red
-        default: .secondary
+        case "running": .working
+        case "done": .ready
+        case "failed": .failed
+        default: .quiet
         }
     }
 
+    private var detail: String {
+        let state = switch command.status {
+        case "running": "Running"
+        case "done": "Done"
+        case "failed": "Failed"
+        case "stopped": "Stopped"
+        default: command.status.capitalized
+        }
+        var parts = [state]
+        if let outcome = command.outcome, outcome.lowercased() != command.status { parts.append(outcome) }
+        parts.append(command.when(TaskTime.text))
+        if command.background { parts.append("in the background") }
+        return parts.filter { !$0.isEmpty }.joined(separator: " · ")
+    }
+
     var body: some View {
-        VStack(alignment: .leading, spacing: 6) {
-            // A tap gesture, not a Button: beside the Copy buttons, a List hands
+        VStack(alignment: .leading, spacing: 8) {
+            // A tap gesture, not a Button: beside the Copy button, a List hands
             // a plain button's taps to the row's other buttons.
-            HStack(alignment: .firstTextBaseline, spacing: 8) {
-                Circle().fill(dot).frame(width: 8, height: 8)
-                Text(command.title).font(.subheadline.weight(.medium)).lineLimit(2)
-                Spacer(minLength: 4)
-                if command.background { Badge(text: "background", tint: .purple) }
-                if let outcome = command.outcome {
-                    Badge(text: outcome, tint: command.status == "failed" || outcome.hasPrefix("exit") ? .red : .secondary)
-                }
-                Image(systemName: open ? "chevron.up" : "chevron.down").font(.caption).foregroundStyle(.tertiary)
+            ItemRow(title: command.title, subtitle: command.command, detail: detail, monoSubtitle: true) {
+                IconTile(systemImage: command.status == "running" ? "play.fill" : "terminal", tone: tone)
+            } trailing: {
+                CopyButton(text: command.command, label: "Copy the command", compact: true)
             }
             .contentShape(Rectangle())
             .onTapGesture { withAnimation(.snappy) { open.toggle() } }
-            .accessibilityElement(children: .combine)
             .accessibilityAddTraits(.isButton)
             .accessibilityHint(open ? "Hides the output" : "Shows the whole command and its output")
+            .contextMenu { CopyMenuItem(text: command.command) }
             if open {
                 CopyableBlock(title: "Command", text: command.command)
                 if let output = command.copyableOutput {
@@ -122,20 +54,8 @@ private struct CommandRow: View {
                         Text("No output yet.").font(.caption).foregroundStyle(.secondary)
                     }
                 }
-            } else {
-                HStack(alignment: .firstTextBaseline, spacing: 6) {
-                    Text(command.command)
-                        .font(.caption.monospaced())
-                        .foregroundStyle(.secondary)
-                        .lineLimit(2)
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                        .contextMenu { CopyMenuItem(text: command.command) }
-                    CopyButton(text: command.command, label: "Copy the command")
-                }
             }
-            Text(command.when(TaskTime.text)).font(.caption2).foregroundStyle(.secondary)
         }
-        .padding(.vertical, 2)
     }
 }
 
@@ -168,6 +88,8 @@ private struct CopyableBlock: View {
 private struct CopyButton: View {
     let text: String
     let label: String
+    /// Just the symbol, with a full-size tap target: for the end of a row.
+    var compact = false
     @State private var copied = false
 
     var body: some View {
@@ -176,9 +98,17 @@ private struct CopyButton: View {
             UINotificationFeedbackGenerator().notificationOccurred(.success)
             withAnimation(.snappy) { copied = true }
         } label: {
-            Label(copied ? "Copied" : "Copy", systemImage: copied ? "checkmark" : "doc.on.doc")
-                .font(.caption2.weight(.semibold))
-                .foregroundStyle(copied ? Color.green : Color.accentColor)
+            if compact {
+                Image(systemName: copied ? "checkmark" : "doc.on.doc")
+                    .font(.system(size: 16, weight: .medium))
+                    .foregroundStyle(copied ? Color.green : Color.accentColor)
+                    .frame(width: 44, height: 44)
+                    .contentShape(Rectangle())
+            } else {
+                Label(copied ? "Copied" : "Copy", systemImage: copied ? "checkmark" : "doc.on.doc")
+                    .font(.caption2.weight(.semibold))
+                    .foregroundStyle(copied ? Color.green : Color.accentColor)
+            }
         }
         // Its own tap target in a List row, not the row's.
         .buttonStyle(.borderless)
@@ -201,20 +131,6 @@ private struct CopyMenuItem: View {
         } label: {
             Label("Copy", systemImage: "doc.on.doc")
         }
-    }
-}
-
-private struct Badge: View {
-    let text: String
-    let tint: Color
-
-    var body: some View {
-        Text(text)
-            .font(.caption2.weight(.semibold))
-            .padding(.horizontal, 6)
-            .padding(.vertical, 2)
-            .foregroundStyle(tint)
-            .background(tint.opacity(0.15), in: Capsule())
     }
 }
 

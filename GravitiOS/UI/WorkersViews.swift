@@ -69,10 +69,7 @@ struct WorkersView: View {
             Section {
                 ForEach(workers) { worker in row(worker) }
             } header: {
-                HStack(spacing: 6) {
-                    Text(title)
-                    Text("\(workers.count)").foregroundStyle(.secondary)
-                }
+                SectionTitle(title, count: workers.count)
             }
         }
     }
@@ -124,46 +121,34 @@ private struct WorkerRow: View {
     /// Tapping opens its bot.
     let opens: Bool
 
-    private var tint: Color {
+    private var tone: Tone {
         switch worker.state {
-        case "running": .accentColor
-        case "queued": .orange
-        case "done": .green
-        case "failed": .red
-        default: .secondary
+        case "running": .working
+        case "queued": .needsYou
+        case "done": .ready
+        case "failed": .failed
+        default: .quiet
         }
+    }
+
+    private var detail: String {
+        var parts: [String] = []
+        if let parent = worker.parentName { parts.append("for \(parent)") }
+        if let note = worker.note { parts.append(note) }
+        if let when = worker.when { parts.append(when.relative) }
+        return parts.joined(separator: " · ")
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 4) {
-            HStack(alignment: .firstTextBaseline, spacing: 6) {
-                Text(worker.name).font(.subheadline.weight(.semibold)).lineLimit(1)
-                Text(worker.chip)
-                    .font(.caption2.weight(.semibold))
-                    .padding(.horizontal, 6)
-                    .padding(.vertical, 2)
-                    .foregroundStyle(tint)
-                    .background(tint.opacity(0.15), in: Capsule())
-                Spacer(minLength: 4)
-                if let when = worker.when { Text(when.relative).font(.caption).foregroundStyle(.secondary) }
-                if opens { Image(systemName: "chevron.right").font(.caption).foregroundStyle(.tertiary) }
-            }
-            if let parent = worker.parentName {
-                Text("for \(parent)").font(.caption).foregroundStyle(.secondary)
-            }
-            if !worker.brief.isEmpty {
-                Text(worker.brief).font(.callout).lineLimit(2)
-            }
-            if let note = worker.note {
-                Text(note).font(.caption).foregroundStyle(.secondary)
-            }
+        ItemRow(title: worker.name, subtitle: worker.brief, detail: detail, subtitleLines: 2) {
+            IconTile(systemImage: "person.badge.clock", tone: tone)
+        } trailing: {
+            Pill(text: worker.chip, tone: tone)
+            if opens { Image(systemName: "chevron.right").font(.caption.weight(.semibold)).foregroundStyle(.tertiary) }
         }
-        .padding(.vertical, 2)
     }
 }
 
-/// A project's shared git repository: workers start from its branch and
-/// push their work back to it.
 struct RepoSheet: View {
     @Environment(AppStore.self) private var store
     @Environment(\.dismiss) private var dismiss

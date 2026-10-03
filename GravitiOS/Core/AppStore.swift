@@ -29,6 +29,8 @@ final class AppStore {
     /// Whether to tell the owner the computer is unreachable. A drop on the
     /// move usually heals in a second or two, so this waits a moment first.
     var connectionTrouble = false
+    /// The last round trip to the daemon, from the keepalive pings.
+    var latency: Duration?
     var endpoint: Endpoint?
     var grants: Set<String> = []
     /// What the daemon serves, from `hello_ok`.
@@ -127,6 +129,7 @@ final class AppStore {
     init(defaults: ComputerDefaults) {
         self.defaults = defaults
         client.onStatus = { [weak self] status in self?.statusChanged(status) }
+        client.onLatency = { [weak self] latency in self?.latency = latency }
         client.onHello = { [weak self] hello in self?.helloReceived(hello) }
         client.onPush = { [weak self] type, frame in self?.pushReceived(type, frame) }
         if let seen = UserDefaults.standard.dictionary(forKey: defaults.key("lastSeen")) as? [String: Double] {
@@ -168,6 +171,7 @@ final class AppStore {
 
     private func statusChanged(_ status: ConnectionStatus) {
         self.status = status
+        if status != .connected { latency = nil }
         noteTrouble(status)
         guard status == .connected else { return }
         Task { await refresh() }

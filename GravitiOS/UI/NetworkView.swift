@@ -34,8 +34,22 @@ struct NetworkView: View {
         return pairs
     }
 
+    /// Pushed inside another screen's navigation, rather than a sheet of its own.
+    var embedded = false
+
     var body: some View {
-        NavigationStack {
+        if embedded {
+            content
+        } else {
+            NavigationStack {
+                content.toolbar {
+                    ToolbarItem(placement: .confirmationAction) { Button("Done") { dismiss() } }
+                }
+            }
+        }
+    }
+
+    private var content: some View {
             List {
                 if !unpaired.isEmpty {
                     Section {
@@ -101,11 +115,9 @@ struct NetworkView: View {
                     Text("Connected daemons can link projects, so their bots work as one team and hand each other tasks and files. Unlinking stops that on both sides; history is kept.")
                 }
             }
+            .listStyle(.insetGrouped)
             .navigationTitle("Network")
             .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .confirmationAction) { Button("Done") { dismiss() } }
-            }
             .refreshable { await load() }
             .task {
                 // Online state changes as links come and go.
@@ -124,7 +136,6 @@ struct NetworkView: View {
                 Text("Projects linked through it are unlinked, and its bots leave them on both sides. You can connect again later.")
             }
             .errorAlert($failure)
-        }
     }
 
     /// The phone's own computer this peer is, if any.
@@ -173,27 +184,17 @@ private struct PeerRow: View {
     /// One of the phone's computers, when the peer is.
     let known: Computer?
 
+    private var status: String {
+        if peer.online { return peer.url == nil ? "Online · dials in" : "Online" }
+        if let seen = peer.lastSeenAt { return "Offline · last seen \(seen.relative)" }
+        return "Waiting for the first connection"
+    }
+
     var body: some View {
-        HStack(spacing: 12) {
-            Image(systemName: known?.kind.symbol ?? "server.rack")
-                .foregroundStyle(.secondary)
-                .frame(width: 24)
-            VStack(alignment: .leading, spacing: 2) {
-                Text(peer.name).font(.body.weight(.medium))
-                Group {
-                    if peer.online {
-                        Text(peer.url == nil ? "Online · dials in" : "Online")
-                    } else if let seen = peer.lastSeenAt {
-                        Text("Offline · last seen \(seen.relative)")
-                    } else {
-                        Text("Waiting for the first connection")
-                    }
-                }
-                .font(.caption)
-                .foregroundStyle(.secondary)
-            }
-            Spacer()
-            Circle().fill(peer.online ? .green : .gray.opacity(0.5)).frame(width: 9, height: 9)
+        ItemRow(title: peer.name, subtitle: status) {
+            IconTile(systemImage: known?.kind.symbol ?? "server.rack", tone: peer.online ? .ready : nil)
+        } trailing: {
+            StatusDot(tone: peer.online ? .ready : .quiet)
         }
     }
 }

@@ -1,11 +1,18 @@
 import SwiftUI
 
-/// The shared artifacts folder: the reports the bots write for each other and for you.
+/// The Files tab: the reports the bots write for each other and for you,
+/// newest first, and the files on the computer itself.
 struct ReportsView: View {
     @Environment(AppStore.self) private var store
     @Environment(LensStore.self) private var lens
+    @State private var mode = Mode.reports
     @State private var query = ""
     @State private var count = Page.size
+
+    enum Mode: String, CaseIterable {
+        case reports = "Reports"
+        case computer = "On this computer"
+    }
 
     private var matching: [LensArtifact] {
         guard !query.isEmpty else { return lens.artifacts }
@@ -19,38 +26,60 @@ struct ReportsView: View {
 
     var body: some View {
         NavigationStack {
-            List {
-                ForEach(shown) { artifact in
-                    NavigationLink(value: artifact) {
-                        VStack(alignment: .leading, spacing: 3) {
-                            Text(artifact.title).font(.subheadline.weight(.medium)).lineLimit(2)
-                            HStack(spacing: 6) {
-                                // From the daemon, artifacts name their project by id.
-                                Text(store.projects.first { $0.id == artifact.project }?.name ?? artifact.project)
-                                if let modified = artifact.modified { Text("·"); Text(modified.relative) }
-                                Text("·")
-                                Text(ByteCountFormatter.string(fromByteCount: Int64(artifact.size), countStyle: .file))
+            VStack(spacing: 0) {
+                ConnectionBanner()
+                Picker("Show", selection: $mode) {
+                    ForEach(Mode.allCases, id: \.self) { Text($0 == .computer ? "On \(store.computerName)" : $0.rawValue) }
+                }
+                .pickerStyle(.segmented)
+                .padding(.horizontal, 16)
+                .padding(.vertical, 8)
+                switch mode {
+                case .reports: reports
+                case .computer: FolderView(path: "")
+                }
+            }
+            .background(Color(.systemGroupedBackground))
+            .navigationTitle("Files")
+            .toolbar { ToolbarItem(placement: .topBarLeading) { ComputerSwitcher() } }
+            .navigationDestination(for: LensArtifact.self) { ReportView(artifact: $0) }
+            .navigationDestination(for: FolderLink.self) { FolderView(path: $0.path) }
+        }
+    }
+
+    private var reports: some View {
+        List {
+            if !shown.isEmpty {
+                Section {
+                    ForEach(shown) { artifact in
+                        NavigationLink(value: artifact) {
+                            ItemRow(title: artifact.title, subtitle: meta(artifact), titleLines: 2) {
+                                IconTile(systemImage: "doc.richtext")
                             }
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
                         }
                     }
-                }
-                if matching.count > count || !lens.artifactCursors.isEmpty {
-                    ShowMoreButton {
+                    ListEnd(hasMore: matching.count > count || !lens.artifactCursors.isEmpty, noun: "reports", loaded: shown.count) {
                         if matching.count <= count { await lens.loadMoreArtifacts() }
                         count += Page.size
                     }
+                } header: {
+                    SectionTitle(query.isEmpty ? "Newest" : "Found")
                 }
             }
-            .overlay { if lens.artifacts.isEmpty { LensEmptyState() } }
-            .searchable(text: $query, prompt: "Search reports")
-            .refreshable { await lens.loadArtifacts() }
-            .task(id: store.projects.count) { await lens.loadArtifacts() }
-            .navigationTitle("Reports")
-            .toolbar { ToolbarItem(placement: .topBarTrailing) { ComputerSwitcher() } }
-            .navigationDestination(for: LensArtifact.self) { ReportView(artifact: $0) }
         }
+        .listStyle(.insetGrouped)
+        .overlay { if lens.artifacts.isEmpty { LensEmptyState() } }
+        .searchable(text: $query, prompt: "Search reports")
+        .refreshable { await lens.loadArtifacts() }
+        .task(id: store.projects.count) { await lens.loadArtifacts() }
+    }
+
+    private func meta(_ artifact: LensArtifact) -> String {
+        // From the daemon, artifacts name their project by id.
+        var parts = [store.projects.first { $0.id == artifact.project }?.name ?? artifact.project]
+        if let modified = artifact.modified { parts.append(modified.relative) }
+        parts.append(ByteCountFormatter.string(fromByteCount: Int64(artifact.size), countStyle: .file))
+        return parts.joined(separator: " · ")
     }
 }
 

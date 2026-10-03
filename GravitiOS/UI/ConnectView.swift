@@ -12,6 +12,13 @@ struct ConnectView: View {
     @State private var host = ""
     @State private var port = "49777"
     @State private var token = ""
+    /// Computers to pair the new one with once it is connected.
+    @State private var linkWith: Set<String> = []
+
+    /// The computers already here that could be paired with the new one.
+    private var linkable: [Computer] {
+        fleet.computers.filter { $0.store.status == .connected && $0.store.canControl }
+    }
 
     private var valid: Bool {
         !host.trimmingCharacters(in: .whitespaces).isEmpty && Int(port) != nil
@@ -58,12 +65,32 @@ struct ConnectView: View {
                     Text("In Gravity on that computer: Settings → Devices → add a device with read, control and approve. The token is shown once. It is stored in this iPhone's Keychain.")
                 }
 
+                if adding, !linkable.isEmpty {
+                    Section {
+                        ForEach(linkable) { computer in
+                            Toggle(isOn: Binding(
+                                get: { linkWith.contains(computer.id) },
+                                set: { if $0 { linkWith.insert(computer.id) } else { linkWith.remove(computer.id) } })
+                            ) {
+                                ItemRow(title: computer.name, subtitle: "Its bots can work with the new computer's") {
+                                    IconTile(systemImage: computer.kind.symbol, tone: .ready)
+                                }
+                            }
+                        }
+                    } header: {
+                        Text("Link it with")
+                    } footer: {
+                        Text("Linked computers can share projects and hand each other tasks. You can change this later under Computers → Network.")
+                    }
+                }
+
                 Section {
                     Button("Connect") { connect() }
                         .disabled(!valid)
                 }
             }
             .navigationTitle(adding ? "Add a computer" : "Connect to Gravity")
+            .onAppear { linkWith = Set(linkable.map(\.id)) }
             .toolbar {
                 if adding {
                     ToolbarItem(placement: .cancellationAction) { Button("Cancel") { dismiss() } }
@@ -77,7 +104,19 @@ struct ConnectView: View {
         let record = ComputerRecord(
             name: trimmed.isEmpty ? kind.label : trimmed, kind: kind,
             host: host.trimmingCharacters(in: .whitespaces), port: Int(port) ?? 49777)
-        fleet.add(record, token: token.trimmingCharacters(in: .whitespacesAndNewlines))
+        let added = fleet.add(record, token: token.trimmingCharacters(in: .whitespacesAndNewlines))
+        let others = fleet.computers.filter { linkWith.contains($0.id) && $0.id != added.id }
         dismiss()
+        guard !others.isEmpty else { return }
+        // Pairing needs the new computer online: wait for it, briefly.
+        Task { @MainActor in
+            for _ in 0..<30 where added.store.status != .connected {
+                try? await Task.sleep(for: .seconds(1))
+            }
+            guard added.store.status == .connected else { return }
+            for other in others where fleet.peer(of: added, for: other) == nil {
+                try? await fleet.connect(added, to: other)
+            }
+        }
     }
 }

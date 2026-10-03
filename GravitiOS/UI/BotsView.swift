@@ -4,13 +4,6 @@ struct BotsView: View {
     @Environment(AppStore.self) private var store
     @State private var path = NavigationPath()
     @State private var creating: Creating?
-    @State private var linking: ProjectRef?
-    @State private var editingRepo: ProjectRef?
-    @State private var showingNetwork = false
-
-    struct ProjectRef: Identifiable {
-        let id: String
-    }
 
     /// What the create sheet is making.
     enum Creating: Identifiable {
@@ -32,58 +25,27 @@ struct BotsView: View {
                     Section {
                         let bots = store.bots(in: project)
                         if bots.isEmpty {
-                            Text("No bots").foregroundStyle(.secondary)
+                            EmptyNote(text: "No bots yet", systemImage: "person")
                         }
                         ForEach(bots) { bot in
                             NavigationLink(value: bot.id) { BotRow(bot: bot) }
                         }
                     } header: {
-                        HStack(spacing: 6) {
-                            Text(project.name)
-                            ForEach(project.links) { link in
-                                Label(link.peerName, systemImage: "link")
-                                    .font(.caption2.weight(.semibold))
-                                    .padding(.horizontal, 6)
-                                    .padding(.vertical, 2)
-                                    .background((link.online ? Color.green : Color.gray).opacity(0.15), in: Capsule())
-                                    .foregroundStyle(link.online ? .green : .secondary)
-                                    .textCase(nil)
-                            }
-                            Spacer()
-                            // Reading is open to every device; changing things needs control.
-                            if store.canControl || store.hasWorkers || store.hasConversations {
-                                Menu {
-                                    if store.canControl {
-                                        Button { creating = .bot(projectId: project.id) } label: {
-                                            Label("New bot", systemImage: "person.badge.plus")
-                                        }
-                                    }
-                                    if store.hasWorkers {
-                                        Button { path.append(WorkersLink(projectId: project.id)) } label: {
-                                            Label("Workers", systemImage: "person.3.sequence")
-                                        }
-                                        Button { editingRepo = ProjectRef(id: project.id) } label: {
-                                            Label(project.repo.map { "Shared repository · \($0.branch)" } ?? "Shared repository",
-                                                  systemImage: "arrow.triangle.branch")
-                                        }
-                                    }
-                                    if store.hasConversations {
-                                        Button { path.append(ConversationsLink(projectId: project.id)) } label: {
-                                            Label("Conversations", systemImage: "bubble.left.and.bubble.right")
-                                        }
-                                    }
-                                    if store.canControl {
-                                        Button { linking = ProjectRef(id: project.id) } label: {
-                                            Label(project.links.isEmpty ? "Link with another computer" : "Linked computers",
-                                                  systemImage: "link")
-                                        }
-                                    }
-                                } label: {
-                                    Image(systemName: "ellipsis.circle")
+                        Button { path.append(ProjectPageLink(id: project.id)) } label: {
+                            HStack(spacing: 6) {
+                                Text(project.name)
+                                Text("\(store.bots(in: project).count)").foregroundStyle(.secondary)
+                                if !project.links.isEmpty {
+                                    Image(systemName: "link").font(.caption2.weight(.semibold))
+                                        .foregroundStyle(project.links.contains(where: \.online) ? .green : .secondary)
                                 }
-                                .accessibilityLabel("\(project.name) actions")
+                                Spacer()
+                                Text("Open").font(.footnote.weight(.semibold)).foregroundStyle(.tint).textCase(nil)
+                                Image(systemName: "chevron.right").font(.caption2.weight(.bold)).foregroundStyle(.tint)
                             }
                         }
+                        .buttonStyle(.plain)
+                        .accessibilityLabel("\(project.name), \(store.bots(in: project).count) bots. Open the project")
                     }
                 }
             }
@@ -100,12 +62,7 @@ struct BotsView: View {
             .refreshable { await store.refresh() }
             .navigationTitle("Bots")
             .toolbar {
-                ToolbarItem(placement: .topBarLeading) { SettingsButton() }
                 ToolbarItem(placement: .topBarLeading) { ComputerSwitcher() }
-                ToolbarItem(placement: .topBarTrailing) {
-                    Button { showingNetwork = true } label: { Image(systemName: "point.3.connected.trianglepath.dotted") }
-                        .accessibilityLabel("Network")
-                }
                 if store.canControl, store.status == .connected {
                     ToolbarItem(placement: .topBarTrailing) {
                         Menu {
@@ -139,10 +96,8 @@ struct BotsView: View {
                     }
                 }
             }
-            .sheet(item: $linking) { LinkProjectSheet(projectId: $0.id) }
-            .sheet(item: $editingRepo) { RepoSheet(projectId: $0.id) }
-            .sheet(isPresented: $showingNetwork) { NetworkView() }
             .navigationDestination(for: String.self) { BotDetailView(botId: $0) }
+            .navigationDestination(for: ProjectPageLink.self) { ProjectView(projectId: $0.id) }
             .navigationDestination(for: ConversationsLink.self) { ConversationsView(projectId: $0.projectId) }
             .navigationDestination(for: WorkersLink.self) { WorkersView(projectId: $0.projectId) }
             #if DEBUG
@@ -176,52 +131,52 @@ struct BotsView: View {
     }
 }
 
-private struct BotRow: View {
+/// Opens a project's page from the Bots list.
+struct ProjectPageLink: Hashable {
+    let id: String
+}
+
+struct BotRow: View {
     @Environment(AppStore.self) private var store
     @Environment(LensStore.self) private var lens
     let bot: Bot
 
-    var body: some View {
-        HStack(alignment: .top, spacing: 12) {
-            AvatarView(avatar: bot.avatar, name: bot.name)
-            VStack(alignment: .leading, spacing: 3) {
-                HStack {
-                    Text(bot.name).font(.headline)
-                    if bot.temporary { WorkerTag() }
-                    if store.isUnread(bot) {
-                        Circle().fill(.tint).frame(width: 8, height: 8)
-                    }
-                    Spacer()
-                    if let machine = bot.peerName {
-                        Label(machine, systemImage: "link").font(.caption2).foregroundStyle(.secondary).lineLimit(1)
-                    }
-                    if bot.engine == .codex {
-                        Text("Codex").font(.caption2.weight(.semibold)).foregroundStyle(.secondary)
-                    }
-                    StateBadge(state: bot.state)
-                }
-                if let turn = lens.latest[bot.id], turn.open, bot.state == .working, !turn.current.isEmpty {
-                    Label(turn.current, systemImage: "play.fill")
-                        .font(.subheadline)
-                        .foregroundStyle(.tint)
-                        .lineLimit(2)
-                } else if let detail = store.approvals[bot.id] {
-                    Text(detail).font(.subheadline).foregroundStyle(.orange).lineLimit(2)
-                } else if let outcome = lens.latest[bot.id]?.outcome, outcome.kind != "none" {
-                    Text(outcome.kind == "message" ? "To \(outcome.to): \(outcome.text)" : outcome.text)
-                        .font(.subheadline)
-                        .foregroundStyle(.secondary)
-                        .lineLimit(2)
-                } else if let activity = store.activity[bot.id] {
-                    Text(activity.from.isEmpty ? activity.text : "\(activity.from): \(activity.text)")
-                        .font(.subheadline)
-                        .foregroundStyle(.secondary)
-                        .lineLimit(2)
-                } else if !bot.description.isEmpty {
-                    Text(bot.description).font(.subheadline).foregroundStyle(.tertiary).lineLimit(2)
-                }
-            }
+    /// The one line about what the bot is doing: its step, its question, its
+    /// last word, or what it is for.
+    private var line: String {
+        if let turn = lens.latest[bot.id], turn.open, bot.state == .working, !turn.current.isEmpty { return turn.current }
+        if let detail = store.approvals[bot.id] { return detail }
+        if let outcome = lens.latest[bot.id]?.outcome, outcome.kind != "none" {
+            return outcome.kind == "message" ? "To \(outcome.to): \(outcome.text)" : outcome.text
         }
-        .padding(.vertical, 2)
+        if let activity = store.activity[bot.id] {
+            return activity.from.isEmpty ? activity.text : "\(activity.from): \(activity.text)"
+        }
+        return bot.description
+    }
+
+    private var detail: String {
+        var parts: [String] = []
+        if let machine = bot.peerName { parts.append("on \(machine)") }
+        if bot.engine == .codex { parts.append("Codex") }
+        if bot.temporary { parts.append("worker") }
+        return parts.joined(separator: " · ")
+    }
+
+    var body: some View {
+        ItemRow(title: bot.name, subtitle: line.replacingOccurrences(of: "**", with: "").replacingOccurrences(of: "`", with: ""),
+                detail: detail, subtitleLines: 2) {
+            AvatarView(avatar: bot.avatar, name: bot.name, size: 40)
+                .overlay(alignment: .topTrailing) {
+                    if store.isUnread(bot) {
+                        Circle().fill(.tint).frame(width: 10, height: 10)
+                            .overlay(Circle().stroke(Color(.secondarySystemGroupedBackground), lineWidth: 2))
+                            .offset(x: 3, y: -3)
+                            .accessibilityLabel("Unread")
+                    }
+                }
+        } trailing: {
+            StateBadge(state: bot.state)
+        }
     }
 }
