@@ -19,7 +19,8 @@ final class SmokeTests: XCTestCase {
         }
     }
 
-    func testHomeShowsWhatNeedsYou() {
+    func testHomeShowsWhatNeedsYou() throws {
+        try DemoControl.ensurePermissionPrompts()
         waitFor(app.staticTexts["Needs you"])
         // The demo's three permission prompts, each with its answers.
         waitFor(app.staticTexts["Bash: rm -rf build/ && npm ci"])

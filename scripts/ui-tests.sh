@@ -12,14 +12,16 @@
 #                   Gravity-iOSQA); it is addressed by UDID and ERASED before each run
 #   SCREENSHOT_DIR  where the tests also write their screenshots as PNG
 #   DEMO_OUT        the demo's folder, wiped on each run (default build/ui-tests-demo)
-#   DEMO_PORT, DEMO_LENS_PORT, DEMO_PEER_PORT
-#                   the demo's ports (default 41300, 41301, 41302)
+#   DEMO_PORT, DEMO_LENS_PORT, DEMO_PEER_PORT, DEMO_CONTROL_PORT
+#                   the demo's ports (default 41300, 41301, 41302, 41303); on the
+#                   control port tests ask the demo for the state they need
 #
 # On a shared computer it touches only what it started: the demo's processes,
 # by the pids make_demo.py records, and the one simulator.
 #
-# Result bundles (screenshots, contrast figures): build/ui-tests.xcresult, and
-# build/ui-tests-dark.xcresult for the dark-mode checks.
+# Result bundles (screenshots, contrast figures): build/ui-tests.xcresult, plus
+# build/ui-tests-fresh.xcresult (notifications not yet asked for) and
+# build/ui-tests-dark.xcresult (dark mode).
 set -eu
 cd "$(dirname "$0")/.."
 simulator=${SIMULATOR:-Gravity-iOSQA}
@@ -27,6 +29,7 @@ out=${DEMO_OUT:-$PWD/build/ui-tests-demo}
 port=${DEMO_PORT:-41300}
 lens_port=${DEMO_LENS_PORT:-41301}
 peer_port=${DEMO_PEER_PORT:-41302}
+control_port=${DEMO_CONTROL_PORT:-41303}
 log="$out.log"
 project=$(dirname "$(ls -d *.xcodeproj/project.pbxproj | head -1)")
 
@@ -37,9 +40,9 @@ if [ -z "$device" ]; then
     exit 1
 fi
 
-for p in "$port" "$lens_port" "$peer_port"; do
+for p in "$port" "$lens_port" "$peer_port" "$control_port"; do
     if nc -z 127.0.0.1 "$p" 2>/dev/null; then
-        echo "Port $p is in use (another demo?); set DEMO_PORT, DEMO_LENS_PORT or DEMO_PEER_PORT" >&2
+        echo "Port $p is in use (another demo?); set DEMO_PORT, DEMO_LENS_PORT, DEMO_PEER_PORT or DEMO_CONTROL_PORT" >&2
         exit 1
     fi
 done
@@ -58,7 +61,7 @@ trap stop_demo EXIT INT TERM
 # The demo first, on a quiet machine; a second try when its daemon trips while starting.
 for attempt in 1 2; do
     python3 -u demo/make_demo.py --serve --out "$out" --port "$port" --lens-port "$lens_port" \
-        --peer-port "$peer_port" >"$log" 2>&1 &
+        --peer-port "$peer_port" --control-port "$control_port" >"$log" 2>&1 &
     demo=$!
     tries=0
     until grep -q '^Serving' "$log"; do
@@ -75,9 +78,11 @@ for attempt in 1 2; do
 done
 sleep 3 # the demo's permission prompts reach the daemon just after it serves
 
-xcrun simctl shutdown "$device" 2>/dev/null || true
-xcrun simctl erase "$device"
-xcrun simctl boot "$device"
+fresh_simulator() {
+    xcrun simctl shutdown "$device" 2>/dev/null || true
+    xcrun simctl erase "$device"
+    xcrun simctl boot "$device"
+}
 
 # Ids the routing tests open: the designer's question and iOS Dev.
 ids=$(python3 - "$out" "$port" <<'EOF'
@@ -94,8 +99,7 @@ print(decision["id"], bot["id"])
 EOF
 )
 
-# Two passes, because a freshly erased simulator ignores the tests' own appearance
-# switch: everything in light, then the *Dark tests with the simulator in dark.
+# A freshly erased simulator ignores the tests' own appearance switch, hence the dark pass.
 dark="-only-testing:UITests/H003Tests/testPermissionCardContrastDark -only-testing:UITests/H003Tests/testDecisionDetailContrastDark"
 run_tests() { # <result bundle> <xcodebuild args…>
     bundle=$1; shift
@@ -103,7 +107,7 @@ run_tests() { # <result bundle> <xcodebuild args…>
     TEST_RUNNER_GRAV_TOKEN=$(cat "$out/gravity/secrets/client.token") \
     TEST_RUNNER_GRAV_PORT=$port TEST_RUNNER_LENS_PORT=$lens_port \
     TEST_RUNNER_DEMO_DECISION_ID=${ids% *} TEST_RUNNER_DEMO_BOT_ID=${ids#* } \
-    TEST_RUNNER_SCREENSHOT_DIR=${SCREENSHOT_DIR:-} \
+    TEST_RUNNER_DEMO_CONTROL_PORT=$control_port TEST_RUNNER_SCREENSHOT_DIR=${SCREENSHOT_DIR:-} \
     xcodebuild -project "$project" -scheme UITests -destination "id=$device" \
         -derivedDataPath build/ui-tests -resultBundlePath "$bundle" test "$@"
 }
@@ -125,9 +129,19 @@ check_simulator() {
         exit 2
     fi
 }
+# Passes: notifications never asked for (on a just-erased simulator), then everything
+# else in light, then the *Dark tests with the simulator in dark.
+fresh="UITests/NotificationSettingsTests/testNotSetUpThenOff"
 status=0
+if [ $# -eq 0 ] || echo "$*" | grep -q NotificationSettings; then
+    fresh_simulator
+    xcrun simctl ui "$device" appearance light
+    run_tests build/ui-tests-fresh.xcresult -only-testing:$fresh || status=1
+    check_simulator
+fi
+fresh_simulator
 xcrun simctl ui "$device" appearance light
-run_tests build/ui-tests.xcresult \
+run_tests build/ui-tests.xcresult -skip-testing:$fresh \
     -skip-testing:UITests/H003Tests/testPermissionCardContrastDark \
     -skip-testing:UITests/H003Tests/testDecisionDetailContrastDark "$@" || status=1
 check_simulator
