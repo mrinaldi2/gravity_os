@@ -1,7 +1,9 @@
 import SwiftUI
 
-/// Where a computer's daemon is and the device token to use: the first-run
-/// screen, and the sheet that adds another computer.
+/// Where a computer's Hermes service is and the device token to use: the
+/// first-run screen, and the sheet that adds another computer. A pairing code
+/// or link fills everything in one step; the sheet stays open until the
+/// service answers, and says which field to fix when it does not.
 struct ConnectView: View {
     @Environment(Fleet.self) private var fleet
     @Environment(\.dismiss) private var dismiss
@@ -14,6 +16,17 @@ struct ConnectView: View {
     @State private var token = ""
     /// Computers to pair the new one with once it is connected.
     @State private var linkWith: Set<String> = []
+    @State private var manual = false
+    @State private var scanning = false
+    @State private var scannerMissing = false
+    @State private var pasteFailed = false
+    /// The computer being tried: connected on its own, saved only once its
+    /// Hermes service answers.
+    @State private var trying: Computer?
+    @State private var failure: PairingFailure?
+
+    /// How long to wait for the Hermes service to answer.
+    static let answerTimeout: Duration = .seconds(15)
 
     /// The computers already here that could be paired with the new one.
     private var linkable: [Computer] {
@@ -25,6 +38,11 @@ struct ConnectView: View {
             && !token.trimmingCharacters(in: .whitespaces).isEmpty
     }
 
+    private var computerName: String {
+        let trimmed = name.trimmingCharacters(in: .whitespaces)
+        return trimmed.isEmpty ? kind.label : trimmed
+    }
+
     private var configPath: String {
         kind == .mac ? "~/.gravity/gravityd.toml" : "%USERPROFILE%\\.gravity\\gravityd.toml"
     }
@@ -33,36 +51,56 @@ struct ConnectView: View {
         NavigationStack {
             Form {
                 Section {
-                    Picker("Type", selection: $kind) {
-                        Text("Mac").tag(ComputerKind.mac)
-                        Text("Windows").tag(ComputerKind.windows)
+                    Button { scan() } label: {
+                        Label("Scan pairing code", systemImage: "qrcode.viewfinder")
+                            .labelStyle(.titleAndIcon)
+                            .font(.body.weight(.semibold))
+                            .frame(maxWidth: .infinity, minHeight: 44)
                     }
-                    .pickerStyle(.segmented)
-                    TextField("Name (\(kind.label))", text: $name, prompt: .placeholder("Name (\(kind.label))"))
-                } header: {
-                    Text("Computer").foregroundStyle(Color.secondaryText)
+                    .buttonStyle(.borderedProminent)
+                    .listRowInsets(EdgeInsets(top: 8, leading: 16, bottom: 8, trailing: 16))
+                    // A plain button rather than PasteButton, whose label is
+                    // fixed to "Paste"; iOS asks once before the app reads it.
+                    Button { pasted(UIPasteboard.general.string ?? "") } label: {
+                        Label("Paste pairing link", systemImage: "doc.on.clipboard")
+                            .labelStyle(.titleAndIcon)
+                    }
+                    Button { withAnimation { manual.toggle() } } label: {
+                        HStack {
+                            Text("Enter manually")
+                            Spacer()
+                            Image(systemName: manual ? "chevron.down" : "chevron.right")
+                                .font(.caption.weight(.semibold))
+                                .foregroundStyle(Color.secondaryText)
+                        }
+                    }
+                } footer: {
+                    if pasteFailed {
+                        Text("That isn’t a pairing link. It starts with thehermes://pair and comes from The Hermes on your computer: Settings → Devices.")
+                            .foregroundStyle(Color.warningText)
+                    } else {
+                        Text("On your computer, open The Hermes → Settings → Devices and add a device. It shows a pairing code and a link.")
+                            .foregroundStyle(Color.secondaryText)
+                    }
+                }
+                .disabled(trying != nil)
+
+                if let trying {
+                    Section {
+                        HStack(spacing: 10) {
+                            ProgressView()
+                            Text("Connecting to \(trying.name)…")
+                        }
+                        .accessibilityElement(children: .combine)
+                    }
+                } else if let failure {
+                    // Also next to the field, but a scanned link leaves the
+                    // fields below the fold.
+                    Section { failureText(failure) }
                 }
 
-                Section {
-                    TextField("Tailscale name or 100.x.y.z", text: $host, prompt: .placeholder("Tailscale name or 100.x.y.z"))
-                        .textInputAutocapitalization(.never)
-                        .autocorrectionDisabled()
-                        .keyboardType(.URL)
-                    TextField("Port", text: $port, prompt: .placeholder("Port")).keyboardType(.numberPad)
-                } header: {
-                    Text("Hermes service").foregroundStyle(Color.secondaryText)
-                } footer: {
-                    Text("The computer running The Hermes, as Tailscale shows it. The Hermes service must list that Tailscale address under bind in \(configPath).").foregroundStyle(Color.secondaryText)
-                }
-
-                Section {
-                    SecureField("Device token", text: $token, prompt: .placeholder("Device token"))
-                        .textInputAutocapitalization(.never)
-                        .autocorrectionDisabled()
-                } header: {
-                    Text("Device token").foregroundStyle(Color.secondaryText)
-                } footer: {
-                    Text("In The Hermes on that computer: Settings → Devices → add a device with read, control and approve. The token is shown once. It is stored in this iPhone's Keychain.").foregroundStyle(Color.secondaryText)
+                if manual {
+                    manualSections
                 }
 
                 if adding, !linkable.isEmpty {
@@ -83,37 +121,160 @@ struct ConnectView: View {
                         Text("Linked computers can share projects and hand each other tasks. You can change this later under Computers → Network.").foregroundStyle(Color.secondaryText)
                     }
                 }
-
-                Section {
-                    Button("Connect") { connect() }
-                        .disabled(!valid)
-                }
             }
             .navigationTitle(adding ? "Add a computer" : "Connect to The Hermes")
-            .onAppear { linkWith = Set(linkable.map(\.id)) }
+            .onAppear {
+                linkWith = Set(linkable.map(\.id))
+                #if DEBUG
+                // Screenshots and checks without a camera: -pairLink <link> pairs as if scanned.
+                if trying == nil, let text = UserDefaults.standard.string(forKey: "pairLink") { pasted(text) }
+                #endif
+            }
+            .onDisappear { stopTrying() }
             .toolbar {
                 if adding {
-                    ToolbarItem(placement: .cancellationAction) { Button("Cancel") { dismiss() } }
+                    ToolbarItem(placement: .cancellationAction) { Button("Cancel") { stopTrying(); dismiss() } }
                 }
+            }
+            .sheet(isPresented: $scanning) {
+                PairingScannerSheet { link in use(link) }
+            }
+            .alert("Can’t scan here", isPresented: $scannerMissing) {
+                Button("OK", role: .cancel) {}
+            } message: {
+                Text("This iPhone can’t scan codes right now. Paste the pairing link, or enter it manually.")
             }
         }
     }
 
-    private func connect() {
-        let trimmed = name.trimmingCharacters(in: .whitespaces)
-        let record = ComputerRecord(
-            name: trimmed.isEmpty ? kind.label : trimmed, kind: kind,
-            host: host.trimmingCharacters(in: .whitespaces), port: Int(port) ?? 49777)
-        let added = fleet.add(record, token: token.trimmingCharacters(in: .whitespacesAndNewlines))
-        let others = fleet.computers.filter { linkWith.contains($0.id) && $0.id != added.id }
-        dismiss()
-        guard !others.isEmpty else { return }
-        // Pairing needs the new computer online: wait for it, briefly.
-        Task { @MainActor in
-            for _ in 0..<30 where added.store.status != .connected {
-                try? await Task.sleep(for: .seconds(1))
+    @ViewBuilder private var manualSections: some View {
+        Section {
+            Picker("Type", selection: $kind) {
+                Text("Mac").tag(ComputerKind.mac)
+                Text("Windows").tag(ComputerKind.windows)
             }
-            guard added.store.status == .connected else { return }
+            .pickerStyle(.segmented)
+            TextField("Name (\(kind.label))", text: $name, prompt: .placeholder("Name (\(kind.label))"))
+        } header: {
+            Text("Computer").foregroundStyle(Color.secondaryText)
+        }
+
+        Section {
+            TextField("Tailscale name or 100.x.y.z", text: $host, prompt: .placeholder("Tailscale name or 100.x.y.z"))
+                .textInputAutocapitalization(.never)
+                .autocorrectionDisabled()
+                .keyboardType(.URL)
+            TextField("Port", text: $port, prompt: .placeholder("Port")).keyboardType(.numberPad)
+            if let failure, failure.field == .address { failureText(failure) }
+        } header: {
+            Text("Hermes service").foregroundStyle(Color.secondaryText)
+        } footer: {
+            Text("The computer running The Hermes, as Tailscale shows it. The Hermes service must list that Tailscale address under bind in \(configPath).").foregroundStyle(Color.secondaryText)
+        }
+
+        Section {
+            SecureField("Device token", text: $token, prompt: .placeholder("Device token"))
+                .textInputAutocapitalization(.never)
+                .autocorrectionDisabled()
+            if let failure, failure.field == .token { failureText(failure) }
+        } header: {
+            Text("Device token").foregroundStyle(Color.secondaryText)
+        } footer: {
+            Text("In The Hermes on that computer: Settings → Devices → add a device with read, control and approve. The token is shown once. It is stored in this iPhone's Keychain.").foregroundStyle(Color.secondaryText)
+        }
+
+        Section {
+            Button("Connect") { connect() }
+                .disabled(!valid || trying != nil)
+        }
+    }
+
+    private func failureText(_ failure: PairingFailure) -> some View {
+        Label(failure.message, systemImage: "exclamationmark.triangle.fill")
+            .font(.footnote)
+            .foregroundStyle(Color.errorText)
+    }
+
+    // MARK: Filling in
+
+    private func scan() {
+        pasteFailed = false
+        if PairingScanner.isAvailable { scanning = true } else { scannerMissing = true }
+    }
+
+    private func pasted(_ text: String) {
+        if let link = PairingLink.parse(text) {
+            use(link)
+        } else {
+            pasteFailed = true
+        }
+    }
+
+    /// A scanned or pasted link: everything is known, so connect straight away.
+    private func use(_ link: PairingLink) {
+        pasteFailed = false
+        host = link.host
+        port = String(link.port)
+        token = link.token
+        if let linkKind = link.kind { kind = linkKind }
+        if let linkName = link.name { name = linkName }
+        connect()
+    }
+
+    // MARK: Connecting
+
+    private func connect() {
+        stopTrying()
+        failure = nil
+        let hostName = host.trimmingCharacters(in: .whitespaces)
+        let portNumber = Int(port) ?? PairingLink.defaultPort
+        let secret = token.trimmingCharacters(in: .whitespacesAndNewlines)
+        let record = ComputerRecord(name: computerName, kind: kind, host: hostName, port: portNumber)
+        let computer = Computer(record, token: secret)
+        trying = computer
+        Task { @MainActor in
+            let outcome = await Self.answer(from: computer)
+            guard trying === computer else { return }
+            if outcome == .connected {
+                trying = nil
+                connected(computer, token: secret)
+            } else {
+                stopTrying()
+                failure = PairingFailure.from(outcome, host: hostName, port: portNumber, computer: computerName)
+                    ?? PairingFailure.unreachable(host: hostName, port: portNumber)
+                // The field to fix has to be on screen.
+                if failure?.field != .version { manual = true }
+                UINotificationFeedbackGenerator().notificationOccurred(.error)
+            }
+        }
+    }
+
+    /// The first settled status: connected, or the failure that ended the
+    /// first attempt. A service that never answers counts as unreachable.
+    private static func answer(from computer: Computer) async -> ConnectionStatus {
+        let deadline = ContinuousClock.now + answerTimeout
+        while ContinuousClock.now < deadline {
+            switch computer.store.status {
+            case .connected, .authFailed, .versionMismatch, .disconnected: return computer.store.status
+            case .idle, .connecting: break
+            }
+            try? await Task.sleep(for: .milliseconds(150))
+        }
+        return .disconnected("No answer.")
+    }
+
+    private func stopTrying() {
+        trying?.store.disconnect()
+        trying = nil
+    }
+
+    private func connected(_ added: Computer, token: String) {
+        UINotificationFeedbackGenerator().notificationOccurred(.success)
+        let others = fleet.computers.filter { linkWith.contains($0.id) }
+        fleet.adopt(added, token: token)
+        if adding { dismiss() }
+        guard !others.isEmpty else { return }
+        Task { @MainActor in
             for other in others where fleet.peer(of: added, for: other) == nil {
                 try? await fleet.connect(added, to: other)
             }

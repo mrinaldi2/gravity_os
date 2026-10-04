@@ -123,8 +123,13 @@ final class Computer: Identifiable {
     }
 
     func setToken(_ token: String, save: Bool = true) {
-        if save { Keychain.save(token, account: Self.tokenAccount(id), afterFirstUnlock: true) }
+        if save { saveToken(token) }
         store.connect(Endpoint(host: record.host, port: record.port, token: token))
+    }
+
+    /// Keeps the token without reconnecting: for a computer already connected.
+    func saveToken(_ token: String) {
+        Keychain.save(token, account: Self.tokenAccount(id), afterFirstUnlock: true)
     }
 
     func setScreenPassword(_ password: String) {
@@ -200,6 +205,15 @@ final class Fleet {
         save()
         select(computer)
         return computer
+    }
+
+    /// Keeps a computer that was connected on its own first, as pairing does
+    /// to check the address and token before anything is saved.
+    func adopt(_ computer: Computer, token: String) {
+        if !ephemeral { computer.saveToken(token) }
+        attach(computer)
+        save()
+        select(computer)
     }
 
     func update(_ computer: Computer, _ record: ComputerRecord) {
