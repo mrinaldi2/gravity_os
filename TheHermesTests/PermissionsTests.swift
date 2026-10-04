@@ -82,7 +82,7 @@ final class PermissionsTests: XCTestCase {
         XCTAssertEqual(store.approvals["b1"], "Wants to run Bash")
         store.pushReceived("approval_pending", ["bot_id": "b2", "tool": "mcp__hermes-bus__send_message",
                                                 "detail": "Claude needs your permission to use mcp__hermes-bus__send_message"])
-        XCTAssertEqual(store.approvals["b2"], "Wants to run send message")
+        XCTAssertEqual(store.approvals["b2"], "Wants to run Send message")
         XCTAssertFalse(store.approvals.values.contains { $0.contains("Claude") || $0.contains("mcp__") })
     }
 
