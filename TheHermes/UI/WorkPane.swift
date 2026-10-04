@@ -50,7 +50,7 @@ struct WorkPane: View {
                 Section {
                     ForEach(upcoming) { UpcomingRow(routine: $0) }
                 } header: {
-                    SectionTitle("Scheduled", count: upcoming.count)
+                    SectionTitle("Routines", count: upcoming.count)
                 }
             }
             if !finished.isEmpty {
@@ -72,7 +72,7 @@ struct WorkPane: View {
                         try await loadTasks()
                     }
                 } header: {
-                    SectionTitle("Finished tasks")
+                    SectionTitle("Done")
                 }
             }
         }

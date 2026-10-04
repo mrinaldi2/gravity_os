@@ -18,7 +18,7 @@ struct MacSettingsSection: View {
 
     var body: some View {
         Section {
-            TextField("Address (empty: same as the daemon)", text: $host)
+            TextField("Address (empty: same as the Hermes service)", text: $host)
                 .textInputAutocapitalization(.never)
                 .autocorrectionDisabled()
                 .keyboardType(.URL)
@@ -42,7 +42,7 @@ struct MacSettingsSection: View {
             if isMac {
                 Text("Turn on Screen Sharing on the Mac: System Settings → General → Sharing → Screen Sharing, and allow your user. Sign in here with that Mac account. The password stays in this iPhone's Keychain and only goes to the Mac. Fast colours sends 16-bit colour: about a third less data, with slight banding on gradients.")
             } else {
-                Text("Install TightVNC Server on the PC and set its primary password (8 characters at most) in TightVNC Service Configuration. Allow port 5900 only from Tailscale in Windows Firewall. The password stays in this iPhone's Keychain. Fast colours sends 16-bit colour: about a third less data, with slight banding on gradients.")
+                Text("Install TightVNC Server on the Windows computer and set its primary password (8 characters at most) in TightVNC Service Configuration. Allow port 5900 only from Tailscale in Windows Firewall. The password stays in this iPhone's Keychain. Fast colours sends 16-bit colour: about a third less data, with slight banding on gradients.")
             }
         }
         .onAppear(perform: loadSettings)
@@ -51,8 +51,8 @@ struct MacSettingsSection: View {
             LabeledContent("File browser", value: filesStatus)
         } footer: {
             Text(isMac
-                 ? "To browse the Mac's files, run on the Mac: companion/install.sh --with-files. Needs a device with the control grant."
-                 : "To browse the PC's files, run on the PC: companion\\install.ps1 -WithFiles. Needs a device with the control grant.")
+                 ? "To browse the Mac's files, run on the Mac: companion/install.sh --with-files. Needs a device with control access."
+                 : "To browse this computer's files, run on it: companion\\install.ps1 -WithFiles. Needs a device with control access.")
         }
         .task(id: computer.id) { await checkFiles() }
     }

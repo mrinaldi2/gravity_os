@@ -10,7 +10,7 @@ enum ComputerKind: String, Codable, CaseIterable {
     var label: String {
         switch self {
         case .mac: "Mac"
-        case .windows: "PC"
+        case .windows: "Windows"
         }
     }
 

@@ -46,7 +46,7 @@ enum BotState: String {
         case .waitingForUser: "Waiting for you"
         case .waitingForApproval: "Needs approval"
         case .rateLimited: "Rate limited"
-        case .authFailed: "Auth failed"
+        case .authFailed: "Sign-in failed"
         case .crashed: "Crashed"
         case .stopping: "Stopping"
         case .stopped: "Stopped"

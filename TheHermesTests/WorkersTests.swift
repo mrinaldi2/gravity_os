@@ -57,12 +57,12 @@ final class WorkersTests: XCTestCase {
 
     func testChipWording() {
         XCTAssertEqual(worker("queued", position: 2).chip, "#2 in queue")
-        XCTAssertEqual(worker("queued").chip, "queued")
-        XCTAssertEqual(worker("running").chip, "running")
-        XCTAssertEqual(worker("running", machine: "here").chip, "running")
-        XCTAssertEqual(worker("running", machine: "win-pc").chip, "running on win-pc")
+        XCTAssertEqual(worker("queued").chip, "Queued")
+        XCTAssertEqual(worker("running").chip, "Running")
+        XCTAssertEqual(worker("running", machine: "here").chip, "Running")
+        XCTAssertEqual(worker("running", machine: "win-pc").chip, "Running on win-pc")
         for state in ["done", "cancelled", "expired", "failed"] {
-            XCTAssertEqual(worker(state).chip, state)
+            XCTAssertEqual(worker(state).chip, state.prefix(1).uppercased() + state.dropFirst())
             XCTAssertFalse(worker(state).isActive, "\(state) cannot be cancelled")
         }
     }

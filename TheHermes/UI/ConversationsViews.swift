@@ -39,7 +39,7 @@ struct ConversationsView: View {
                         }
                     }
                 } header: {
-                    SectionTitle("Between bots", count: conversations.count)
+                    SectionTitle("Conversations", count: conversations.count)
                 }
             }
         }
@@ -189,7 +189,7 @@ private struct Bubble: View {
                         .padding(.vertical, 1)
                         .background(Color(.tertiarySystemFill), in: Capsule())
                     if let state = message.taskState {
-                        Pill(text: state, tone: state == "done" ? .ready : state == "open" ? .needsYou : .quiet)
+                        Pill(text: state.prefix(1).uppercased() + state.dropFirst(), tone: state == "done" ? .ready : state == "open" ? .needsYou : .quiet)
                     }
                     Spacer(minLength: 0)
                     if let at = message.createdAt {

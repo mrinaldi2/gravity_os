@@ -79,7 +79,7 @@ struct NetworkView: View {
                         }
                         let peers = computer.store.peers.filter(\.isActive)
                         if peers.isEmpty, errors[computer.id] == nil {
-                            Text("Not connected to another Gravity.").foregroundStyle(.secondary)
+                            Text("Not connected to another computer.").foregroundStyle(.secondary)
                         }
                         ForEach(peers) { peer in
                             PeerRow(peer: peer, known: known(peer, of: computer))
@@ -109,10 +109,10 @@ struct NetworkView: View {
                     NavigationLink {
                         InviteView()
                     } label: {
-                        Label("Connect a Gravity this phone doesn't know", systemImage: "qrcode")
+                        Label("Connect a computer this phone doesn't know", systemImage: "qrcode")
                     }
                 } footer: {
-                    Text("Connected daemons can link projects, so their bots work as one team and hand each other tasks and files. Unlinking stops that on both sides; history is kept.")
+                    Text("Connected computers can link projects, so their bots work as one team and hand each other tasks and files. Unlinking stops that on both sides; history is kept.")
                 }
             }
             .listStyle(.insetGrouped)
@@ -135,7 +135,7 @@ struct NetworkView: View {
             } message: {
                 Text("Projects linked through it are unlinked, and its bots leave them on both sides. You can connect again later.")
             }
-            .errorAlert($failure)
+            .errorAlert("Couldn’t change the connection.", $failure)
     }
 
     /// The phone's own computer this peer is, if any.
@@ -149,7 +149,7 @@ struct NetworkView: View {
                 try await computer.store.loadPeers()
                 errors[computer.id] = nil
             } catch {
-                errors[computer.id] = "This Gravity cannot connect to other daemons: \(error.localizedDescription)"
+                errors[computer.id] = "This computer can’t connect to other computers: \(error.localizedDescription)"
             }
         }
     }
@@ -223,7 +223,7 @@ private struct InviteView: View {
                 Picker("This phone's computer", selection: $computerId) {
                     ForEach(fleet.computers) { Text($0.name).tag($0.id) }
                 }
-                TextField("Name for the other Gravity", text: $otherName)
+                TextField("Name for the other computer", text: $otherName)
             }
             Section {
                 Button("Create an invite code") { createInvite() }
@@ -233,9 +233,9 @@ private struct InviteView: View {
                     Button("Copy code", systemImage: "doc.on.doc") { UIPasteboard.general.string = invite }
                 }
             } header: {
-                Text("The other Gravity connects to this one")
+                Text("The other computer connects to this one")
             } footer: {
-                Text("Paste the code on the other machine: gravityd peer add <name> \"<code>\". It holds a token and works once.")
+                Text("Paste the code on the other computer: hermesd peer add <name> \"<code>\". It holds a token and works once.")
             }
             Section {
                 TextField("ws://…/peer#…", text: $code, axis: .vertical)
@@ -245,14 +245,14 @@ private struct InviteView: View {
                 Button(added ? "Added" : "Add with this code") { addPeer() }
                     .disabled(name.isEmpty || code.isEmpty || busy || added)
             } header: {
-                Text("This Gravity connects to the other")
+                Text("This computer connects to the other")
             } footer: {
-                Text("Make the code on the other machine: gravityd peer invite <name>.")
+                Text("Make the code on the other computer: hermesd peer invite <name>.")
             }
         }
         .navigationTitle("Invite codes")
         .navigationBarTitleDisplayMode(.inline)
-        .errorAlert($failure)
+        .errorAlert("Couldn’t connect the computers.", $failure)
         .onAppear { if computerId.isEmpty { computerId = fleet.selected?.id ?? "" } }
     }
 

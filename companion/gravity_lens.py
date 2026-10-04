@@ -122,6 +122,19 @@ def short_path(path: str) -> str:
 
 # ---------------------------------------------------------------- transcript
 
+# The bus MCP server was "gravity-bus" and is "hermes-bus" from The Hermes
+# 0.14. Transcripts hold both, so both are read.
+BUS_PREFIXES = ("mcp__hermes-bus__", "mcp__gravity-bus__")
+
+
+def bus_action(name: str) -> Optional[str]:
+    """The action of a bus tool ("send_message"), or None for any other tool."""
+    for prefix in BUS_PREFIXES:
+        if name.startswith(prefix):
+            return name[len(prefix):]
+    return None
+
+
 class Turn:
     def __init__(self, turn_id: str, at: str, trigger: Dict[str, Any]):
         self.id = turn_id
@@ -408,11 +421,12 @@ class Transcript:
         event: Dict[str, Any] = {"id": event_id, "at": at, "kind": "tool", "tool": name, "error": False}
         detail: Dict[str, Any] = {"input": ""}
 
-        if name == "mcp__gravity-bus__send_message":
+        bus = bus_action(name)
+        if bus == "send_message":
             event.update(kind="sent", to=args.get("to", ""), msg_kind=args.get("kind", "chat"),
                          title=f"Sent {args.get('kind') or 'message'} to {args.get('to', '')}",
                          text=truncate(str(args.get("body", "")), TEXT_LIMIT))
-        elif name == "mcp__gravity-bus__complete_task":
+        elif bus == "complete_task":
             artifacts = [a for a in (args.get("artifacts") or []) if isinstance(a, str)]
             event.update(kind="completed", title="Completed a task",
                          text=truncate(str(args.get("result", "")), TEXT_LIMIT),
@@ -444,11 +458,10 @@ class Transcript:
         elif name in ("Task", "Agent"):
             event.update(title=f"Started a helper: {str(args.get('description', ''))[:80]}")
             detail["content"] = truncate(str(args.get("prompt", "")), OUTPUT_LIMIT)
-        elif name == "mcp__gravity-bus__raise_decision":
+        elif bus == "raise_decision":
             event.update(title=f"Asked you to decide: {str(args.get('title', ''))[:100]}", minor=False)
-        elif name.startswith("mcp__gravity-bus__"):
-            action = name[len("mcp__gravity-bus__"):].replace("_", " ")
-            event.update(title=f"Gravity: {action}", minor=True)
+        elif bus is not None:
+            event.update(title=f"Hermes: {bus.replace('_', ' ')}", minor=True)
         elif name in ("ToolSearch", "Skill", "TaskStop", "TaskOutput"):
             event.update(title=f"{name}", minor=True)
         else:
@@ -1136,7 +1149,7 @@ def shared_roots(config: str) -> Optional[List[str]]:
 
 def main() -> None:
     home = os.path.expanduser("~")
-    parser = argparse.ArgumentParser(description="Read-only view of Gravity bots' work for GravitiOS.")
+    parser = argparse.ArgumentParser(description="Read-only view of bots' work for The Hermes iOS app.")
     parser.add_argument("--port", type=int, default=49778)
     parser.add_argument("--bind", action="append", help="address to listen on (default: gravityd's bind list)")
     parser.add_argument("--gravity-home", default=os.path.join(home, ".gravity"),

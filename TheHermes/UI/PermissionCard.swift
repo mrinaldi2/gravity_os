@@ -66,7 +66,7 @@ struct PermissionCard: View {
                 answerButton(.deny, prominent: false)
             }
             if !store.canControl {
-                Text("This device can read but not answer: it needs the control grant.")
+                Text("This device can read but not answer: it needs control access.")
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
@@ -88,10 +88,13 @@ struct PermissionCard: View {
                 if busy == answer {
                     ProgressView().controlSize(.small)
                 } else {
-                    Text(answer == .allowSession ? "For session" : answer.label)
+                    Text(answer == .allowSession ? "Allow for session" : answer.label)
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.85)
                 }
             }
-            .font(.footnote.weight(.semibold))
+            // A step under footnote, so "Allow for session" fits on one line.
+            .font(.caption.weight(.semibold))
             .frame(maxWidth: .infinity)
         }
         .buttonStyle(AnswerButtonStyle(tone: answer == .deny ? .failed : prominent ? .ready : .working))

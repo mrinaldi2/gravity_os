@@ -123,7 +123,7 @@ struct BotsView: View {
 
     private var emptyDetail: String {
         switch store.status {
-        case .connected: "Create a project and bots in Gravity on \(store.computerName)."
+        case .connected: "Create a project and bots in Hermes on \(store.computerName)."
         case .disconnected(let reason): reason
         case .authFailed(let reason), .versionMismatch(let reason): reason
         default: ""
@@ -159,7 +159,7 @@ struct BotRow: View {
         var parts: [String] = []
         if let machine = bot.peerName { parts.append("on \(machine)") }
         if bot.engine == .codex { parts.append("Codex") }
-        if bot.temporary { parts.append("worker") }
+        if bot.temporary { parts.append("Worker") }
         return parts.joined(separator: " · ")
     }
 

@@ -50,9 +50,9 @@ struct ConnectView: View {
                         .keyboardType(.URL)
                     TextField("Port", text: $port).keyboardType(.numberPad)
                 } header: {
-                    Text("Daemon")
+                    Text("Hermes service")
                 } footer: {
-                    Text("The computer running Gravity, as Tailscale shows it. The daemon must list that Tailscale address under bind in \(configPath).")
+                    Text("The computer running The Hermes, as Tailscale shows it. The Hermes service must list that Tailscale address under bind in \(configPath).")
                 }
 
                 Section {
@@ -62,7 +62,7 @@ struct ConnectView: View {
                 } header: {
                     Text("Device token")
                 } footer: {
-                    Text("In Gravity on that computer: Settings → Devices → add a device with read, control and approve. The token is shown once. It is stored in this iPhone's Keychain.")
+                    Text("In The Hermes on that computer: Settings → Devices → add a device with read, control and approve. The token is shown once. It is stored in this iPhone's Keychain.")
                 }
 
                 if adding, !linkable.isEmpty {
@@ -89,7 +89,7 @@ struct ConnectView: View {
                         .disabled(!valid)
                 }
             }
-            .navigationTitle(adding ? "Add a computer" : "Connect to Gravity")
+            .navigationTitle(adding ? "Add a computer" : "Connect to The Hermes")
             .onAppear { linkWith = Set(linkable.map(\.id)) }
             .toolbar {
                 if adding {

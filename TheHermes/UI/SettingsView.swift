@@ -15,7 +15,7 @@ struct SettingsView: View {
                 } header: {
                     SectionTitle("Terminal")
                 } footer: {
-                    Text("Opening a bot's terminal resizes it to fit this screen. The terminal is shared, so Gravity on the computer shows that size too until it resizes it again.")
+                    Text("Opening a bot's terminal resizes it to fit this screen. The terminal is shared, so Hermes on the computer shows that size too until it resizes it again.")
                 }
 
                 Section {
@@ -36,7 +36,7 @@ struct SettingsView: View {
                 } header: {
                     SectionTitle("About")
                 } footer: {
-                    Text("GravitiOS is an independent project under the MIT License. It is not made by, affiliated with or endorsed by the Gravity authors.")
+                    Text("The Hermes is open source under the MIT License. Based on Gravity by P. Mikołajczuk.")
                 }
             }
             .navigationTitle("Settings")

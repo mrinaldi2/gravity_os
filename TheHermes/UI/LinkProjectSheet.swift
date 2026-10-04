@@ -27,7 +27,7 @@ struct LinkProjectSheet: View {
             Form {
                 if !store.hasLinkedProjects {
                     Section {
-                        Text("Gravity on \(store.computerName) does not link projects yet. It needs a daemon with linked projects; this phone already speaks it.")
+                        Text("The Hermes on \(store.computerName) does not link projects yet. It needs a Hermes service with linked projects; this phone already speaks it.")
                             .foregroundStyle(.secondary)
                     }
                 }
@@ -52,8 +52,8 @@ struct LinkProjectSheet: View {
                     if available.isEmpty {
                         Section {
                             Text(peers.isEmpty
-                                 ? "\(store.computerName) is not connected to another Gravity yet."
-                                 : "Linked with every connected Gravity.")
+                                 ? "\(store.computerName) is not connected to another computer yet."
+                                 : "Linked with every connected computer.")
                                 .foregroundStyle(.secondary)
                             Button("Open the network", systemImage: "point.3.connected.trianglepath.dotted") { showingNetwork = true }
                         }
@@ -106,7 +106,7 @@ struct LinkProjectSheet: View {
             } message: {
                 Text("The bots on \(unlinking?.peerName ?? "the other computer") leave \(project?.name ?? "this project"), and this project's bots leave theirs. History is kept, and you can link again later.")
             }
-            .errorAlert($failure)
+            .errorAlert("Couldn’t change the link.", $failure)
             .task {
                 try? await store.loadPeers()
                 if peerId.isEmpty { peerId = available.first(where: \.online)?.id ?? available.first?.id ?? "" }

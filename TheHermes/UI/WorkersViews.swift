@@ -209,7 +209,7 @@ struct RepoSheet: View {
                     }
                 }
             }
-            .errorAlert($failure)
+            .errorAlert("Couldn’t save the repository.", $failure)
             .onAppear {
                 url = project?.repo?.url ?? ""
                 branch = project?.repo?.branch ?? "main"

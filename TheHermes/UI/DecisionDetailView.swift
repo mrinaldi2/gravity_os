@@ -30,7 +30,7 @@ struct DecisionDetailView: View {
         .toolbar(.hidden, for: .tabBar)
         .disabled(busy)
         .task(id: store.status) { await store.loadDecision(decisionId) }
-        .errorAlert($error)
+        .errorAlert("Couldn’t answer the decision.", $error)
     }
 
     // MARK: Sections
@@ -112,7 +112,7 @@ struct DecisionDetailView: View {
                 TextField(decision.options.isEmpty ? "Your ruling" : "Your ruling (optional with an option)",
                           text: $rulingText, axis: .vertical).lineLimit(2...8)
                 TextField("Reason (optional)", text: $reason, axis: .vertical).lineLimit(1...4)
-                Button("Answer and publish") {
+                Button("Publish ruling") {
                     act { try await store.answerAndPublish(decision.id, option: option, text: ruling(decision), reason: reason) }
                 }
                 .fontWeight(.semibold)
@@ -121,7 +121,7 @@ struct DecisionDetailView: View {
                     act { try await store.decide("answer_decision", answerFields(decision)) }
                 }
                 .disabled(ruling(decision).isEmpty)
-                Button("Hold for later") {
+                Button("Put on hold") {
                     act { try await store.decide("hold_decision", ["decision_id": decision.id]) }
                 }
             } header: {
@@ -131,7 +131,7 @@ struct DecisionDetailView: View {
             }
         } else {
             Section {
-                Text("This device cannot rule on decisions (no approve grant).")
+                Text("This device can’t approve decisions.")
                     .font(.footnote)
                     .foregroundStyle(.secondary)
             }

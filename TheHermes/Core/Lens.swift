@@ -243,13 +243,13 @@ final class LensStore {
         do {
             return try decoder.decode(T.self, from: data)
         } catch {
-            throw DaemonError(code: "decode", message: "Unexpected reply from Gravity Lens (\(error)).")
+            throw DaemonError(code: "decode", message: "Unexpected reply from Lens (\(error)).")
         }
     }
 
     private func fetch(_ path: String, _ query: [String: String] = [:]) async throws -> Data {
         guard let endpoint = app.endpoint else {
-            throw DaemonError(code: "not_connected", message: "No daemon configured.")
+            throw DaemonError(code: "not_connected", message: "No computer configured.")
         }
         var components = URLComponents()
         components.scheme = "http"
@@ -265,11 +265,11 @@ final class LensStore {
             let code = (response as? HTTPURLResponse)?.statusCode ?? 0
             if code == 401 {
                 status = .unauthorized
-                throw DaemonError(code: "unauthorized", message: "Gravity Lens rejected the device token.")
+                throw DaemonError(code: "unauthorized", message: "Lens rejected the device token.")
             }
             guard code == 200 else {
                 let message = (try? decoder.decode(ServerMessage.self, from: data))?.message
-                throw DaemonError(code: "http_\(code)", message: message ?? "Gravity Lens answered \(code).")
+                throw DaemonError(code: "http_\(code)", message: message ?? "Lens answered \(code).")
             }
             status = .ok
             return data
@@ -334,7 +334,7 @@ final class LensStore {
             let row = reply.dict("detail") ?? [:]
             guard let data = try? JSONSerialization.data(withJSONObject: row),
                   let detail = try? decoder.decode(LensEventDetail.self, from: data) else {
-                throw DaemonError(code: "decode", message: "Unexpected step detail from the daemon.")
+                throw DaemonError(code: "decode", message: "Unexpected step detail from the Hermes service.")
             }
             return detail
         }
@@ -521,7 +521,7 @@ final class LensStore {
     private func readFile(_ fields: JSONDict) async throws -> DaemonFile {
         let reply = try await app.client.request("read_file", fields)
         guard let row = reply.dict("file") else {
-            throw DaemonError(code: "not_found", message: "The daemon did not return the file.")
+            throw DaemonError(code: "not_found", message: "The Hermes service did not return the file.")
         }
         return DaemonFile(row)
     }

@@ -241,7 +241,7 @@ final class Inflater {
     }
 }
 
-/// The two pixel formats GravitiOS asks the Mac for.
+/// The two pixel formats the app asks the Mac for.
 enum PixelFormat {
     /// 32 bits per pixel, 24-bit colour, little-endian, 0x00RRGGBB.
     static let full: [UInt8] = [32, 24, 0, 1, 0, 255, 0, 255, 0, 255, 16, 8, 0, 0, 0, 0]

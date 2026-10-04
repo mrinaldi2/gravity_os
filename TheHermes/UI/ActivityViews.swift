@@ -11,7 +11,7 @@ extension LensTrigger {
             case "reply": return "Reply from \(sender)"
             case "done": return "\(sender) finished a task"
             case "decision": return "Your ruling"
-            case "note": return from == "You" ? "Note from Gravity" : "Note from \(sender)"
+            case "note": return from == "You" ? "Note from you" : "Note from \(sender)"
             default: return "Message from \(sender)"
             }
         case "owner": return "You"
@@ -319,7 +319,7 @@ struct NeedsYouSection: View {
                         ItemRow(title: item.bot.name, subtitle: item.line, detail: many ? "on \(item.computer.name)" : nil, subtitleLines: 2) {
                             AvatarView(avatar: item.bot.avatar, name: item.bot.name, size: 36)
                         } trailing: {
-                            StatusLabel(text: item.tone == .failed ? "Stopped" : "Needs you", tone: item.tone)
+                            StatusLabel(text: item.tone == .failed ? item.bot.state.label : "Needs you", tone: item.tone)
                         }
                     }
                 }
@@ -403,13 +403,13 @@ struct LensEmptyState: View {
             ProgressView()
         case .unreachable:
             ContentUnavailableView {
-                Label("Gravity Lens not reachable", systemImage: "eye.slash")
+                Label("Lens not reachable", systemImage: "eye.slash")
             } description: {
-                Text("The activity view needs the Gravity Lens companion running on \(store.computerName), on port \(String(lens.port)). See the README in the GravitiOS project.")
+                Text("The activity view needs the Lens companion running on \(store.computerName), on port \(String(lens.port)). See the README in The Hermes iOS project.")
             }
         case .unauthorized:
             ContentUnavailableView("Token rejected", systemImage: "lock",
-                                   description: Text("Gravity Lens checks the same device token as the daemon. It needs the read grant."))
+                                   description: Text("Lens checks the same device token as the Hermes service. It needs read access."))
         case .ok:
             ContentUnavailableView("Nothing yet", systemImage: "text.bubble",
                                    description: Text("Turns appear here as the bots work."))

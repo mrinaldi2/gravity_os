@@ -9,13 +9,13 @@
 		<true/>
 	</dict>
 	<key>NSMicrophoneUsageDescription</key>
-	<string>GravitiOS listens while you dictate a message to a bot or text to type on your computer.</string>
+	<string>The Hermes listens while you dictate a message to a bot or text to type on your computer.</string>
 	<key>NSSpeechRecognitionUsageDescription</key>
-	<string>GravitiOS turns what you dictate into text. It stays on this iPhone when your language supports on-device recognition.</string>
+	<string>The Hermes turns what you dictate into text. It stays on this iPhone when your language supports on-device recognition.</string>
 	<!-- Set from THEHERMES_COMMIT (Config/Version.xcconfig); shown in Settings > About. -->
 	<key>TheHermesCommit</key>
 	<string>$(THEHERMES_COMMIT)</string>
 	<key>NSLocalNetworkUsageDescription</key>
-	<string>GravitiOS connects to your Gravity daemon on your own network or tailnet.</string>
+	<string>The Hermes connects to the Hermes service on your computer, over your own network or tailnet.</string>
 </dict>
 </plist>

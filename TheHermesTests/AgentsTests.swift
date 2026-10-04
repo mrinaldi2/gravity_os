@@ -224,4 +224,10 @@ final class CapabilityTests: XCTestCase {
         XCTAssertTrue(linked.isLinked)
         XCTAssertFalse(Bot(["id": "x"]).userChrome, "off by default")
     }
+
+    func testBothBusNamesCountAsTheBus() {
+        XCTAssertTrue(BusTool.isBus("mcp__hermes-bus__send_message"))
+        XCTAssertTrue(BusTool.isBus("mcp__gravity-bus__complete_task"))
+        XCTAssertFalse(BusTool.isBus("mcp__playwright__browser_click"))
+    }
 }

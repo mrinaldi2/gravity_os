@@ -21,6 +21,16 @@ struct TaskRowView: View {
         return task.closedAt.map(TaskTime.text) ?? ""
     }
 
+    private var stateLabel: String {
+        switch task.state {
+        case "open": "Open"
+        case "done": "Done"
+        case "cancelled": "Cancelled"
+        case "expired": "Expired"
+        default: task.state.prefix(1).uppercased() + task.state.dropFirst().replacingOccurrences(of: "_", with: " ")
+        }
+    }
+
     private var tone: Tone {
         switch task.state {
         case "open": .working
@@ -40,7 +50,7 @@ struct TaskRowView: View {
             ItemRow(title: task.counterpart, subtitle: open ? nil : task.request, detail: when, subtitleLines: 2) {
                 IconTile(systemImage: task.role == "assigned" ? "tray.and.arrow.down" : "arrow.up.forward", tone: tone)
             } trailing: {
-                if !task.isOpen { Pill(text: task.state, tone: tone) }
+                if !task.isOpen { Pill(text: stateLabel, tone: tone) }
             }
             .contentShape(Rectangle())
             .onTapGesture { if hasMore || open { Task { await toggle() } } }

@@ -61,7 +61,7 @@ struct SendToBotSheet: View {
                     }
                 }
             }
-            .errorAlert($error)
+            .errorAlert("Couldn’t send it.", $error)
             .onAppear { if store.bot(botId) == nil { botId = "" } }
         }
         .presentationDetents([.medium, .large])

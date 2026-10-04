@@ -73,6 +73,11 @@ class LensTests(unittest.TestCase):
         fixed = lens.named({"from": "Ios Dev", "nested": [{"to": "Qa Tester"}]}, {"ios dev": "iOS Dev", "qa tester": "QA Tester"})
         self.assertEqual(fixed, {"from": "iOS Dev", "nested": [{"to": "QA Tester"}]})
 
+    def test_both_bus_names_are_read(self):
+        self.assertEqual(gravity_lens.bus_action("mcp__hermes-bus__send_message"), "send_message")
+        self.assertEqual(gravity_lens.bus_action("mcp__gravity-bus__complete_task"), "complete_task")
+        self.assertIsNone(gravity_lens.bus_action("mcp__playwright__browser_click"))
+
 
 if __name__ == "__main__":
     unittest.main()

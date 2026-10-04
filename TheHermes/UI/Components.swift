@@ -85,7 +85,7 @@ struct StateBadge: View {
 /// Marks a temporary worker wherever bots are listed.
 struct WorkerTag: View {
     var body: some View {
-        Pill(text: "worker", tone: .worker).accessibilityLabel("Temporary worker")
+        Pill(text: "Worker", tone: .worker).accessibilityLabel("Worker: temporary, removed when its task closes")
     }
 }
 
@@ -101,7 +101,7 @@ struct ConnectionBanner: View {
                 Text(store.status.label).font(.footnote.weight(.medium))
                 Spacer()
                 if case .disconnected = store.status {
-                    Button("Retry") { store.client.reconnectNow() }.font(.footnote.weight(.semibold))
+                    Button("Try again") { store.client.reconnectNow() }.font(.footnote.weight(.semibold))
                 }
             }
             .padding(.horizontal, 14)
@@ -124,10 +124,12 @@ extension Date {
 
 /// Runs a throwing action and surfaces its failure as an alert.
 struct ErrorAlert: ViewModifier {
+    /// "Couldn't <do the thing>."
+    let title: String
     @Binding var message: String?
 
     func body(content: Content) -> some View {
-        content.alert("Something went wrong", isPresented: Binding(
+        content.alert(title, isPresented: Binding(
             get: { message != nil }, set: { if !$0 { message = nil } })
         ) {
             Button("OK", role: .cancel) {}
@@ -138,7 +140,7 @@ struct ErrorAlert: ViewModifier {
 }
 
 extension View {
-    func errorAlert(_ message: Binding<String?>) -> some View { modifier(ErrorAlert(message: message)) }
+    func errorAlert(_ title: String, _ message: Binding<String?>) -> some View { modifier(ErrorAlert(title: title, message: message)) }
 }
 
 /// How much a list loads at first, and how much each "Show more" adds: enough

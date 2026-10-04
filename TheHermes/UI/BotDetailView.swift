@@ -18,7 +18,7 @@ struct BotDetailView: View {
         case activity = "Activity"
         case messages = "Messages"
         case work = "Work"
-        case files = "Files"
+        case files = "Artifacts"
         case more = "More"
 
         var symbol: String {
@@ -124,7 +124,7 @@ struct BotDetailView: View {
         } message: {
             Text(confirming?.body(bot?.name ?? "The bot") ?? "")
         }
-        .errorAlert($failure)
+        .errorAlert("Couldn’t restart the bot.", $failure)
         .toolbar(.hidden, for: .tabBar)
         // The browser is watched while the bot is on screen, whatever pane is
         // open, so the Browser pane is live the moment it is chosen.
@@ -203,7 +203,7 @@ struct BotDetailView: View {
     }
 }
 
-/// Restart and Clear chat, with the words Gravity's desktop uses.
+/// Restart bot and Clear conversation, with the words the desktop app uses.
 enum SessionAction {
     case restart, clear
 
@@ -225,7 +225,7 @@ enum SessionAction {
 
     var confirm: String {
         switch self {
-        case .restart: "Restart"
+        case .restart: "Restart bot"
         case .clear: "Clear conversation"
         }
     }
@@ -342,8 +342,8 @@ private struct BotMorePane: View {
                 RoutinesSection(botId: botId)
                 if store.canRestart {
                     Section {
-                        Button { confirming = .restart } label: { Label("Restart session", systemImage: "arrow.clockwise") }
-                        Button(role: .destructive) { confirming = .clear } label: { Label("Clear chat", systemImage: "eraser") }
+                        Button { confirming = .restart } label: { Label("Restart bot", systemImage: "arrow.clockwise") }
+                        Button(role: .destructive) { confirming = .clear } label: { Label("Clear conversation", systemImage: "eraser") }
                     } header: {
                         SectionTitle("Session")
                     } footer: {
@@ -400,7 +400,7 @@ private struct RoutinesSection: View {
             SectionTitle("Routines")
         }
         .task(id: store.status) { await load() }
-        .errorAlert($error)
+        .errorAlert("Couldn’t update the routine.", $error)
     }
 
     private func load() async {
@@ -438,7 +438,7 @@ private struct ChromeAccessSection: View {
             }
             .disabled(!store.canControl || store.status != .connected || saving)
             // On the row, not the Section: a List applies a section's modifiers to each row.
-            .errorAlert($failure)
+            .errorAlert("Couldn’t change Chrome access.", $failure)
             if let note { Text(note).font(.footnote).foregroundStyle(.secondary) }
         } header: {
             Text("Browser")

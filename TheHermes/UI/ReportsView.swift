@@ -10,7 +10,7 @@ struct ReportsView: View {
     @State private var count = Page.size
 
     enum Mode: String, CaseIterable {
-        case reports = "Reports"
+        case reports = "Artifacts"
         case computer = "On this computer"
     }
 
@@ -29,7 +29,7 @@ struct ReportsView: View {
             VStack(spacing: 0) {
                 ConnectionBanner()
                 Picker("Show", selection: $mode) {
-                    ForEach(Mode.allCases, id: \.self) { Text($0 == .computer ? "On \(store.computerName)" : $0.rawValue) }
+                    ForEach(Mode.allCases, id: \.self) { Text($0 == .computer ? "Files on \(store.computerName)" : $0.rawValue) }
                 }
                 .pickerStyle(.segmented)
                 .padding(.horizontal, 16)
@@ -58,7 +58,7 @@ struct ReportsView: View {
                             }
                         }
                     }
-                    ListEnd(hasMore: matching.count > count || !lens.artifactCursors.isEmpty, noun: "reports", loaded: shown.count) {
+                    ListEnd(hasMore: matching.count > count || !lens.artifactCursors.isEmpty, noun: "artifacts", loaded: shown.count) {
                         if matching.count <= count { await lens.loadMoreArtifacts() }
                         count += Page.size
                     }
@@ -69,7 +69,7 @@ struct ReportsView: View {
         }
         .listStyle(.insetGrouped)
         .overlay { if lens.artifacts.isEmpty { LensEmptyState() } }
-        .searchable(text: $query, prompt: "Search reports")
+        .searchable(text: $query, prompt: "Search artifacts")
         .refreshable { await lens.loadArtifacts() }
         .task(id: store.projects.count) { await lens.loadArtifacts() }
     }
@@ -107,7 +107,7 @@ struct ReportView: View {
             .frame(maxWidth: .infinity, alignment: .leading)
             .padding()
         }
-        .navigationTitle(artifact.title == artifact.name ? "Report" : artifact.title)
+        .navigationTitle(artifact.title == artifact.name ? "Artifact" : artifact.title)
         .navigationBarTitleDisplayMode(.inline)
         .toolbar(.hidden, for: .tabBar)
         .toolbar {

@@ -237,7 +237,7 @@ struct TerminalScreen: View {
     }
 
     private var readOnlyNote: some View {
-        Text("This device can watch but not type (no control grant).")
+        Text("This device can watch but not type: it needs control access.")
             .font(.footnote)
             .foregroundStyle(.secondary)
             .frame(maxWidth: .infinity)

@@ -37,8 +37,8 @@ struct NewProjectSheet: View {
                         }
                     } footer: {
                         Text(linkPeerId.isEmpty
-                             ? "Link it with a connected Gravity to have bots on both machines in one team."
-                             : "A project of the same name is made there and linked: bots on either machine work as one team.")
+                             ? "Link it with a connected computer to have bots on both computers in one team."
+                             : "A project of the same name is made there and linked: bots on either computer work as one team.")
                     }
                 }
                 Section {
@@ -54,7 +54,7 @@ struct NewProjectSheet: View {
                 }
             }
             .disabled(busy)
-            .errorAlert($error)
+            .errorAlert("Couldn’t create the project.", $error)
             .onAppear { focused = true }
             .task { if store.hasLinkedProjects { try? await store.loadPeers() } }
         }
@@ -127,7 +127,7 @@ struct NewBotSheet: View {
                         .textInputAutocapitalization(.words)
                 } footer: {
                     if full {
-                        Text("This project already has 12 bots on \(store.computerName), the most Gravity allows. Delete one first\(links.isEmpty ? "" : ", or run the new one on a linked computer").")
+                        Text("This project already has 12 bots on \(store.computerName), the most Hermes allows. Delete one on your computer first\(links.isEmpty ? "" : ", or run the new one on a linked computer").")
                             .foregroundStyle(Color.warningText)
                     }
                 }
@@ -152,7 +152,7 @@ struct NewBotSheet: View {
                         Text("Engine and computer")
                     } footer: {
                         Text(peerId.isEmpty
-                             ? "Default is the engine \(store.computerName)'s Gravity is set to. The bot can switch engines later and keeps its workspace."
+                             ? "Default is the engine Hermes on \(store.computerName) is set to. The bot can switch engines later and keeps its workspace."
                              : "It runs on \(links.first { $0.peerId == peerId }?.peerName ?? "the other computer"), in the linked project, and works with the bots here as one team.")
                     }
                 }
@@ -160,10 +160,10 @@ struct NewBotSheet: View {
                 Section {
                     TextField("One line: what this bot is for", text: $description, axis: .vertical)
                         .lineLimit(1...3)
-                    TextField("Standing instructions", text: $instructions, axis: .vertical)
+                    TextField("Instructions", text: $instructions, axis: .vertical)
                         .lineLimit(4...12)
                 } header: {
-                    Text("Charter")
+                    Text("Profile")
                 } footer: {
                     Text("Optional. Without one, the bot asks you what it is for and writes the answer down itself. It can change its own charter later.")
                 }
@@ -182,7 +182,7 @@ struct NewBotSheet: View {
                 }
             }
             .disabled(busy)
-            .errorAlert($error)
+            .errorAlert("Couldn’t create the bot.", $error)
             .onAppear {
                 if projectId.isEmpty { projectId = store.sortedProjects.first?.id ?? "" }
             }

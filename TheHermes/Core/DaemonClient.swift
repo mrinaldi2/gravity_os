@@ -30,7 +30,7 @@ enum ConnectionStatus: Equatable {
         case .connected: "Connected"
         case .disconnected: "Disconnected"
         case .authFailed: "Token rejected"
-        case .versionMismatch: "Version mismatch"
+        case .versionMismatch: "Update needed"
         }
     }
 }
@@ -148,7 +148,7 @@ final class DaemonClient {
 
     func request(_ type: String, _ fields: JSONDict = [:]) async throws -> JSONDict {
         guard status == .connected, let task else {
-            throw DaemonError(code: "not_connected", message: "Not connected to the daemon.")
+            throw DaemonError(code: "not_connected", message: "Not connected to the Hermes service.")
         }
         let id = newRequestId()
         var body = fields
@@ -166,7 +166,7 @@ final class DaemonClient {
             // Long enough for a page to crawl in over a weak mobile link.
             Task { @MainActor [weak self] in
                 try? await Task.sleep(for: .seconds(30))
-                self?.fail(id, DaemonError(code: "timeout", message: "The daemon did not answer \(type)."))
+                self?.fail(id, DaemonError(code: "timeout", message: "The Hermes service did not answer \(type)."))
             }
         }
     }
@@ -260,7 +260,7 @@ final class DaemonClient {
         teardown()
         switch frame.str("code") {
         case "unsupported_version": status = .versionMismatch(message)
-        default: status = .authFailed(message.isEmpty ? "The daemon rejected the token." : message)
+        default: status = .authFailed(message.isEmpty ? "The Hermes service rejected the token." : message)
         }
     }
 

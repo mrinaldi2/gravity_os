@@ -196,7 +196,7 @@ struct StepRow: View {
         case "Grep", "Glob": "magnifyingglass"
         case "WebFetch", "WebSearch": "globe"
         case "Task", "Agent": "person.2"
-        default: (tool ?? "").hasPrefix("mcp__gravity-bus__") ? "point.3.connected.trianglepath.dotted" : "wrench.and.screwdriver"
+        default: BusTool.isBus(tool ?? "") ? "point.3.connected.trianglepath.dotted" : "wrench.and.screwdriver"
         }
     }
 

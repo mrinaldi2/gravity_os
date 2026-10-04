@@ -383,11 +383,11 @@ struct Worker: Identifiable, Equatable {
     /// "#2 in queue", "running", "running on win-pc", "done", …
     var chip: String {
         switch state {
-        case "queued": return queuePosition.map { "#\($0) in queue" } ?? "queued"
+        case "queued": return queuePosition.map { "#\($0) in queue" } ?? "Queued"
         case "running":
-            guard let machine, machine != "here" else { return "running" }
-            return "running on \(machine)"
-        default: return state
+            guard let machine, machine != "here" else { return "Running" }
+            return "Running on \(machine)"
+        default: return state.prefix(1).uppercased() + state.dropFirst()
         }
     }
 

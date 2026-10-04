@@ -530,7 +530,7 @@ final class AppStore {
     func createProject(name: String) async throws -> Project {
         let reply = try await client.request("create_project", ["name": name])
         guard let row = reply.dict("project") else {
-            throw DaemonError(code: "internal", message: "The daemon did not return the project.")
+            throw DaemonError(code: "internal", message: "The Hermes service did not return the project.")
         }
         let project = Project(row)
         upsert(project)
@@ -551,7 +551,7 @@ final class AppStore {
         if let avatar { fields["avatar"] = avatar }
         let reply = try await client.request("create_bot", fields)
         guard let row = reply.dict("bot") else {
-            throw DaemonError(code: "internal", message: "The daemon did not return the bot.")
+            throw DaemonError(code: "internal", message: "The Hermes service did not return the bot.")
         }
         let bot = Bot(row)
         upsert(bot)
@@ -659,7 +659,7 @@ final class AppStore {
         let reply = try await client.request("create_peer_invite", fields)
         try? await loadPeers()
         guard let invite = reply.optStr("invite") else {
-            throw DaemonError(code: "internal", message: "The daemon did not return an invite.")
+            throw DaemonError(code: "internal", message: "The Hermes service did not return an invite.")
         }
         return invite
     }
@@ -713,7 +713,7 @@ final class AppStore {
     func readFile(botId: String, path: String) async throws -> DaemonFile {
         let reply = try await client.request("read_file", ["bot_id": botId, "path": path])
         guard let row = reply.dict("file") else {
-            throw DaemonError(code: "not_found", message: "The daemon did not return the file.")
+            throw DaemonError(code: "not_found", message: "The Hermes service did not return the file.")
         }
         return DaemonFile(row)
     }
@@ -734,7 +734,7 @@ final class AppStore {
     func task(botId: String, taskId: String) async throws -> BotTask {
         let reply = try await client.request("get_task", ["bot_id": botId, "task_id": taskId])
         guard let row = reply.dict("task") else {
-            throw DaemonError(code: "not_found", message: "The daemon did not return the task.")
+            throw DaemonError(code: "not_found", message: "The Hermes service did not return the task.")
         }
         return BotTask(row)
     }

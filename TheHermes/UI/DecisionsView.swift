@@ -36,10 +36,10 @@ struct DecisionsView: View {
                                 .id(request.id)
                         }
                     } header: {
-                        SectionTitle("Permission prompts", count: store.permissions.count)
+                        SectionTitle("Permission requests", count: store.permissions.count)
                     }
                 }
-                section("Waiting on you", pending)
+                section("Open", pending)
                 section("On hold", held)
                 // Waiting and held ones all load; settled ones a page at a time.
                 section("Settled", closed, more: closed.count >= store.settledLimit)

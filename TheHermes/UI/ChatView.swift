@@ -47,7 +47,7 @@ struct ChatView: View {
             if store.canControl { composer }
         }
         .task(id: store.status) { await store.loadMessages(botId: botId) }
-        .errorAlert($error)
+        .errorAlert("Couldn’t send the message.", $error)
     }
 
     private var composer: some View {
@@ -86,7 +86,7 @@ private struct MessageBubble: View {
             HStack(spacing: 6) {
                 if !message.fromUser { Text(message.senderName).font(.caption.weight(.semibold)) }
                 if message.kind != "chat" {
-                    Text(message.kind).font(.caption2.weight(.medium))
+                    Text(message.kind.prefix(1).uppercased() + message.kind.dropFirst()).font(.caption2.weight(.medium))
                         .padding(.horizontal, 6).padding(.vertical, 1)
                         .background(.quaternary, in: Capsule())
                 }

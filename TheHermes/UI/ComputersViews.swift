@@ -37,7 +37,7 @@ struct ComputerSwitcher: View {
         var parts = [computer.name]
         if computer.store.status != .connected { parts.append(computer.store.status.label) }
         let waiting = computer.store.decisionsBadge + computer.store.approvals.count
-        if waiting > 0 { parts.append("\(waiting) waiting") }
+        if waiting > 0 { parts.append("Needs you \(waiting)") }
         return parts.joined(separator: " · ")
     }
 }
@@ -90,10 +90,10 @@ struct ComputerEditor: View {
                     TextField("49777", text: $port).keyboardType(.numberPad).multilineTextAlignment(.trailing)
                 }
             } header: {
-                Text("Daemon")
+                Text("Hermes service")
             }
             Section {
-                TextField("Address (empty: same as the daemon)", text: $record.lensHost)
+                TextField("Address (empty: same as the Hermes service)", text: $record.lensHost)
                     .textInputAutocapitalization(.never)
                     .autocorrectionDisabled()
                     .keyboardType(.URL)
@@ -101,7 +101,7 @@ struct ComputerEditor: View {
                     TextField("49778", text: $lensPort).keyboardType(.numberPad).multilineTextAlignment(.trailing)
                 }
             } header: {
-                Text("Gravity Lens")
+                Text("Lens")
             }
             Section {
                 Button("Save") {
@@ -120,12 +120,12 @@ struct ComputerEditor: View {
                 }
                 .disabled(token.trimmingCharacters(in: .whitespaces).isEmpty)
             } footer: {
-                Text("For a token that was revoked or rejected. Create one in Gravity on \(computer.name): Settings → Devices.")
+                Text("For a token that was revoked or rejected. Create one in Hermes on \(computer.name): Settings → Devices.")
             }
             Section {
                 Button("Remove \(computer.name)", role: .destructive) { confirmRemove = true }
             } footer: {
-                Text("Removes its token and screen password from this iPhone. To cut off a lost phone, revoke the device in Gravity on that computer.")
+                Text("Removes its token and screen password from this iPhone. To cut off a lost phone, revoke the device in Hermes on that computer.")
             }
         }
         .navigationTitle(computer.name)

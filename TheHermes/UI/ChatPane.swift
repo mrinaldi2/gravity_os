@@ -87,7 +87,7 @@ struct BotChatPane: View {
     private static let bottom = "chat-bottom"
 
     private var blockedReason: String? {
-        if !store.canControl { return "This device can read but not write: it needs the control grant." }
+        if !store.canControl { return "This device can read but not write: it needs control access." }
         if store.status != .connected { return store.status.label }
         return nil
     }

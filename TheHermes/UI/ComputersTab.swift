@@ -30,7 +30,7 @@ extension Computer {
         return ms < 1 ? "Online · under 1 ms" : "Online · \(ms) ms"
     }
 
-    /// "8 bots · 1 working · 2 need you".
+    /// "8 bots · 1 working · Needs you 2".
     var botsLine: String {
         let bots = store.bots.filter { !$0.isLinked }
         guard !bots.isEmpty else { return store.status == .connected ? "No bots yet" : "" }
@@ -38,7 +38,7 @@ extension Computer {
         let working = bots.filter { $0.state == .working }.count
         if working > 0 { parts.append("\(working) working") }
         let waiting = store.decisionsBadge + store.approvals.count
-        if waiting > 0 { parts.append("\(waiting) need\(waiting == 1 ? "s" : "") you") }
+        if waiting > 0 { parts.append("Needs you \(waiting)") }
         return parts.joined(separator: " · ")
     }
 }
@@ -142,7 +142,7 @@ struct ComputerPage: View {
             Section {
                 HStack(spacing: 12) {
                     tile("Screen", "Control the desktop", "display", .screen)
-                    tile("Files", "Browse the disk", "folder", .files)
+                    tile("Files on \(computer.name)", "Browse the disk", "folder", .files)
                 }
                 .listRowInsets(EdgeInsets())
                 .listRowBackground(Color.clear)
@@ -171,24 +171,24 @@ struct ComputerPage: View {
                     LabeledContent("Address", value: "\(endpoint.host):\(endpoint.port)")
                 }
                 if !store.serverVersion.isEmpty {
-                    LabeledContent("Daemon", value: "gravityd \(store.serverVersion)")
+                    LabeledContent("Hermes service", value: store.serverVersion)
                 }
-                LabeledContent("Grants", value: store.grants.sorted().joined(separator: ", "))
+                LabeledContent("Access", value: store.grants.sorted().joined(separator: ", "))
                 if let diagnostics {
                     LabeledContent("Active bots", value: "\(diagnostics.activeBots)")
-                    LabeledContent("Runtime", value: diagnostics.runtimeAvailable
+                    LabeledContent("Engine", value: diagnostics.runtimeAvailable
                         ? diagnostics.runtimeKind : "\(diagnostics.runtimeKind) (unavailable)")
                     LabeledContent("Database", value: diagnostics.dbHealthy ? "Healthy" : "Degraded")
-                    LabeledContent("Delivery backlog", value: "\(diagnostics.deliveryBacklog)")
+                    LabeledContent("Undelivered messages", value: "\(diagnostics.deliveryBacklog)")
                     LabeledContent("Uptime", value: uptime(diagnostics.uptimeSeconds))
                     if diagnostics.staleBuild {
-                        Label("The daemon was updated on disk and needs a restart.", systemImage: "exclamationmark.triangle")
+                        Label("The Hermes service was updated on disk and needs a restart.", systemImage: "exclamationmark.triangle")
                             .font(.footnote)
                             .foregroundStyle(Color.warningText)
                     }
                 }
             } header: {
-                SectionTitle("Daemon")
+                SectionTitle("Hermes service")
             }
             Section {
                 LabeledContent("Status", value: lens.status.label)
@@ -198,9 +198,9 @@ struct ComputerPage: View {
                 LabeledContent("Port", value: String(lens.port))
                 Button("Check now") { Task { await lens.refresh() } }
             } header: {
-                SectionTitle("Gravity Lens")
+                SectionTitle("Lens")
             } footer: {
-                Text("The companion that turns the bots' logs into Activity and Reports, and serves the file browser. It uses the same device token as the daemon.")
+                Text("The companion that turns the bots' logs into Activity and artifacts, and serves the file browser. It uses the same device token as the Hermes service.")
             }
             MacSettingsSection()
             Section {
