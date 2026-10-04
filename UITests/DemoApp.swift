@@ -144,3 +144,48 @@ extension XCUIApplication {
         }
     }
 }
+
+/// The demo's control endpoint (make_demo.py --control-port, which scripts/ui-tests.sh
+/// starts): each test asks for the demo state it needs instead of relying on what
+/// earlier tests left behind.
+enum DemoControl {
+    static var port: String? { DemoApp.environment["DEMO_CONTROL_PORT"].flatMap { $0.isEmpty ? nil : $0 } }
+
+    @discardableResult
+    static func post(_ path: String) throws -> [String: Any] {
+        let port = try XCTUnwrap(port, "No DEMO_CONTROL_PORT: run scripts/ui-tests.sh")
+        var request = URLRequest(url: URL(string: "http://127.0.0.1:\(port)\(path)")!)
+        request.httpMethod = "POST"
+        request.timeoutInterval = 30
+        var result: Result<[String: Any], Error> = .failure(URLError(.timedOut))
+        // The endpoint comes up just after the demo says it serves: a few tries.
+        for _ in 0..<5 {
+            let done = DispatchSemaphore(value: 0)
+            URLSession.shared.dataTask(with: request) { data, response, error in
+                if let error {
+                    result = .failure(error)
+                } else if (response as? HTTPURLResponse)?.statusCode != 200 {
+                    result = .failure(URLError(.badServerResponse))
+                } else {
+                    result = .success((try? JSONSerialization.jsonObject(with: data ?? Data())) as? [String: Any] ?? [:])
+                }
+                done.signal()
+            }.resume()
+            done.wait()
+            if case .success = result { break }
+            sleep(1)
+        }
+        return try result.get()
+    }
+
+    /// The demo's 3 permission prompts are pending (re-asked when an earlier test used them up).
+    static func ensurePermissionPrompts() throws {
+        let reply = try post("/permissions")
+        XCTAssertEqual(reply["pending"] as? Int, 3, "The demo could not raise its 3 permission prompts")
+    }
+
+    /// `bot` waits on a permission prompt in its own terminal (approval_pending).
+    static func approval(bot: String) throws {
+        try post("/approval?bot=\(bot.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed)!)")
+    }
+}

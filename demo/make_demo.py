@@ -254,32 +254,116 @@ def link_peer(ws: "Socket", out: str, gravityd: str, port: int, project_id: str)
     return peer
 
 
-def ask_permissions(port: int, home: str, bots: Dict[str, Dict[str, str]]) -> None:
-    """Bots waiting on the owner: each posts a prompt the way Claude Code's
-    PermissionRequest hook does, and the daemon holds it for an app to answer.
-    Each request blocks until answered, so each gets a thread."""
-    prompts = [
-        ("Backend Dev", "Bash", {"command": "rm -rf build/ && npm ci",
-                                 "description": "Clean install before the release build"}),
-        ("iOS Dev", "Write", {"file_path": "Sources/Sync/ConflictBanner.swift",
-                              "content": "import SwiftUI\n\nstruct ConflictBanner: View {\n    // …\n}\n"}),
-        ("Web Dev", "WebFetch", {"url": "https://example.com/pricing", "prompt": "Compare the plans"}),
-    ]
+PROMPTS = [
+    ("Backend Dev", "Bash", {"command": "rm -rf build/ && npm ci",
+                             "description": "Clean install before the release build"}),
+    ("iOS Dev", "Write", {"file_path": "Sources/Sync/ConflictBanner.swift",
+                          "content": "import SwiftUI\n\nstruct ConflictBanner: View {\n    // …\n}\n"}),
+    ("Web Dev", "WebFetch", {"url": "https://example.com/pricing", "prompt": "Compare the plans"}),
+]
 
-    def ask(bot: str, tool: str, tool_input: Dict[str, Any]) -> None:
-        with open(os.path.join(home, "secrets", f"bot-{bots[bot]['id']}.token")) as handle:
-            token = handle.read().strip()
+
+def bot_token(home: str, bot_id: str) -> str:
+    with open(os.path.join(home, "secrets", f"bot-{bot_id}.token")) as handle:
+        return handle.read().strip()
+
+
+def ask(port: int, home: str, bot_id: str, tool: str, tool_input: Dict[str, Any]) -> None:
+    """One prompt, posted the way Claude Code's PermissionRequest hook does. It
+    blocks until answered, so it runs on a thread of its own."""
+    def post() -> None:
         body = json.dumps({"tool_name": tool, "tool_input": tool_input, "permission_suggestions": []}).encode()
         request = urllib.request.Request(f"http://127.0.0.1:{port}/hook/permission", data=body, headers={
-            "Authorization": f"Bearer {token}", "Content-Type": "application/json"})
+            "Authorization": f"Bearer {bot_token(home, bot_id)}", "Content-Type": "application/json"})
         try:
             urllib.request.urlopen(request, timeout=3700).read()
         except OSError:
             pass
+    threading.Thread(target=post, daemon=True).start()
 
-    for number, prompt in enumerate(prompts):
-        threading.Thread(target=ask, args=prompt, daemon=True).start()
-        time.sleep(1.2 if number < len(prompts) - 1 else 0.5)
+
+def ask_permissions(port: int, home: str, bots: Dict[str, Dict[str, str]]) -> None:
+    """Bots waiting on the owner: the daemon holds each prompt for an app to answer."""
+    for number, (bot, tool, tool_input) in enumerate(PROMPTS):
+        ask(port, home, bots[bot]["id"], tool, tool_input)
+        time.sleep(1.2 if number < len(PROMPTS) - 1 else 0.5)
+
+
+def hold_permissions(port: int, token: str) -> None:
+    """The daemon holds a prompt for the app only while a client that can answer
+    one is connected; between two app launches nobody is, and the prompts would
+    go back to the bots' terminals. This client stays connected for the demo's
+    life (reading keeps it answering pings)."""
+    def run() -> None:
+        while True:
+            try:
+                holder = Socket(port)
+                holder.request("hello", protocol_version=2, token=token, client="gravitios-demo-holder",
+                               features=["permission_cards"])
+                while True:
+                    holder.receive()
+            except (OSError, ValueError, IndexError):
+                time.sleep(1)
+    threading.Thread(target=run, daemon=True).start()
+
+
+def serve_control(control_port: int, port: int, home: str, token: str, bots: Dict[str, Dict[str, str]]) -> None:
+    """A small HTTP endpoint for UI tests to set the demo up per test (127.0.0.1 only):
+
+    POST /permissions          the 3 demo prompts are pending again (missing ones re-asked)
+    POST /approval?bot=<name>  that bot waits on a permission prompt in its own terminal
+    """
+    from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+    from urllib.parse import parse_qs, urlparse
+
+    def pending() -> List[Dict[str, Any]]:
+        ws = Socket(port)
+        ws.request("hello", protocol_version=2, token=token, client="gravitios-demo-control")
+        return ws.request("list_permissions")["permissions"]
+
+    class Handler(BaseHTTPRequestHandler):
+        def do_POST(self) -> None:
+            url = urlparse(self.path)
+            query = parse_qs(url.query)
+            try:
+                if url.path == "/permissions":
+                    waiting = {(p["bot_id"], p["tool"]) for p in pending()}
+                    for bot, tool, tool_input in PROMPTS:
+                        if (bots[bot]["id"], tool) not in waiting:
+                            ask(port, home, bots[bot]["id"], tool, tool_input)
+                    for _ in range(50):
+                        waiting = {(p["bot_id"], p["tool"]) for p in pending()}
+                        if all((bots[b]["id"], t) in waiting for b, t, _ in PROMPTS):
+                            break
+                        time.sleep(0.2)
+                    reply: Dict[str, Any] = {"pending": len(waiting)}
+                elif url.path == "/approval":
+                    bot = bots[query["bot"][0]]["id"]
+                    body = json.dumps({"hook_event_name": "Notification",
+                                       "message": "Claude needs your permission to use Bash"}).encode()
+                    urllib.request.urlopen(urllib.request.Request(
+                        f"http://127.0.0.1:{port}/hook", data=body, headers={
+                            "Authorization": f"Bearer {bot_token(home, bot)}",
+                            "Content-Type": "application/json"}), timeout=10).read()
+                    reply = {"ok": True}
+                else:
+                    self.send_error(404)
+                    return
+            except Exception as error:  # the test reads the reason
+                self.send_error(500, str(error))
+                return
+            data = json.dumps(reply).encode()
+            self.send_response(200)
+            self.send_header("Content-Type", "application/json")
+            self.send_header("Content-Length", str(len(data)))
+            self.end_headers()
+            self.wfile.write(data)
+
+        def log_message(self, *args: Any) -> None:
+            pass
+
+    server = ThreadingHTTPServer(("127.0.0.1", control_port), Handler)
+    threading.Thread(target=server.serve_forever, daemon=True).start()
 
 
 def raise_decision(port: int, home: str, bot_id: str, **arguments: Any) -> None:
@@ -668,6 +752,8 @@ def main() -> None:
     parser.add_argument("--lens-port", type=int, default=49788)
     parser.add_argument("--gravityd", help="path to gravityd (default: the one Gravity installed)")
     parser.add_argument("--serve", action="store_true", help="keep the daemon running and start Gravity Lens")
+    parser.add_argument("--control-port", type=int, default=0,
+                        help="with --serve: an HTTP endpoint for UI tests to reset the demo per test")
     parser.add_argument("--peer-port", type=int, default=0,
                         help="also start a peer daemon on this port and link Aurora Notes with it")
     args = parser.parse_args()
@@ -752,7 +838,10 @@ def main() -> None:
     remember(lens)
     print(f"  Gravity Lens: 127.0.0.1:{args.lens_port}\nServing. Ctrl-C stops both.")
     if "permissions" in hello.get("capabilities", []):
+        hold_permissions(args.port, token)
         ask_permissions(args.port, home, bots)
+    if args.control_port:
+        serve_control(args.control_port, args.port, home, token, bots)
     # kill stops the lot as Ctrl-C does (scripts/ui-tests.sh runs the demo in the background).
     signal.signal(signal.SIGTERM, signal.default_int_handler)
     try:

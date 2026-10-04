@@ -18,6 +18,7 @@ final class GlossaryTests: XCTestCase {
 
     override func setUpWithError() throws {
         continueAfterFailure = true
+        try DemoControl.ensurePermissionPrompts() // "Allow for session" is on their cards
         app = try DemoApp.launch()
         allowSystemAlerts()
         waitFor(app.tabBars.buttons["Home"])

@@ -42,6 +42,7 @@ final class H003Tests: XCTestCase {
     func testDecisionDetailContrastDark() throws { try decisionDetail(dark: true) }
 
     private func permissionCard(dark: Bool) throws {
+        try DemoControl.ensurePermissionPrompts()
         let app = try DemoApp.launch(dark: dark)
         allowSystemAlerts()
         let allow = waitFor(app.buttons["Allow once"].firstMatch)
