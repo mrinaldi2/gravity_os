@@ -12,9 +12,9 @@
 	<string>GravitiOS listens while you dictate a message to a bot or text to type on your computer.</string>
 	<key>NSSpeechRecognitionUsageDescription</key>
 	<string>GravitiOS turns what you dictate into text. It stays on this iPhone when your language supports on-device recognition.</string>
-	<!-- Set from GRAVITIOS_COMMIT (Config/Version.xcconfig); shown in Settings > About. -->
-	<key>GravitiOSCommit</key>
-	<string>$(GRAVITIOS_COMMIT)</string>
+	<!-- Set from THEHERMES_COMMIT (Config/Version.xcconfig); shown in Settings > About. -->
+	<key>TheHermesCommit</key>
+	<string>$(THEHERMES_COMMIT)</string>
 	<key>NSLocalNetworkUsageDescription</key>
 	<string>GravitiOS connects to your Gravity daemon on your own network or tailnet.</string>
 </dict>

@@ -1,5 +1,5 @@
 import XCTest
-@testable import GravitiOS
+@testable import TheHermes
 
 /// Who made each artifact (`created_by` in `list_artifacts`), and what a
 /// command row offers to copy.

@@ -1,5 +1,5 @@
 import XCTest
-@testable import GravitiOS
+@testable import TheHermes
 
 /// Staying usable on a link that drops for a moment (a phone in a car).
 @MainActor

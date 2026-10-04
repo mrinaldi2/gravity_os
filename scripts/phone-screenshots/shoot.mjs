@@ -1,4 +1,4 @@
-// Screenshots of GravitiOS on a real iPhone, through Appium. This script
+// Screenshots of The Hermes on a real iPhone, through Appium. This script
 // builds WebDriverAgent (the copy Appium's iOS driver ships) with your team's
 // signing, runs it on the phone through xcodebuild, which reaches it over
 // Wi-Fi too, and hands Appium its address. The first run builds for a few

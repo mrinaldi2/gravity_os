@@ -34,7 +34,7 @@ final class RFBClient: @unchecked Sendable {
 
     private let connection: NWConnection
     private let credentials: Credentials
-    private let queue = DispatchQueue(label: "gravitios.rfb")
+    private let queue = DispatchQueue(label: "thehermes.rfb")
     private var buffer: [UInt8] = []
     private var bufferOffset = 0
     private var task: Task<Void, Never>?

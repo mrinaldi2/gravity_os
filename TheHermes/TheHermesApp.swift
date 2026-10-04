@@ -2,7 +2,7 @@ import SwiftUI
 import UserNotifications
 
 @main
-struct GravitiOSApp: App {
+struct TheHermesApp: App {
     @State private var fleet = Fleet()
 
     init() {

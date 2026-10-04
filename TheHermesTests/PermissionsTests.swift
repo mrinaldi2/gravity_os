@@ -1,5 +1,5 @@
 import XCTest
-@testable import GravitiOS
+@testable import TheHermes
 
 /// Bots' permission prompts, against frames shaped as Gravity's
 /// docs/protocol.md describes them.

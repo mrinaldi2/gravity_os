@@ -1,5 +1,5 @@
 import XCTest
-@testable import GravitiOS
+@testable import TheHermes
 
 /// Lists that load a page at a time, as docs/protocol.md describes them.
 final class PagingTests: XCTestCase {

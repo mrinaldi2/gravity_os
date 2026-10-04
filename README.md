@@ -141,7 +141,7 @@ DEVELOPMENT_TEAM = ABCDE12345
 PRODUCT_BUNDLE_IDENTIFIER = com.yourname.gravitios
 ```
 
-Open `GravitiOS.xcodeproj`, choose your iPhone and press **Run**. Your team ID is in Xcode → Settings → Accounts.
+Open `TheHermes.xcodeproj`, choose your iPhone and press **Run**. Your team ID is in Xcode → Settings → Accounts.
 
 ### 5. Connect
 
@@ -238,13 +238,13 @@ See [SECURITY.md](SECURITY.md) to report a vulnerability.
 ## Project layout
 
 ```
-GravitiOS/            the SwiftUI app
+TheHermes/            the SwiftUI app
   Core/               daemon client (WebSocket), Lens client, state, Keychain
   UI/                 screens
   Core/RFB/            the Screen Sharing (VNC) client
 companion/            Gravity Lens (gravity_lens.py, gravity_files.py), gravity_autostart.py and the installers (install.sh, install.ps1)
 demo/                 the demo world, a fake Screen Sharing server, and their images
-GravitiOSTests/       the app's unit tests (xcodebuild test -scheme GravitiOS)
+TheHermesTests/       the app's unit tests (xcodebuild test -scheme TheHermes)
 tests/                Lens tests (python3 -m unittest discover tests)
 Config/               Info.plist, Signing.xcconfig (+ your git-ignored Local.xcconfig)
 ```

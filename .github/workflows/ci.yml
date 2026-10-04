@@ -44,14 +44,14 @@ jobs:
       - uses: actions/checkout@v4
       - name: Build for the simulator
         run: |
-          xcodebuild -project GravitiOS.xcodeproj -scheme GravitiOS \
+          xcodebuild -project TheHermes.xcodeproj -scheme TheHermes \
             -destination 'generic/platform=iOS Simulator' \
             -derivedDataPath build CODE_SIGNING_ALLOWED=NO build | tail -20
           test ${PIPESTATUS[0]} -eq 0
       - name: Unit tests
         run: |
           device=$(xcrun simctl list devices available | grep -m1 -oE 'iPhone[^(]*\(([0-9A-F-]{36})\)' | grep -oE '[0-9A-F-]{36}')
-          xcodebuild test -project GravitiOS.xcodeproj -scheme GravitiOS \
+          xcodebuild test -project TheHermes.xcodeproj -scheme TheHermes \
             -destination "platform=iOS Simulator,id=$device" \
             -derivedDataPath build CODE_SIGNING_ALLOWED=NO | grep -E "Test Case|Executed|error:|TEST (SUCCEEDED|FAILED)"
           test ${PIPESTATUS[0]} -eq 0
