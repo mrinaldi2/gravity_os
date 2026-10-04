@@ -100,6 +100,7 @@ struct PermissionCard: View {
         .buttonStyle(AnswerButtonStyle(tone: answer == .deny ? .failed : prominent ? .ready : .working))
         .disabled(!canAnswer)
         .accessibilityLabel(answer.label)
+        .accessibilityHint(answer.hint ?? "")
     }
 
     private func send(_ answer: PermissionRequest.Answer) {

@@ -37,7 +37,7 @@ struct ComputerSwitcher: View {
         var parts = [computer.name]
         if computer.store.status != .connected { parts.append(computer.store.status.label) }
         let waiting = computer.store.decisionsBadge + computer.store.approvals.count
-        if waiting > 0 { parts.append("Needs you \(waiting)") }
+        if waiting > 0 { parts.append(waiting == 1 ? "1 needs you" : "\(waiting) need you") }
         return parts.joined(separator: " · ")
     }
 }
@@ -120,17 +120,17 @@ struct ComputerEditor: View {
                 }
                 .disabled(token.trimmingCharacters(in: .whitespaces).isEmpty)
             } footer: {
-                Text("For a token that was revoked or rejected. Create one in Hermes on \(computer.name): Settings → Devices.").foregroundStyle(Color.secondaryText)
+                Text("For a token that was revoked or rejected. Create one on \(computer.name) in The Hermes → Settings → Devices.").foregroundStyle(Color.secondaryText)
             }
             Section {
                 Button("Remove \(computer.name)", role: .destructive) { confirmRemove = true }
             } footer: {
-                Text("Removes its token and screen password from this iPhone. To cut off a lost phone, revoke the device in Hermes on that computer.").foregroundStyle(Color.secondaryText)
+                Text("Removes its token and screen password from this iPhone. To cut off a lost phone, revoke the device on that computer in The Hermes → Settings → Devices.").foregroundStyle(Color.secondaryText)
             }
         }
         .navigationTitle(computer.name)
         .confirmationDialog("Remove \(computer.name)?", isPresented: $confirmRemove, titleVisibility: .visible) {
-            Button("Remove", role: .destructive) {
+            Button("Remove computer", role: .destructive) {
                 dismiss()
                 fleet.remove(computer)
             }

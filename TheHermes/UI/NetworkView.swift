@@ -130,7 +130,7 @@ struct NetworkView: View {
                 get: { unlinking != nil }, set: { if !$0 { unlinking = nil } }), titleVisibility: .visible
             ) {
                 if let unlinking {
-                    Button("Unlink", role: .destructive) { unlink(unlinking) }
+                    Button("Unlink computer", role: .destructive) { unlink(unlinking) }
                 }
             } message: {
                 Text("Projects linked through it are unlinked, and its bots leave them on both sides. You can connect again later.")

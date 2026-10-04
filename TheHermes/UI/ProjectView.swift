@@ -115,7 +115,7 @@ struct ProjectView: View {
         let working = bots.filter { $0.state == .working }.count
         if working > 0 { parts.append("\(working) working") }
         let waiting = bots.filter(\.state.needsOwner).count
-        if waiting > 0 { parts.append("Needs you \(waiting)") }
+        if waiting > 0 { parts.append(waiting == 1 ? "1 needs you" : "\(waiting) need you") }
         if let project, !project.links.isEmpty {
             parts.append("on \(project.links.count + 1) computers")
         }

@@ -228,7 +228,7 @@ private struct RecentRow: View {
                 IconTile(systemImage: "person")
             }
         } trailing: {
-            if turn.outcome.kind == "completed" { Pill(text: "done", tone: .ready) }
+            if turn.outcome.kind == "completed" { Pill(text: "Done", tone: .ready) }
         }
     }
 }
@@ -326,7 +326,7 @@ struct NeedsYouSection: View {
                 ForEach(decisions) { computer in
                     let pending = computer.store.pendingCounts
                     Button { openDecisions(computer) } label: {
-                        ItemRow(title: pending.total == 1 ? "1 decision waiting" : "\(pending.total) decisions waiting",
+                        ItemRow(title: pending.total == 1 ? "1 open decision" : "\(pending.total) open decisions",
                                 subtitle: pending.urgent > 0 ? "\(pending.urgent) urgent" : "Bots want your ruling",
                                 detail: many ? "on \(computer.name)" : nil) {
                             IconTile(systemImage: "checklist", tone: pending.urgent > 0 ? .failed : .needsYou)

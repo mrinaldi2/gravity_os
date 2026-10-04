@@ -101,7 +101,7 @@ struct LinkProjectSheet: View {
                 get: { unlinking != nil }, set: { if !$0 { unlinking = nil } }), titleVisibility: .visible
             ) {
                 if let unlinking {
-                    Button("Unlink", role: .destructive) { unlink(unlinking) }
+                    Button("Unlink project", role: .destructive) { unlink(unlinking) }
                 }
             } message: {
                 Text("The bots on \(unlinking?.peerName ?? "the other computer") leave \(project?.name ?? "this project"), and this project's bots leave theirs. History is kept, and you can link again later.")

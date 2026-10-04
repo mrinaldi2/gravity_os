@@ -144,7 +144,7 @@ struct DecisionDetailView: View {
             switch decision.state {
             case "answered":
                 Section {
-                    Button("Publish") { act { try await store.publish(decision.id) } }.fontWeight(.semibold)
+                    Button("Publish ruling") { act { try await store.publish(decision.id) } }.fontWeight(.semibold)
                     Button("Change answer") {
                         act { try await store.decide("unanswer_decision", ["decision_id": decision.id]) }
                     }

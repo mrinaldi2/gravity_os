@@ -12,6 +12,8 @@ struct BotDetailView: View {
     @State private var confirming: SessionAction?
     @State private var notice: String?
     @State private var failure: String?
+    /// Says which action `failure` is about.
+    @State private var failedAction = SessionAction.restart
 
     /// Four panes at most: what the bot says, what it does, what it made,
     /// and everything else (terminal, browser, memory, its settings).
@@ -107,14 +109,10 @@ struct BotDetailView: View {
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
             ToolbarItem(placement: .principal) { header }
+            // Only the state here, so it is never cut short; chat search
+            // lives in the chat pane itself.
             ToolbarItem(placement: .topBarTrailing) {
-                if let bot { StateBadge(state: bot.state) }
-            }
-            if pane == .chat {
-                ToolbarItem(placement: .topBarTrailing) {
-                    Button { searching.toggle() } label: { Image(systemName: "magnifyingglass") }
-                        .accessibilityLabel("Search this chat")
-                }
+                if let bot { StateBadge(state: bot.state).fixedSize() }
             }
         }
         .confirmationDialog(confirming?.title(bot?.name ?? "the bot") ?? "", isPresented: Binding(
@@ -126,7 +124,7 @@ struct BotDetailView: View {
         } message: {
             Text(confirming?.body(bot?.name ?? "The bot") ?? "")
         }
-        .errorAlert("Couldn’t restart the bot.", $failure)
+        .errorAlert(failedAction == .clear ? "Couldn’t clear the conversation." : "Couldn’t restart the bot.", $failure)
         .toolbar(.hidden, for: .tabBar)
         // The browser is watched while the bot is on screen, whatever pane is
         // open, so the Browser pane is live the moment it is chosen.
@@ -202,6 +200,7 @@ struct BotDetailView: View {
                 }
                 notice = action.done(name)
             } catch {
+                failedAction = action
                 failure = error.localizedDescription
             }
         }

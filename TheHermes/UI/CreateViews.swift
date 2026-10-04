@@ -167,7 +167,7 @@ struct NewBotSheet: View {
                 } header: {
                     Text("Profile").foregroundStyle(Color.secondaryText)
                 } footer: {
-                    Text("Optional. Without one, the bot asks you what it is for and writes the answer down itself. It can change its own charter later.").foregroundStyle(Color.secondaryText)
+                    Text("Optional. Without one, the bot asks you what it is for and writes the answer down itself. It can change its own instructions later.").foregroundStyle(Color.secondaryText)
                 }
 
                 Section("Avatar") {

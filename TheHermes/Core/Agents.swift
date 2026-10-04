@@ -270,13 +270,7 @@ struct AgentMessage: Identifiable, Equatable {
         createdAt = d.date("created_at")
     }
 
-    var kindLabel: String {
-        switch kind {
-        case "done": "result"
-        case "chat": "message"
-        default: kind
-        }
-    }
+    var kindLabel: String { MessageKind.label(kind) }
 }
 
 /// A pair of bots that talked, with the newest word (`list_agent_conversations`).
@@ -440,6 +434,13 @@ struct PermissionRequest: Identifiable, Equatable {
         expiresAt = d.date("expires_at")
     }
 
+    /// The tool as people read it: "Bash", or "send message" for
+    /// `mcp__hermes-bus__send_message`, never the `mcp__` form.
+    var toolName: String {
+        guard tool.hasPrefix("mcp__") else { return tool }
+        return (tool.components(separatedBy: "__").last ?? tool).replacingOccurrences(of: "_", with: " ")
+    }
+
     /// The owner's answer. A reason goes back to the bot with a deny only.
     enum Answer: String, CaseIterable {
         case allowOnce = "allow_once"
@@ -449,9 +450,14 @@ struct PermissionRequest: Identifiable, Equatable {
         var label: String {
             switch self {
             case .allowOnce: "Allow once"
-            case .allowSession: "Allow for this session"
+            case .allowSession: "Allow for session"
             case .deny: "Deny"
             }
+        }
+
+        /// Context VoiceOver adds after the label.
+        var hint: String? {
+            self == .allowSession ? "For the rest of this bot's session" : nil
         }
     }
 
@@ -459,5 +465,31 @@ struct PermissionRequest: Identifiable, Equatable {
     static func adding(_ request: PermissionRequest, to list: [PermissionRequest]) -> [PermissionRequest] {
         (list.filter { $0.id != request.id } + [request])
             .sorted { ($0.createdAt ?? .distantPast) < ($1.createdAt ?? .distantPast) }
+    }
+}
+
+/// How a message's kind reads: never the raw wire value.
+enum MessageKind {
+    static func label(_ kind: String) -> String {
+        switch kind {
+        case "done": "Result"
+        case "task": "Task"
+        case "reply": "Reply"
+        case "note": "Note"
+        default: "Message"
+        }
+    }
+}
+
+/// How a task's state reads: Open · Done · Cancelled · Expired.
+enum TaskStateLabel {
+    static func label(_ state: String) -> String {
+        switch state {
+        case "open": "Open"
+        case "done": "Done"
+        case "cancelled": "Cancelled"
+        case "expired": "Expired"
+        default: state.prefix(1).uppercased() + state.dropFirst().replacingOccurrences(of: "_", with: " ")
+        }
     }
 }

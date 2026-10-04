@@ -30,7 +30,7 @@ extension Computer {
         return ms < 1 ? "Online · under 1 ms" : "Online · \(ms) ms"
     }
 
-    /// "8 bots · 1 working · Needs you 2".
+    /// "8 bots · 1 working · 2 need you".
     var botsLine: String {
         let bots = store.bots.filter { !$0.isLinked }
         guard !bots.isEmpty else { return store.status == .connected ? "No bots yet" : "" }
@@ -38,7 +38,7 @@ extension Computer {
         let working = bots.filter { $0.state == .working }.count
         if working > 0 { parts.append("\(working) working") }
         let waiting = store.decisionsBadge + store.approvals.count
-        if waiting > 0 { parts.append("Needs you \(waiting)") }
+        if waiting > 0 { parts.append(waiting == 1 ? "1 needs you" : "\(waiting) need you") }
         return parts.joined(separator: " · ")
     }
 }
@@ -176,8 +176,8 @@ struct ComputerPage: View {
                 LabeledContent("Access", value: store.grants.sorted().joined(separator: ", "))
                 if let diagnostics {
                     LabeledContent("Active bots", value: "\(diagnostics.activeBots)")
-                    LabeledContent("Engine", value: diagnostics.runtimeAvailable
-                        ? diagnostics.runtimeKind : "\(diagnostics.runtimeKind) (unavailable)")
+                    let engine = BotEngine(rawValue: diagnostics.runtimeKind)?.label ?? diagnostics.runtimeKind
+                    LabeledContent("Engine", value: diagnostics.runtimeAvailable ? engine : "\(engine) (unavailable)")
                     LabeledContent("Database", value: diagnostics.dbHealthy ? "Healthy" : "Degraded")
                     LabeledContent("Undelivered messages", value: "\(diagnostics.deliveryBacklog)")
                     LabeledContent("Uptime", value: uptime(diagnostics.uptimeSeconds))

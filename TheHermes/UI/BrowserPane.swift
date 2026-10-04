@@ -186,7 +186,7 @@ private struct ActionRow: View {
                 HStack(spacing: 6) {
                     Text(action.title).font(.footnote)
                     if action.ownersChrome {
-                        Pill(text: "your Chrome", tone: .needsYou)
+                        Pill(text: "Your Chrome", tone: .needsYou)
                     }
                 }
                 if let subtitle = action.subtitle {

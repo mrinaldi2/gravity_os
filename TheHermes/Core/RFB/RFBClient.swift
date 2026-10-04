@@ -174,7 +174,7 @@ final class RFBClient: @unchecked Sendable {
                 case .failed(let error), .waiting(let error):
                     once.done = true
                     continuation.resume(throwing: RFBError.protocolError(
-                        "Could not reach the screen-sharing server (\(error.localizedDescription)). Is it turned on?"))
+                        "Couldn’t reach the screen-sharing server. Is it turned on?\n\(error.localizedDescription)"))
                 case .cancelled:
                     once.done = true
                     continuation.resume(throwing: CancellationError())

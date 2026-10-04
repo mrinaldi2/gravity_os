@@ -34,7 +34,7 @@ struct NotificationExplainer: View {
             Text("Get told when a bot needs you")
                 .font(.title2.weight(.bold))
                 .multilineTextAlignment(.center)
-            Text("The Hermes lets you know when a bot needs a decision, asks for permission or is waiting for you. Tap a notification to open exactly that.")
+            Text("While The Hermes is open or recently used, it lets you know when a bot needs a decision, asks for permission or is waiting for you. Tap a notification to go straight there.")
                 .font(.callout)
                 .foregroundStyle(Color.secondaryText)
                 .multilineTextAlignment(.center)

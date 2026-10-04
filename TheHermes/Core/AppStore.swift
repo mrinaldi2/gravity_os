@@ -358,7 +358,7 @@ final class AppStore {
         onCountsChanged?()
         // Its bot is on screen: the card is already in front of the owner.
         guard inBackground || botOnScreen != request.botId else { return }
-        notify("\(bot(request.botId)?.name ?? "A bot") needs your permission", request.summary,
+        notify("\(bot(request.botId)?.name ?? "A bot") wants to run \(request.toolName)", request.summary,
                id: "permission-\(request.id)", about: (.permission, request.id, request.botId), always: true)
     }
 

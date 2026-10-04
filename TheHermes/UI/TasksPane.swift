@@ -21,15 +21,7 @@ struct TaskRowView: View {
         return task.closedAt.map(TaskTime.text) ?? ""
     }
 
-    private var stateLabel: String {
-        switch task.state {
-        case "open": "Open"
-        case "done": "Done"
-        case "cancelled": "Cancelled"
-        case "expired": "Expired"
-        default: task.state.prefix(1).uppercased() + task.state.dropFirst().replacingOccurrences(of: "_", with: " ")
-        }
-    }
+    private var stateLabel: String { TaskStateLabel.label(task.state) }
 
     private var tone: Tone {
         switch task.state {

@@ -68,7 +68,7 @@ final class Dictation {
             phase = .listening
         } catch {
             finish()
-            phase = .failed("Could not start listening: \(error.localizedDescription)")
+            phase = .failed("Couldn’t start listening.\n\(error.localizedDescription)")
         }
     }
 

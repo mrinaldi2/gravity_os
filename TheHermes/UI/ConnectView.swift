@@ -84,7 +84,8 @@ struct ConnectView: View {
                         Text("That isn’t a pairing link. It starts with thehermes://pair and comes from The Hermes on your computer: Settings → Devices.")
                             .foregroundStyle(Color.warningText)
                     } else {
-                        Text("On your computer, open The Hermes → Settings → Devices and add a device. It shows a pairing code and a link.")
+                        // Until desktop shows pairing codes (H-010 desktop), it may show only a token.
+                        Text("On your computer, open The Hermes → Settings → Devices and create a device. Scan its pairing code, or, if it shows only a token, choose Enter manually.")
                             .foregroundStyle(Color.secondaryText)
                     }
                 }
@@ -170,17 +171,27 @@ struct ConnectView: View {
                 Text("Windows").tag(ComputerKind.windows)
             }
             .pickerStyle(.segmented)
-            TextField("Name (\(kind.label))", text: $name, prompt: .placeholder("Name (\(kind.label))"))
+            LabeledContent("Name") {
+                TextField("Name", text: $name, prompt: .placeholder(kind.label))
+                    .multilineTextAlignment(.trailing)
+            }
         } header: {
             Text("Computer").foregroundStyle(Color.secondaryText)
         }
 
         Section {
-            TextField("Tailscale name or 100.x.y.z", text: $host, prompt: .placeholder("Tailscale name or 100.x.y.z"))
-                .textInputAutocapitalization(.never)
-                .autocorrectionDisabled()
-                .keyboardType(.URL)
-            TextField("Port", text: $port, prompt: .placeholder("Port")).keyboardType(.numberPad)
+            LabeledContent("Address") {
+                TextField("Address", text: $host, prompt: .placeholder("Tailscale name or 100.x.y.z"))
+                    .textInputAutocapitalization(.never)
+                    .autocorrectionDisabled()
+                    .keyboardType(.URL)
+                    .multilineTextAlignment(.trailing)
+            }
+            LabeledContent("Port") {
+                TextField("Port", text: $port, prompt: .placeholder("49777"))
+                    .keyboardType(.numberPad)
+                    .multilineTextAlignment(.trailing)
+            }
             if let failure, failure.field == .address { failureText(failure) }
         } header: {
             Text("Hermes service").foregroundStyle(Color.secondaryText)
@@ -189,9 +200,12 @@ struct ConnectView: View {
         }
 
         Section {
-            SecureField("Device token", text: $token, prompt: .placeholder("Device token"))
-                .textInputAutocapitalization(.never)
-                .autocorrectionDisabled()
+            LabeledContent("Token") {
+                SecureField("Token", text: $token, prompt: .placeholder("Device token"))
+                    .textInputAutocapitalization(.never)
+                    .autocorrectionDisabled()
+                    .multilineTextAlignment(.trailing)
+            }
             if let failure, failure.field == .token { failureText(failure) }
         } header: {
             Text("Device token").foregroundStyle(Color.secondaryText)

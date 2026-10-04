@@ -175,14 +175,14 @@ final class ConversationsTests: XCTestCase {
                      "body": "Built   the\nupdater", "created_at": "2026-10-02T09:00:00Z"],
         ])
         XCTAssertEqual(AgentConversations.preview(conversation, bots: bots), "windev: Built the updater")
-        XCTAssertEqual(conversation.last?.kindLabel, "result")
+        XCTAssertEqual(conversation.last?.kindLabel, "Result")
         XCTAssertEqual(conversation.messageCount, 4)
     }
 
     func testMessageParse() {
         let parsed = message(9)
         XCTAssertEqual(parsed.taskState, "open")
-        XCTAssertEqual(parsed.kindLabel, "task")
+        XCTAssertEqual(parsed.kindLabel, "Task")
         XCTAssertNotNil(parsed.createdAt)
     }
 }
@@ -229,5 +229,19 @@ final class CapabilityTests: XCTestCase {
         XCTAssertTrue(BusTool.isBus("mcp__hermes-bus__send_message"))
         XCTAssertTrue(BusTool.isBus("mcp__gravity-bus__complete_task"))
         XCTAssertFalse(BusTool.isBus("mcp__playwright__browser_click"))
+    }
+
+    func testKindsAndStatesReadInSentenceCase() {
+        XCTAssertEqual(["done", "task", "reply", "note", "chat", "mystery"].map(MessageKind.label),
+                       ["Result", "Task", "Reply", "Note", "Message", "Message"])
+        XCTAssertEqual(["open", "done", "cancelled", "expired"].map(TaskStateLabel.label),
+                       ["Open", "Done", "Cancelled", "Expired"])
+    }
+
+    func testPermissionToolNamesNeverShowMCP() {
+        func request(_ tool: String) -> PermissionRequest { PermissionRequest(["id": "p", "bot_id": "b", "tool": tool]) }
+        XCTAssertEqual(request("Bash").toolName, "Bash")
+        XCTAssertEqual(request("mcp__hermes-bus__send_message").toolName, "send message")
+        XCTAssertEqual(request("mcp__playwright__browser_click").toolName, "browser click")
     }
 }

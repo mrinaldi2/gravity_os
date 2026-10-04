@@ -56,6 +56,22 @@ struct BotChatPane: View {
                 }
                 .scrollDismissesKeyboard(.interactively)
                 .modifier(TracksBottom(following: $following))
+                // Search sits on the transcript, not in the navigation bar, so
+                // the bot's state there is never cut short.
+                .overlay(alignment: .topTrailing) {
+                    if !searching {
+                        Button { searching = true } label: {
+                            Image(systemName: "magnifyingglass")
+                                .font(.body.weight(.medium))
+                                .frame(width: 44, height: 44)
+                                .background(.regularMaterial, in: Circle())
+                        }
+                        .buttonStyle(.plain)
+                        .padding(.top, 6)
+                        .padding(.trailing, 10)
+                        .accessibilityLabel("Search this chat")
+                    }
+                }
                 .onChange(of: turns.last) { _, _ in
                     if following, !searching { withAnimation { proxy.scrollTo(Self.bottom, anchor: .bottom) } }
                 }
