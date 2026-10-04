@@ -45,7 +45,7 @@ struct DecisionsView: View {
                 section("Settled", closed, more: closed.count >= store.settledLimit)
             }
             .listStyle(.insetGrouped)
-            .onChange(of: focusPermission.wrappedValue) { _, id in
+            .onChange(of: focusPermission.wrappedValue, initial: true) { _, id in
                 guard let id else { return }
                 withAnimation { proxy.scrollTo(id, anchor: .top) }
                 focusPermission.wrappedValue = nil
@@ -64,7 +64,7 @@ struct DecisionsView: View {
             .navigationDestination(for: String.self) { DecisionDetailView(decisionId: $0) }
             .navigationDestination(item: $openBot) { BotDetailView(botId: $0) }
         }
-        .onChange(of: openDecision) { _, id in
+        .onChange(of: openDecision, initial: true) { _, id in
             guard let id else { return }
             path = [id]
             openDecision = nil

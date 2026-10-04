@@ -1,7 +1,15 @@
 import SwiftUI
 
+/// A bot to open from outside the Bots tab, on a given pane.
+struct BotLink: Hashable {
+    let botId: String
+    var pane: NotificationTarget.BotPane?
+}
+
 struct BotsView: View {
     @Environment(AppStore.self) private var store
+    /// Set from outside, e.g. a tapped notification: opens that bot.
+    var openBot: Binding<BotLink?> = .constant(nil)
     @State private var path = NavigationPath()
     @State private var creating: Creating?
 
@@ -97,6 +105,14 @@ struct BotsView: View {
                 }
             }
             .navigationDestination(for: String.self) { BotDetailView(botId: $0) }
+            .navigationDestination(for: BotLink.self) { BotDetailView(botId: $0.botId, initialPane: $0.pane) }
+            .onChange(of: openBot.wrappedValue, initial: true) { _, link in
+                guard let link else { return }
+                var fresh = NavigationPath()
+                fresh.append(link)
+                path = fresh
+                openBot.wrappedValue = nil
+            }
             .navigationDestination(for: ProjectPageLink.self) { ProjectView(projectId: $0.id) }
             .navigationDestination(for: ConversationsLink.self) { ConversationsView(projectId: $0.projectId) }
             .navigationDestination(for: WorkersLink.self) { WorkersView(projectId: $0.projectId) }

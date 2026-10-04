@@ -8,6 +8,8 @@ struct RootView: View {
     @State private var tab = Tab.activity
     @State private var openDecision: String?
     @State private var focusPermission: String?
+    @State private var openBot: BotLink?
+    @State private var explaining = false
     private var router: NotificationRouter { .shared }
 
     enum Tab { case activity, bots, decisions, reports, computers }
@@ -20,7 +22,7 @@ struct RootView: View {
             }
                 .tabItem { Label("Home", systemImage: "house") }
                 .tag(Tab.activity)
-            BotsView()
+            BotsView(openBot: $openBot)
                 .tabItem { Label("Bots", systemImage: "person.2") }
                 .tag(Tab.bots)
             DecisionsView(openDecision: $openDecision, focusPermission: $focusPermission)
@@ -39,15 +41,42 @@ struct RootView: View {
         .id(computer.id)
         .overlay(alignment: .top) { noticeBanner }
         .animation(.snappy, value: fleet.notice?.1)
-        .task { Notifier.requestPermission() }
+        // Asked after pairing, with a word on why, before the system prompt.
+        .task { explaining = await NotificationExplainer.shouldExplain() }
+        .sheet(isPresented: $explaining) { NotificationExplainer() }
         .task(id: computer.id) { await lens.poll() }
-        // A tapped "needs your permission" notification: its computer, its card.
+        #if DEBUG
+        // Checks without tapping a notification: -route kind/id[/bot] acts as one.
+        .task {
+            guard let route = UserDefaults.standard.string(forKey: "route") else { return }
+            let parts = route.split(separator: "/").map(String.init)
+            guard parts.count >= 2 else { return }
+            router.target = NotificationTarget(userInfo: ["computer": computer.id, "kind": parts[0], "id": parts[1],
+                                                          "bot": parts.count > 2 ? parts[2] : ""])
+        }
+        #endif
+        // A tapped notification: its computer, then what it is about.
         .onChange(of: router.target, initial: true) { _, target in
-            guard let target, let source = fleet.computers.first(where: { $0.id == target.computerId }) else { return }
-            fleet.select(source)
-            tab = .decisions
-            focusPermission = target.permissionId
+            guard let target else { return }
             router.target = nil
+            guard let source = fleet.computers.first(where: { $0.id == target.computerId }),
+                  let destination = target.destination else { return }
+            fleet.select(source)
+            open(destination)
+        }
+    }
+
+    private func open(_ destination: NotificationTarget.Destination) {
+        switch destination {
+        case .decision(let id):
+            tab = .decisions
+            openDecision = id
+        case .permissionCard(let id):
+            tab = .decisions
+            focusPermission = id
+        case .bot(let id, let pane):
+            tab = .bots
+            openBot = BotLink(botId: id, pane: pane)
         }
     }
 

@@ -9,6 +9,11 @@ struct ConnectView: View {
     @Environment(\.dismiss) private var dismiss
     /// Shown as a sheet over the app, with a Cancel button.
     var adding = false
+    /// A pairing link the system opened the app with. It fills the form but
+    /// waits for Connect: a link from a web page or message is not something
+    /// the owner chose to scan.
+    var initialLink: PairingLink? = nil
+    @State private var fromLink = false
     @State private var name = ""
     @State private var kind = ComputerKind.mac
     @State private var host = ""
@@ -85,6 +90,14 @@ struct ConnectView: View {
                 }
                 .disabled(trying != nil)
 
+                if fromLink, trying == nil, failure == nil {
+                    Section {
+                        Label("Opened from a pairing link. Check the computer and its address, then tap Connect.",
+                              systemImage: "link")
+                            .font(.footnote)
+                    }
+                }
+
                 if let trying {
                     Section {
                         HStack(spacing: 10) {
@@ -129,6 +142,9 @@ struct ConnectView: View {
                 // Screenshots and checks without a camera: -pairLink <link> pairs as if scanned.
                 if trying == nil, let text = UserDefaults.standard.string(forKey: "pairLink") { pasted(text) }
                 #endif
+            }
+            .onChange(of: initialLink, initial: true) { _, link in
+                if let link { prefill(link) }
             }
             .onDisappear { stopTrying() }
             .toolbar {
@@ -212,13 +228,27 @@ struct ConnectView: View {
 
     /// A scanned or pasted link: everything is known, so connect straight away.
     private func use(_ link: PairingLink) {
+        fill(link)
+        fromLink = false
+        connect()
+    }
+
+    /// A link from outside the app: filled in, shown, and left for Connect.
+    private func prefill(_ link: PairingLink) {
+        stopTrying()
+        failure = nil
+        fill(link)
+        fromLink = true
+        manual = true
+    }
+
+    private func fill(_ link: PairingLink) {
         pasteFailed = false
         host = link.host
         port = String(link.port)
         token = link.token
         if let linkKind = link.kind { kind = linkKind }
         if let linkName = link.name { name = linkName }
-        connect()
     }
 
     // MARK: Connecting

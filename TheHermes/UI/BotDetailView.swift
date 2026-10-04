@@ -5,6 +5,8 @@ struct BotDetailView: View {
     @Environment(LensStore.self) private var lens
     @Environment(\.scenePhase) private var scenePhase
     let botId: String
+    /// The pane to open on, from a tapped notification.
+    var initialPane: NotificationTarget.BotPane? = nil
     @State private var choice: Pane?
     @State private var searching = false
     @State private var confirming: SessionAction?
@@ -132,6 +134,9 @@ struct BotDetailView: View {
             store.markSeen(botId)
             store.botOnScreen = botId
             watchBrowser()
+            if choice == nil, let initialPane {
+                choice = initialPane == .chat ? .chat : .work
+            }
             #if DEBUG
             // Screenshots of the demo: -openPane Commands opens that pane.
             if choice == nil, let name = UserDefaults.standard.string(forKey: "openPane") {

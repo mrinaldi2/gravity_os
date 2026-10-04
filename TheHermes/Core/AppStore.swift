@@ -348,7 +348,8 @@ final class AppStore {
         bots[index].stateReason = frame.str("reason")
         if state != .waitingForApproval { approvals[id] = nil }
         if inBackground, state == .waitingForUser, previous != state {
-            notify("\(bots[index].name) is waiting for you", activity[id]?.text ?? "", id: "wait-\(id)")
+            notify("\(bots[index].name) is waiting for you", activity[id]?.text ?? "", id: "wait-\(id)",
+                   about: (.waiting, id, id))
         }
     }
 
@@ -358,7 +359,7 @@ final class AppStore {
         // Its bot is on screen: the card is already in front of the owner.
         guard inBackground || botOnScreen != request.botId else { return }
         notify("\(bot(request.botId)?.name ?? "A bot") needs your permission", request.summary,
-               id: "permission-\(request.id)", info: ["permission": request.id], always: true)
+               id: "permission-\(request.id)", about: (.permission, request.id, request.botId), always: true)
     }
 
     private func resolvePermission(_ id: String) {
@@ -373,7 +374,8 @@ final class AppStore {
         let detail = frame.str("detail")
         approvals[id] = detail
         if inBackground {
-            notify("\(bot(id)?.name ?? "A bot") needs approval", detail, id: "approval-\(id)")
+            notify("\(bot(id)?.name ?? "A bot") needs approval", detail, id: "approval-\(id)",
+                   about: (.approval, id, id))
         }
     }
 
@@ -381,18 +383,29 @@ final class AppStore {
         let entry = Notice(level: frame.str("level"), title: frame.str("title"),
                            body: frame.str("body"), decisionId: frame.optStr("decision_id"))
         if inBackground {
-            notify(entry.title, entry.body)
+            // What a notice is about, when the daemon says: a decision, or a
+            // task and the bot it is for (task_id and bot_id, H-011).
+            let about: (NotificationTarget.Kind, String, String?)?
+            if let decision = entry.decisionId {
+                about = (.decision, decision, nil)
+            } else if let task = frame.optStr("task_id"), let bot = frame.optStr("bot_id") {
+                about = (.task, task, bot)
+            } else {
+                about = nil
+            }
+            notify(entry.title, entry.body, about: about)
         } else {
             notice = entry
         }
     }
 
-    /// `info` comes back when the notification is tapped, with this computer's id.
+    /// `about` (kind, id, bot) comes back as a `NotificationTarget` when the
+    /// notification is tapped, with this computer's id.
     private func notify(_ title: String, _ body: String, id: String = UUID().uuidString,
-                        info: [String: String] = [:], always: Bool = false) {
+                        about: (NotificationTarget.Kind, String, String?)? = nil, always: Bool = false) {
         let tagged = notificationTag.map { "\($0): \(title)" } ?? title
-        var info = info
-        info["computer"] = defaults.id
+        let info = about.map { NotificationTarget(computerId: defaults.id, kind: $0.0, id: $0.1, botId: $0.2).userInfo }
+            ?? ["computer": defaults.id]
         Notifier.post(title: tagged, body: body, id: defaults.key(id), info: info, inForeground: always)
     }
 
@@ -426,7 +439,8 @@ final class AppStore {
         } else {
             decisions.insert(updated, at: 0)
             if inBackground, decision.state == "open" {
-                notify("\(decision.raisedByName) needs a decision", decision.title, id: "decision-\(decision.id)")
+                notify("\(decision.raisedByName) needs a decision", decision.title, id: "decision-\(decision.id)",
+                       about: (.decision, decision.id, nil))
             }
         }
         Task { await refreshCounts() }

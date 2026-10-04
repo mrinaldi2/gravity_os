@@ -36,19 +36,15 @@ enum Notifier {
     }
 }
 
-/// Where a tapped notification leads: a permission prompt on a computer.
+/// Where a tapped notification leads: a decision, a bot's permission card,
+/// its Chat or its Work pane, on the computer it came from.
 @MainActor
 @Observable
 final class NotificationRouter: NSObject, UNUserNotificationCenterDelegate {
     static let shared = NotificationRouter()
 
-    struct Target: Equatable {
-        let computerId: String
-        let permissionId: String
-    }
-
-    /// Set when the owner taps a prompt's notification; the root view opens it.
-    var target: Target?
+    /// Set when the owner taps a notification; the root view opens it.
+    var target: NotificationTarget?
 
     nonisolated func userNotificationCenter(_ center: UNUserNotificationCenter,
                                             willPresent notification: UNNotification) async
@@ -60,8 +56,7 @@ final class NotificationRouter: NSObject, UNUserNotificationCenterDelegate {
 
     nonisolated func userNotificationCenter(_ center: UNUserNotificationCenter,
                                             didReceive response: UNNotificationResponse) async {
-        let info = response.notification.request.content.userInfo
-        guard let computer = info["computer"] as? String, let permission = info["permission"] as? String else { return }
-        await MainActor.run { target = Target(computerId: computer, permissionId: permission) }
+        guard let tapped = NotificationTarget(userInfo: response.notification.request.content.userInfo) else { return }
+        await MainActor.run { target = tapped }
     }
 }
