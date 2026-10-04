@@ -17,7 +17,8 @@
 #                   control port tests ask the demo for the state they need
 #
 # On a shared computer it touches only what it started: the demo's processes,
-# by the pids make_demo.py records, and the one simulator.
+# by the pids make_demo.py records, and the one simulator, which it boots for
+# the run and shuts down afterwards.
 #
 # Result bundles (screenshots, contrast figures): build/ui-tests.xcresult, plus
 # build/ui-tests-fresh.xcresult (notifications not yet asked for) and
@@ -57,7 +58,12 @@ stop_demo() {
         rm -f "$out/pids"
     fi
 }
-trap stop_demo EXIT INT TERM
+# The simulator is booted only for the run: shut down whatever happens.
+finish() {
+    stop_demo
+    xcrun simctl shutdown "$device" 2>/dev/null || true
+}
+trap finish EXIT INT TERM
 # The demo first, on a quiet machine; a second try when its daemon trips while starting.
 for attempt in 1 2; do
     python3 -u demo/make_demo.py --serve --out "$out" --port "$port" --lens-port "$lens_port" \
