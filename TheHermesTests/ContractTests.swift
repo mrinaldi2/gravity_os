@@ -90,6 +90,35 @@ final class ContractTests: XCTestCase {
         XCTAssertEqual(blocked.since.timeIntervalSince1970, 1_791_105_153.123, accuracy: 0.001)
     }
 
+    /// A variant a newer daemon adds must not break decoding on this phone
+    /// (Architect review F6): it decodes as `.unknown` and goes back unchanged.
+    func testUnknownEnumVariantsDecodeAndRoundTrip() throws {
+        let local = URL(fileURLWithPath: #filePath).deletingLastPathComponent().appendingPathComponent("ContractFixtures")
+        let itemData = try Data(contentsOf: local.appendingPathComponent("item-unknown-variants.json"))
+        let item = try Contracts.decoder().decode(BoardItem.self, from: itemData)
+        XCTAssertEqual(item.category, .unknown("parked"))
+        XCTAssertEqual(item.type, .unknown("experiment"))
+        XCTAssertEqual(item.size, .unknown("XL"))
+        XCTAssertEqual(item.priority, .unknown("P4"))
+        XCTAssertEqual(item.platforms, [.ios, .unknown("watchos")])
+        XCTAssertEqual(item.people.first?.role, .unknown("pair"))
+        XCTAssertEqual(item.verifications.first?.result, .unknown("flaky"))
+        XCTAssertEqual(item.title, "Board and dashboard", "the rest of the item still decodes")
+
+        let again = try XCTUnwrap(JSONSerialization.jsonObject(with: Contracts.encoder().encode(item)) as? [String: Any])
+        XCTAssertEqual(again["category"] as? String, "parked")
+        XCTAssertEqual(again["platforms"] as? [String], ["ios", "watchos"])
+
+        let eventData = try Data(contentsOf: local.appendingPathComponent("event-unknown-kind.json"))
+        XCTAssertEqual(try Contracts.decoder().decode(BoardItemEvent.self, from: eventData).kind, .unknown("archived"))
+    }
+
+    func testKnownVariantsKeepTheirWireValues() {
+        XCTAssertEqual(BoardSize(rawValue: "M"), .m)
+        XCTAssertEqual(BoardPriority.p1.rawValue, "P1")
+        XCTAssertEqual(BoardColumnCategory(rawValue: "doing"), .doing)
+    }
+
     func testHelloContracts() {
         XCTAssertEqual(Contracts.served(by: ["contracts": ["board": 1, "releases": 2]]), ["board": 1, "releases": 2])
         XCTAssertEqual(Contracts.served(by: ["server_version": "0.13.0"]), [:], "a daemon from before contracts")

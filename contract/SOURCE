@@ -1,4 +1,17 @@
 board.schema.json and fixtures/board/ come from the Hermes repo at
 fbda7e7d083bd31ce5648051fefbeb813721b8be
 (contract/board.schema.json and crates/bus/fixtures/board/).
-Refresh with scripts/contract/vendor.sh.
+Refresh with scripts/contract/vendor.sh; never edit these files by hand.
+
+sha256:
+54e08a4fbe12638e5ba630ba9f308b0ff4f514e717e31ceae8220d0cf12d1c4d  board.schema.json
+1c4ccb3dabb80ed3829b2080a60d5d7013d76c13714df6c5e8bde6c34d28a2e1  fixtures/board/card.json
+e30f668a582415ece744072697c8db3583fcd96b5f524e11420e835b601aaba3  fixtures/board/column.json
+ec12c1d4eebc00dd1de7c03824e31fcb020c45d2ac077dddf34496c3df14f6b7  fixtures/board/comment.json
+2a395213cef3963df8172e1998db9f00a4cce513c37630bfbe8981b7b3615792  fixtures/board/event.json
+974e660c25137604410d6e16df9841855d097965bcb1643ff0a92d48680760bb  fixtures/board/item.json
+c3b5741ed9ce781604b06e4da631cdd92fed7304e3af7b5d8935bf51f9340dd0  fixtures/board/link.json
+96fe5c14333e5c71f15e231bd6a9212003d51f6dc86caf4da3fd0b45c77e3571  fixtures/board/role.json
+66a4f5ad4daa5467a6950605b4418e108f06997ca81aa5c8114bde8a2a4beb7c  fixtures/board/settings.json
+c5ba6d6fa510e4e880b081a232fd35ea7f1207b045f48a4a149f8d140b2213b0  fixtures/board/template.json
+435d5995fe02c908807537079fe5566d529892dae6be177674dfb459c5d53019  fixtures/board/unmet.json

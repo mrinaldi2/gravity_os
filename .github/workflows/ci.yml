@@ -43,8 +43,8 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - name: Wire contract is current
-        # The generated Swift must match the vendored schema; the unit tests
-        # below decode every golden fixture with it.
+        # Vendored files must match their checksums in contract/SOURCE, and the
+        # generated Swift the schema; the unit tests decode every fixture.
         run: scripts/contract/generate-swift.sh --check
       - name: Build for the simulator
         run: |

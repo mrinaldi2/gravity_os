@@ -4,7 +4,8 @@
 # generated file by hand.
 #
 #   scripts/contract/generate-swift.sh          regenerate TheHermes/Core/Generated/Board.swift
-#   scripts/contract/generate-swift.sh --check  fail if it is out of date with the schema
+#   scripts/contract/generate-swift.sh --check  fail if a vendored file was edited by hand, or the
+#                                               Swift is out of date with the schema (CI runs this)
 set -eu
 cd "$(dirname "$0")/../.."
 schema=contract/board.schema.json
@@ -26,10 +27,12 @@ trap 'rm -f "$tmp"' EXIT
   # app's namespace; "BoardBoard…" from types already named Board… collapses.
   "$quicktype" --src-lang schema --lang swift --top-level BoardContract --type-prefix Board \
     --struct-or-class struct --access-level internal --no-initializers --acronym-style pascal \
-    "$schema" | sed -e 's/BoardBoard/Board/g' -e '/^\/\/ This file was generated from JSON Schema using quicktype/d'
+    "$schema" | sed -e 's/BoardBoard/Board/g' -e '/^\/\/ This file was generated from JSON Schema using quicktype/d' \
+    | python3 scripts/contract/open_enums.py
 } > "$tmp"
 
 if [ "${1:-}" = "--check" ]; then
+  scripts/contract/vendor.sh --check
   if ! cmp -s "$tmp" "$out"; then
     echo "$out is out of date with $schema. Run scripts/contract/generate-swift.sh." >&2
     exit 1

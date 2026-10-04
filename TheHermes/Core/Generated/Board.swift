@@ -75,33 +75,157 @@ struct BoardItemCard: Codable {
 }
 
 /// Where an item's change lands; decides who must verify it.
-enum BoardPlatform: String, Codable {
-    case daemon = "daemon"
-    case desktop = "desktop"
-    case infra = "infra"
-    case ios = "ios"
+enum BoardPlatform: Codable, Hashable {
+    case daemon
+    case desktop
+    case infra
+    case ios
+    /// A value this app does not know yet; kept so it round-trips.
+    case unknown(String)
+
+    init(rawValue: String) {
+        switch rawValue {
+        case "daemon": self = .daemon
+        case "desktop": self = .desktop
+        case "infra": self = .infra
+        case "ios": self = .ios
+        default: self = .unknown(rawValue)
+        }
+    }
+
+    var rawValue: String {
+        switch self {
+        case .daemon: "daemon"
+        case .desktop: "desktop"
+        case .infra: "infra"
+        case .ios: "ios"
+        case .unknown(let value): value
+        }
+    }
+
+    init(from decoder: Decoder) throws {
+        self.init(rawValue: try decoder.singleValueContainer().decode(String.self))
+    }
+
+    func encode(to encoder: Encoder) throws {
+        var container = encoder.singleValueContainer()
+        try container.encode(rawValue)
+    }
 }
 
-enum BoardPriority: String, Codable {
-    case p0 = "P0"
-    case p1 = "P1"
-    case p2 = "P2"
-    case p3 = "P3"
+enum BoardPriority: Codable, Hashable {
+    case p0
+    case p1
+    case p2
+    case p3
+    /// A value this app does not know yet; kept so it round-trips.
+    case unknown(String)
+
+    init(rawValue: String) {
+        switch rawValue {
+        case "P0": self = .p0
+        case "P1": self = .p1
+        case "P2": self = .p2
+        case "P3": self = .p3
+        default: self = .unknown(rawValue)
+        }
+    }
+
+    var rawValue: String {
+        switch self {
+        case .p0: "P0"
+        case .p1: "P1"
+        case .p2: "P2"
+        case .p3: "P3"
+        case .unknown(let value): value
+        }
+    }
+
+    init(from decoder: Decoder) throws {
+        self.init(rawValue: try decoder.singleValueContainer().decode(String.self))
+    }
+
+    func encode(to encoder: Encoder) throws {
+        var container = encoder.singleValueContainer()
+        try container.encode(rawValue)
+    }
 }
 
 /// L is allowed only in the inbox: it must be split before it is ready.
-enum BoardSize: String, Codable {
-    case l = "L"
-    case m = "M"
-    case s = "S"
+enum BoardSize: Codable, Hashable {
+    case l
+    case m
+    case s
+    /// A value this app does not know yet; kept so it round-trips.
+    case unknown(String)
+
+    init(rawValue: String) {
+        switch rawValue {
+        case "L": self = .l
+        case "M": self = .m
+        case "S": self = .s
+        default: self = .unknown(rawValue)
+        }
+    }
+
+    var rawValue: String {
+        switch self {
+        case .l: "L"
+        case .m: "M"
+        case .s: "S"
+        case .unknown(let value): value
+        }
+    }
+
+    init(from decoder: Decoder) throws {
+        self.init(rawValue: try decoder.singleValueContainer().decode(String.self))
+    }
+
+    func encode(to encoder: Encoder) throws {
+        var container = encoder.singleValueContainer()
+        try container.encode(rawValue)
+    }
 }
 
-enum BoardItemType: String, Codable {
-    case bug = "bug"
-    case chore = "chore"
-    case epic = "epic"
-    case feature = "feature"
-    case spike = "spike"
+enum BoardItemType: Codable, Hashable {
+    case bug
+    case chore
+    case epic
+    case feature
+    case spike
+    /// A value this app does not know yet; kept so it round-trips.
+    case unknown(String)
+
+    init(rawValue: String) {
+        switch rawValue {
+        case "bug": self = .bug
+        case "chore": self = .chore
+        case "epic": self = .epic
+        case "feature": self = .feature
+        case "spike": self = .spike
+        default: self = .unknown(rawValue)
+        }
+    }
+
+    var rawValue: String {
+        switch self {
+        case .bug: "bug"
+        case .chore: "chore"
+        case .epic: "epic"
+        case .feature: "feature"
+        case .spike: "spike"
+        case .unknown(let value): value
+        }
+    }
+
+    init(from decoder: Decoder) throws {
+        self.init(rawValue: try decoder.singleValueContainer().decode(String.self))
+    }
+
+    func encode(to encoder: Encoder) throws {
+        var container = encoder.singleValueContainer()
+        try container.encode(rawValue)
+    }
 }
 
 // MARK: - BoardColumn
@@ -129,22 +253,90 @@ struct BoardColumn: Codable {
 
 /// The canonical category a column maps to. Guards and metrics key on it, so
 /// renaming or splitting a column never changes the rules.
-enum BoardColumnCategory: String, Codable {
-    case approval = "approval"
-    case cancelled = "cancelled"
-    case deploying = "deploying"
-    case doing = "doing"
-    case done = "done"
-    case inbox = "inbox"
-    case ready = "ready"
-    case review = "review"
-    case verify = "verify"
+enum BoardColumnCategory: Codable, Hashable {
+    case approval
+    case cancelled
+    case deploying
+    case doing
+    case done
+    case inbox
+    case ready
+    case review
+    case verify
+    /// A value this app does not know yet; kept so it round-trips.
+    case unknown(String)
+
+    init(rawValue: String) {
+        switch rawValue {
+        case "approval": self = .approval
+        case "cancelled": self = .cancelled
+        case "deploying": self = .deploying
+        case "doing": self = .doing
+        case "done": self = .done
+        case "inbox": self = .inbox
+        case "ready": self = .ready
+        case "review": self = .review
+        case "verify": self = .verify
+        default: self = .unknown(rawValue)
+        }
+    }
+
+    var rawValue: String {
+        switch self {
+        case .approval: "approval"
+        case .cancelled: "cancelled"
+        case .deploying: "deploying"
+        case .doing: "doing"
+        case .done: "done"
+        case .inbox: "inbox"
+        case .ready: "ready"
+        case .review: "review"
+        case .verify: "verify"
+        case .unknown(let value): value
+        }
+    }
+
+    init(from decoder: Decoder) throws {
+        self.init(rawValue: try decoder.singleValueContainer().decode(String.self))
+    }
+
+    func encode(to encoder: Encoder) throws {
+        var container = encoder.singleValueContainer()
+        try container.encode(rawValue)
+    }
 }
 
 /// What a column's WIP limit counts.
-enum BoardWipScope: String, Codable {
-    case column = "column"
-    case perAssignee = "per_assignee"
+enum BoardWipScope: Codable, Hashable {
+    case column
+    case perAssignee
+    /// A value this app does not know yet; kept so it round-trips.
+    case unknown(String)
+
+    init(rawValue: String) {
+        switch rawValue {
+        case "column": self = .column
+        case "per_assignee": self = .perAssignee
+        default: self = .unknown(rawValue)
+        }
+    }
+
+    var rawValue: String {
+        switch self {
+        case .column: "column"
+        case .perAssignee: "per_assignee"
+        case .unknown(let value): value
+        }
+    }
+
+    init(from decoder: Decoder) throws {
+        self.init(rawValue: try decoder.singleValueContainer().decode(String.self))
+    }
+
+    func encode(to encoder: Encoder) throws {
+        var container = encoder.singleValueContainer()
+        try container.encode(rawValue)
+    }
 }
 
 // MARK: - BoardItemComment
@@ -194,15 +386,54 @@ struct BoardItemEvent: Codable {
 }
 
 /// What an item-history event records. Metrics are computed from these.
-enum BoardItemEventKind: String, Codable {
-    case assigned = "assigned"
-    case blocked = "blocked"
-    case commented = "commented"
-    case created = "created"
-    case edited = "edited"
-    case linked = "linked"
-    case moved = "moved"
-    case ranked = "ranked"
+enum BoardItemEventKind: Codable, Hashable {
+    case assigned
+    case blocked
+    case commented
+    case created
+    case edited
+    case linked
+    case moved
+    case ranked
+    /// A value this app does not know yet; kept so it round-trips.
+    case unknown(String)
+
+    init(rawValue: String) {
+        switch rawValue {
+        case "assigned": self = .assigned
+        case "blocked": self = .blocked
+        case "commented": self = .commented
+        case "created": self = .created
+        case "edited": self = .edited
+        case "linked": self = .linked
+        case "moved": self = .moved
+        case "ranked": self = .ranked
+        default: self = .unknown(rawValue)
+        }
+    }
+
+    var rawValue: String {
+        switch self {
+        case .assigned: "assigned"
+        case .blocked: "blocked"
+        case .commented: "commented"
+        case .created: "created"
+        case .edited: "edited"
+        case .linked: "linked"
+        case .moved: "moved"
+        case .ranked: "ranked"
+        case .unknown(let value): value
+        }
+    }
+
+    init(from decoder: Decoder) throws {
+        self.init(rawValue: try decoder.singleValueContainer().decode(String.self))
+    }
+
+    func encode(to encoder: Encoder) throws {
+        var container = encoder.singleValueContainer()
+        try container.encode(rawValue)
+    }
 }
 
 /// A work item in full, as the item drawer shows it.
@@ -314,9 +545,36 @@ struct BoardItemPerson: Codable {
 }
 
 /// A bot's part on one item, beyond the assignee.
-enum BoardPersonRole: String, Codable {
-    case reviewer = "reviewer"
-    case verifier = "verifier"
+enum BoardPersonRole: Codable, Hashable {
+    case reviewer
+    case verifier
+    /// A value this app does not know yet; kept so it round-trips.
+    case unknown(String)
+
+    init(rawValue: String) {
+        switch rawValue {
+        case "reviewer": self = .reviewer
+        case "verifier": self = .verifier
+        default: self = .unknown(rawValue)
+        }
+    }
+
+    var rawValue: String {
+        switch self {
+        case .reviewer: "reviewer"
+        case .verifier: "verifier"
+        case .unknown(let value): value
+        }
+    }
+
+    init(from decoder: Decoder) throws {
+        self.init(rawValue: try decoder.singleValueContainer().decode(String.self))
+    }
+
+    func encode(to encoder: Encoder) throws {
+        var container = encoder.singleValueContainer()
+        try container.encode(rawValue)
+    }
 }
 
 // MARK: - BoardItemVerification
@@ -336,10 +594,39 @@ struct BoardItemVerification: Codable {
     }
 }
 
-enum BoardVerificationResult: String, Codable {
-    case blocked = "blocked"
-    case fail = "fail"
-    case pass = "pass"
+enum BoardVerificationResult: Codable, Hashable {
+    case blocked
+    case fail
+    case pass
+    /// A value this app does not know yet; kept so it round-trips.
+    case unknown(String)
+
+    init(rawValue: String) {
+        switch rawValue {
+        case "blocked": self = .blocked
+        case "fail": self = .fail
+        case "pass": self = .pass
+        default: self = .unknown(rawValue)
+        }
+    }
+
+    var rawValue: String {
+        switch self {
+        case .blocked: "blocked"
+        case .fail: "fail"
+        case .pass: "pass"
+        case .unknown(let value): value
+        }
+    }
+
+    init(from decoder: Decoder) throws {
+        self.init(rawValue: try decoder.singleValueContainer().decode(String.self))
+    }
+
+    func encode(to encoder: Encoder) throws {
+        var container = encoder.singleValueContainer()
+        try container.encode(rawValue)
+    }
 }
 
 // MARK: - BoardItemLink
@@ -362,16 +649,57 @@ struct BoardItemLink: Codable {
     }
 }
 
-enum BoardLinkKind: String, Codable {
-    case artifact = "artifact"
-    case branch = "branch"
-    case decision = "decision"
-    case itemBlocks = "item:blocks"
-    case itemDuplicates = "item:duplicates"
-    case itemRelates = "item:relates"
-    case meeting = "meeting"
-    case pr = "pr"
-    case task = "task"
+enum BoardLinkKind: Codable, Hashable {
+    case artifact
+    case branch
+    case decision
+    case itemBlocks
+    case itemDuplicates
+    case itemRelates
+    case meeting
+    case pr
+    case task
+    /// A value this app does not know yet; kept so it round-trips.
+    case unknown(String)
+
+    init(rawValue: String) {
+        switch rawValue {
+        case "artifact": self = .artifact
+        case "branch": self = .branch
+        case "decision": self = .decision
+        case "item:blocks": self = .itemBlocks
+        case "item:duplicates": self = .itemDuplicates
+        case "item:relates": self = .itemRelates
+        case "meeting": self = .meeting
+        case "pr": self = .pr
+        case "task": self = .task
+        default: self = .unknown(rawValue)
+        }
+    }
+
+    var rawValue: String {
+        switch self {
+        case .artifact: "artifact"
+        case .branch: "branch"
+        case .decision: "decision"
+        case .itemBlocks: "item:blocks"
+        case .itemDuplicates: "item:duplicates"
+        case .itemRelates: "item:relates"
+        case .meeting: "meeting"
+        case .pr: "pr"
+        case .task: "task"
+        case .unknown(let value): value
+        }
+    }
+
+    init(from decoder: Decoder) throws {
+        self.init(rawValue: try decoder.singleValueContainer().decode(String.self))
+    }
+
+    func encode(to encoder: Encoder) throws {
+        var container = encoder.singleValueContainer()
+        try container.encode(rawValue)
+    }
 }
 
 // MARK: - BoardProjectRole
@@ -391,14 +719,51 @@ struct BoardProjectRole: Codable {
 }
 
 /// A bot's role in a project's way of working.
-enum BoardRole: String, Codable {
-    case coach = "coach"
-    case dev = "dev"
-    case devops = "devops"
-    case lead = "lead"
-    case reviewerArch = "reviewer.arch"
-    case reviewerUX = "reviewer.ux"
-    case tester = "tester"
+enum BoardRole: Codable, Hashable {
+    case coach
+    case dev
+    case devops
+    case lead
+    case reviewerArch
+    case reviewerUX
+    case tester
+    /// A value this app does not know yet; kept so it round-trips.
+    case unknown(String)
+
+    init(rawValue: String) {
+        switch rawValue {
+        case "coach": self = .coach
+        case "dev": self = .dev
+        case "devops": self = .devops
+        case "lead": self = .lead
+        case "reviewer.arch": self = .reviewerArch
+        case "reviewer.ux": self = .reviewerUX
+        case "tester": self = .tester
+        default: self = .unknown(rawValue)
+        }
+    }
+
+    var rawValue: String {
+        switch self {
+        case .coach: "coach"
+        case .dev: "dev"
+        case .devops: "devops"
+        case .lead: "lead"
+        case .reviewerArch: "reviewer.arch"
+        case .reviewerUX: "reviewer.ux"
+        case .tester: "tester"
+        case .unknown(let value): value
+        }
+    }
+
+    init(from decoder: Decoder) throws {
+        self.init(rawValue: try decoder.singleValueContainer().decode(String.self))
+    }
+
+    func encode(to encoder: Encoder) throws {
+        var container = encoder.singleValueContainer()
+        try container.encode(rawValue)
+    }
 }
 
 /// One project's board configuration.
@@ -461,9 +826,36 @@ struct BoardTemplate: Codable {
     }
 }
 
-enum BoardTemplateKind: String, Codable {
-    case itemType = "item_type"
-    case meetingType = "meeting_type"
+enum BoardTemplateKind: Codable, Hashable {
+    case itemType
+    case meetingType
+    /// A value this app does not know yet; kept so it round-trips.
+    case unknown(String)
+
+    init(rawValue: String) {
+        switch rawValue {
+        case "item_type": self = .itemType
+        case "meeting_type": self = .meetingType
+        default: self = .unknown(rawValue)
+        }
+    }
+
+    var rawValue: String {
+        switch self {
+        case .itemType: "item_type"
+        case .meetingType: "meeting_type"
+        case .unknown(let value): value
+        }
+    }
+
+    init(from decoder: Decoder) throws {
+        self.init(rawValue: try decoder.singleValueContainer().decode(String.self))
+    }
+
+    func encode(to encoder: Encoder) throws {
+        var container = encoder.singleValueContainer()
+        try container.encode(rawValue)
+    }
 }
 
 /// A guard a move does not meet yet, with what would fix it. The UI shows these
