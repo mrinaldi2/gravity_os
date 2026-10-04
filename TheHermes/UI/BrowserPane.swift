@@ -28,7 +28,7 @@ struct BrowserPane: View {
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 12) {
-                Text(note).font(.footnote).foregroundStyle(.secondary)
+                Text(note).font(.footnote).foregroundStyle(Color.secondaryText)
                 if let tabs, tabs.open {
                     TabStrip(tabs: tabs) { store.watchBrowser(botId, tabId: $0) }
                 }
@@ -61,7 +61,7 @@ struct BrowserPane: View {
             } else {
                 VStack(alignment: .leading, spacing: 6) {
                     if let url = tabs.activeTab?.url, !url.isEmpty {
-                        Text(url).font(.caption.monospaced()).foregroundStyle(.secondary).lineLimit(1).truncationMode(.middle)
+                        Text(url).font(.caption.monospaced()).foregroundStyle(Color.secondaryText).lineLimit(1).truncationMode(.middle)
                     }
                     if let frame, let image = UIImage(data: frame.jpeg) {
                         // The page's own shape, never cropped.
@@ -85,7 +85,7 @@ struct BrowserPane: View {
     private func placeholder(_ text: String) -> some View {
         Text(text)
             .font(.callout)
-            .foregroundStyle(.secondary)
+            .foregroundStyle(Color.secondaryText)
             .multilineTextAlignment(.center)
             .frame(maxWidth: .infinity, minHeight: 180)
             .background(Color(.secondarySystemBackground), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
@@ -106,10 +106,10 @@ struct BrowserPane: View {
                     HStack {
                         Text(group.why).font(.subheadline.weight(.semibold))
                         Spacer()
-                        if let at = group.at { Text(TaskTime.text(at)).font(.caption).foregroundStyle(.secondary) }
+                        if let at = group.at { Text(TaskTime.text(at)).font(.caption).foregroundStyle(Color.secondaryText) }
                     }
                     if !group.ask.isEmpty {
-                        Text(group.ask).font(.footnote).foregroundStyle(.secondary).lineLimit(2)
+                        Text(group.ask).font(.footnote).foregroundStyle(Color.secondaryText).lineLimit(2)
                     }
                     ForEach(group.actions) { action in ActionRow(action: action) }
                 }
@@ -190,7 +190,7 @@ private struct ActionRow: View {
                     }
                 }
                 if let subtitle = action.subtitle {
-                    Text(subtitle).font(.caption.monospaced()).foregroundStyle(.secondary).lineLimit(1).truncationMode(.middle)
+                    Text(subtitle).font(.caption.monospaced()).foregroundStyle(Color.secondaryText).lineLimit(1).truncationMode(.middle)
                 }
             }
         }

@@ -160,7 +160,7 @@ struct FilePreview: View {
             ScrollView {
                 VStack(alignment: .leading, spacing: 10) {
                     if loaded.truncated {
-                        Text("Only the first 16 MB are shown.").font(.caption).foregroundStyle(.secondary)
+                        Text("Only the first 16 MB are shown.").font(.caption).foregroundStyle(Color.secondaryText)
                     }
                     if loaded.mime == "text/markdown" {
                         MarkdownText(text).textSelection(.enabled)

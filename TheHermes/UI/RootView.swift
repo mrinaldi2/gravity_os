@@ -64,7 +64,7 @@ struct RootView: View {
                 VStack(alignment: .leading, spacing: 2) {
                     if fleet.computers.count > 1 {
                         Label(source.name, systemImage: source.kind.symbol)
-                            .font(.caption.weight(.medium)).foregroundStyle(.secondary)
+                            .font(.caption.weight(.medium)).foregroundStyle(Color.secondaryText)
                     }
                     Text(notice.title).font(.subheadline.weight(.semibold))
                     if !notice.body.isEmpty {

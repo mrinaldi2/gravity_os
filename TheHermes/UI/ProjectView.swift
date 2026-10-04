@@ -25,7 +25,7 @@ struct ProjectView: View {
                             }
                         }
                         .accessibilityHidden(true)
-                        Text(summary(bots)).font(.footnote).foregroundStyle(.secondary)
+                        Text(summary(bots)).font(.footnote).foregroundStyle(Color.secondaryText)
                     }
                     .padding(.vertical, 4)
                 }
@@ -91,7 +91,7 @@ struct ProjectView: View {
                 } header: {
                     SectionTitle("Computers")
                 } footer: {
-                    Text("A linked project's bots on every computer work as one team and hand each other tasks and files.")
+                    Text("A linked project's bots on every computer work as one team and hand each other tasks and files.").foregroundStyle(Color.secondaryText)
                 }
             }
         }

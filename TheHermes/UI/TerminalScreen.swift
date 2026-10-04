@@ -212,7 +212,7 @@ struct TerminalScreen: View {
                 .padding(.horizontal, 10)
             }
             HStack(alignment: .bottom, spacing: 8) {
-                TextField("Message the bot's terminal", text: $draft, axis: .vertical)
+                TextField("Message the bot's terminal", text: $draft, prompt: .placeholder("Message the bot's terminal"), axis: .vertical)
                     .lineLimit(1...5)
                     .focused($composing)
                     .padding(.horizontal, 12)
@@ -239,7 +239,7 @@ struct TerminalScreen: View {
     private var readOnlyNote: some View {
         Text("This device can watch but not type: it needs control access.")
             .font(.footnote)
-            .foregroundStyle(.secondary)
+            .foregroundStyle(Color.secondaryText)
             .frame(maxWidth: .infinity)
             .padding(8)
             .background(Color(white: 0.10))

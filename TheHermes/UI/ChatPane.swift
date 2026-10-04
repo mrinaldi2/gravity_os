@@ -41,7 +41,7 @@ struct BotChatPane: View {
                         if loaded, turns.isEmpty, pending.isEmpty {
                             Text("Nothing here yet. Messages you send, and everything \(bot?.name ?? "the bot") does, show up here.")
                                 .font(.callout)
-                                .foregroundStyle(.secondary)
+                                .foregroundStyle(Color.secondaryText)
                                 .frame(maxWidth: .infinity)
                                 .padding(.top, 40)
                         }
@@ -159,11 +159,11 @@ struct ChatTurnView: View {
             if turn.open {
                 HStack(spacing: 8) {
                     ProgressView().controlSize(.small)
-                    Text("Working…").font(.footnote).foregroundStyle(.secondary)
+                    Text("Working…").font(.footnote).foregroundStyle(Color.secondaryText)
                 }
             }
             if let lens = turn.lensTurn(botName: nil), !lens.stats.line.isEmpty {
-                Text(lens.stats.line).font(.caption).foregroundStyle(.secondary)
+                Text(lens.stats.line).font(.caption).foregroundStyle(Color.secondaryText)
             }
         }
         // Outside a List, links and disclosure labels would take the accent colour.
@@ -184,7 +184,7 @@ struct ChatTurnView: View {
                     .font(.caption2)
             }
         }
-        .foregroundStyle(.secondary)
+        .foregroundStyle(Color.secondaryText)
     }
 
     /// The owner's words sit on the right, like a sent message; everything else is labelled.
@@ -262,7 +262,7 @@ private struct PendingBubble: View {
                 .background(Color.accentColor.opacity(0.16), in: RoundedRectangle(cornerRadius: 14, style: .continuous))
             Text(message.label)
                 .font(.caption2)
-                .foregroundStyle(message.state == .sent || message.state == .queued ? AnyShapeStyle(.secondary) : AnyShapeStyle(Color.errorText))
+                .foregroundStyle(message.state == .sent || message.state == .queued ? AnyShapeStyle(Color.secondaryText) : AnyShapeStyle(Color.errorText))
         }
         .frame(maxWidth: .infinity, alignment: .trailing)
         .padding(.leading, 40)
@@ -285,17 +285,17 @@ private struct ChatComposer: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 4) {
             if let blocked {
-                Text(blocked).font(.caption).foregroundStyle(.secondary)
+                Text(blocked).font(.caption).foregroundStyle(Color.secondaryText)
             } else if case .failed(let reason) = dictation.phase {
                 Text(reason).font(.caption).foregroundStyle(Color.errorText)
             } else if dictation.isListening {
                 Label("Listening… tap the microphone when you are done.", systemImage: "waveform")
                     .font(.caption).foregroundStyle(Color.errorText)
             } else if text.hasPrefix("/") {
-                Text("Runs in the terminal, as if you typed it there.").font(.caption).foregroundStyle(.secondary)
+                Text("Runs in the terminal, as if you typed it there.").font(.caption).foregroundStyle(Color.secondaryText)
             }
             HStack(alignment: .bottom, spacing: 8) {
-                TextField("Message \(botName)", text: $draft, axis: .vertical)
+                TextField("Message \(botName)", text: $draft, prompt: .placeholder("Message \(botName)"), axis: .vertical)
                     .lineLimit(1...6)
                     .textFieldStyle(.roundedBorder)
                     .disabled(blocked != nil)
@@ -424,14 +424,14 @@ private struct ChatSearchBar: View {
             HStack(spacing: 8) {
                 TextField("Search this chat", text: Binding(
                     get: { search.query },
-                    set: { search.setQuery($0, in: turns) }))
+                    set: { search.setQuery($0, in: turns) }), prompt: .placeholder("Search this chat"))
                     .textFieldStyle(.roundedBorder)
                     .textInputAutocapitalization(.never)
                     .autocorrectionDisabled()
                     .focused($focused)
                     .submitLabel(.search)
                     .onSubmit { search.next(); focused = true }
-                Text(search.countLabel).font(.caption.monospacedDigit()).foregroundStyle(.secondary)
+                Text(search.countLabel).font(.caption.monospacedDigit()).foregroundStyle(Color.secondaryText)
                 Button { search.previous() } label: { Image(systemName: "chevron.up") }
                     .disabled(search.count == 0)
                     .accessibilityLabel("Previous match")
@@ -441,7 +441,7 @@ private struct ChatSearchBar: View {
                 Button("Done", action: done)
             }
             if hasMore, search.active {
-                Text("Only loaded turns are searched.").font(.caption2).foregroundStyle(.secondary)
+                Text("Only loaded turns are searched.").font(.caption2).foregroundStyle(Color.secondaryText)
             }
         }
         .padding(.horizontal, 12)

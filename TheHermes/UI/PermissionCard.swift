@@ -29,7 +29,7 @@ struct PermissionCard: View {
                 } else {
                     Text(name).font(.subheadline.weight(.semibold))
                 }
-                Text("wants to run").font(.subheadline).foregroundStyle(.secondary)
+                Text("wants to run").font(.subheadline).foregroundStyle(Color.secondaryText)
                 Spacer(minLength: 0)
             }
             Text(request.summary)
@@ -39,7 +39,7 @@ struct PermissionCard: View {
             if let expires = request.expiresAt {
                 Text("Denied at \(expires.formatted(date: .omitted, time: .shortened)) if unanswered")
                     .font(.caption)
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(Color.secondaryText)
             }
             if !request.input.isEmpty {
                 DisclosureGroup(isExpanded: $showInput) {
@@ -55,7 +55,7 @@ struct PermissionCard: View {
                 }
                 .tint(.secondary)
             }
-            TextField("Reason, sent with Deny (optional)", text: $reason, axis: .vertical)
+            TextField("Reason, sent with Deny (optional)", text: $reason, prompt: .placeholder("Reason, sent with Deny (optional)"), axis: .vertical)
                 .font(.footnote)
                 .lineLimit(1...3)
                 .textFieldStyle(.roundedBorder)
@@ -68,7 +68,7 @@ struct PermissionCard: View {
             if !store.canControl {
                 Text("This device can read but not answer: it needs control access.")
                     .font(.caption)
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(Color.secondaryText)
             }
             if let failure {
                 Text(failure).font(.caption).foregroundStyle(Color.errorText)
@@ -117,7 +117,7 @@ struct PermissionCard: View {
     }
 }
 
-/// A bordered button whose words keep 4.5:1 on the orange card: its tone's
+/// A bordered button, 44pt tall, whose words keep 4.5:1 on the orange card: its tone's
 /// text colour on a light wash of the tint, laid over the plain card colour.
 private struct AnswerButtonStyle: ButtonStyle {
     let tone: Tone
@@ -127,7 +127,8 @@ private struct AnswerButtonStyle: ButtonStyle {
         configuration.label
             .foregroundStyle(tone.text)
             .padding(.vertical, 8)
-            .padding(.horizontal, 10)
+            .padding(.horizontal, 6)
+            .frame(minHeight: 44)
             .background(tone.color.opacity(0.12), in: Capsule())
             .background(Color(.secondarySystemGroupedBackground), in: Capsule())
             .opacity(configuration.isPressed ? 0.6 : isEnabled ? 1 : 0.4)

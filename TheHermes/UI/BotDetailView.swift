@@ -82,7 +82,7 @@ struct BotDetailView: View {
             if let notice {
                 Label(notice, systemImage: "arrow.clockwise")
                     .font(.footnote)
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(Color.secondaryText)
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .padding(.horizontal, 14)
                     .padding(.bottom, 8)
@@ -157,7 +157,7 @@ struct BotDetailView: View {
                 VStack(alignment: .leading, spacing: 0) {
                     Text(bot.name).font(.subheadline.weight(.semibold)).lineLimit(1)
                     Text([bot.peerName ?? store.computerName, store.projectName(bot.projectId)].filter { !$0.isEmpty }.joined(separator: " · "))
-                        .font(.caption2).foregroundStyle(.secondary).lineLimit(1)
+                        .font(.caption2).foregroundStyle(Color.secondaryText).lineLimit(1)
                 }
             }
             .accessibilityElement(children: .combine)
@@ -318,7 +318,7 @@ private struct BotMorePane: View {
                     }
                     if bot.temporary {
                         Text("Temporary worker spawned by \(bot.createdByBotId.flatMap(store.bot)?.name ?? "a bot"); removed when its task closes.")
-                            .font(.footnote).foregroundStyle(.secondary)
+                            .font(.footnote).foregroundStyle(Color.secondaryText)
                     } else if let creator = bot.createdByBotId.flatMap(store.bot) {
                         LabeledContent("Created by", value: creator.name)
                     }
@@ -328,7 +328,7 @@ private struct BotMorePane: View {
                     if !bot.instructions.isEmpty {
                         Text(bot.instructions)
                             .font(.footnote)
-                            .foregroundStyle(.secondary)
+                            .foregroundStyle(Color.secondaryText)
                             .lineLimit(instructionsOpen ? nil : 3)
                             .textSelection(.enabled)
                             .onTapGesture { withAnimation(.snappy) { instructionsOpen.toggle() } }
@@ -347,12 +347,12 @@ private struct BotMorePane: View {
                     } header: {
                         SectionTitle("Session")
                     } footer: {
-                        Text("Files, memory and tasks are kept either way.")
+                        Text("Files, memory and tasks are kept either way.").foregroundStyle(Color.secondaryText)
                     }
                     .disabled(store.status != .connected)
                 }
                 Section {
-                    Text(bot.workspacePath).font(.caption.monospaced()).foregroundStyle(.secondary).textSelection(.enabled)
+                    Text(bot.workspacePath).font(.caption.monospaced()).foregroundStyle(Color.secondaryText).textSelection(.enabled)
                 } header: {
                     SectionTitle("Workspace")
                 }
@@ -386,7 +386,7 @@ private struct RoutinesSection: View {
                     }
                 }
                 .disabled(!store.canControl)
-                Text(routine.prompt).font(.footnote).foregroundStyle(.secondary).lineLimit(3)
+                Text(routine.prompt).font(.footnote).foregroundStyle(Color.secondaryText).lineLimit(3)
                 if store.canControl {
                     Button("Run now") {
                         run { _ = try await store.client.request("run_routine_now", ["routine_id": routine.id]) }
@@ -439,11 +439,11 @@ private struct ChromeAccessSection: View {
             .disabled(!store.canControl || store.status != .connected || saving)
             // On the row, not the Section: a List applies a section's modifiers to each row.
             .errorAlert("Couldn’t change Chrome access.", $failure)
-            if let note { Text(note).font(.footnote).foregroundStyle(.secondary) }
+            if let note { Text(note).font(.footnote).foregroundStyle(Color.secondaryText) }
         } header: {
-            Text("Browser")
+            Text("Browser").foregroundStyle(Color.secondaryText)
         } footer: {
-            Text("\(bot.name) always has a browser of its own. Allow this only for tasks that need your logged-in sessions; its tabs then open in your Chrome. Restarts the bot.")
+            Text("\(bot.name) always has a browser of its own. Allow this only for tasks that need your logged-in sessions; its tabs then open in your Chrome. Restarts the bot.").foregroundStyle(Color.secondaryText)
         }
     }
 

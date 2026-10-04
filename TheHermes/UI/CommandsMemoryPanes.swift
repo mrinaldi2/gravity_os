@@ -56,8 +56,8 @@ struct CommandRow: View {
                     CopyableBlock(title: "Output", text: output)
                 } else {
                     VStack(alignment: .leading, spacing: 4) {
-                        Text("Output").font(.caption2.weight(.semibold)).foregroundStyle(.secondary)
-                        Text("No output yet.").font(.caption).foregroundStyle(.secondary)
+                        Text("Output").font(.caption2.weight(.semibold)).foregroundStyle(Color.secondaryText)
+                        Text("No output yet.").font(.caption).foregroundStyle(Color.secondaryText)
                     }
                 }
             }
@@ -73,7 +73,7 @@ private struct CopyableBlock: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 4) {
             HStack {
-                Text(title).font(.caption2.weight(.semibold)).foregroundStyle(.secondary)
+                Text(title).font(.caption2.weight(.semibold)).foregroundStyle(Color.secondaryText)
                 Spacer()
                 CopyButton(text: text, label: "Copy the \(title.lowercased())")
             }
@@ -164,7 +164,7 @@ struct MemoryPane: View {
         ScrollView {
             VStack(alignment: .leading, spacing: 10) {
                 HStack {
-                    Label(Self.file, systemImage: "brain").font(.caption.monospaced()).foregroundStyle(.secondary)
+                    Label(Self.file, systemImage: "brain").font(.caption.monospaced()).foregroundStyle(Color.secondaryText)
                     Spacer()
                     Button("Refresh") { Task { await load() } }
                         .font(.caption)
@@ -174,17 +174,17 @@ struct MemoryPane: View {
                 case .loading:
                     ProgressView().frame(maxWidth: .infinity)
                 case .missing:
-                    Text("\(name) has not written any memory yet.").foregroundStyle(.secondary)
+                    Text("\(name) has not written any memory yet.").foregroundStyle(Color.secondaryText)
                 case .failed(let error):
                     Text(error).font(.footnote).foregroundStyle(Color.errorText)
                 case .loaded(let text, let truncated):
                     if text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-                        Text("\(name)'s memory is empty.").foregroundStyle(.secondary)
+                        Text("\(name)'s memory is empty.").foregroundStyle(Color.secondaryText)
                     } else {
                         MarkdownText(text).textSelection(.enabled)
                     }
                     if truncated {
-                        Text("Only the start of the file is shown.").font(.caption).foregroundStyle(.secondary)
+                        Text("Only the start of the file is shown.").font(.caption).foregroundStyle(Color.secondaryText)
                     }
                 }
             }

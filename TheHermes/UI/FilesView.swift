@@ -173,7 +173,7 @@ private struct FileRow: View {
             }
         } trailing: {
             if loading { ProgressView() }
-            if file.link { Image(systemName: "arrow.turn.up.right").font(.caption2).foregroundStyle(.secondary) }
+            if file.link { Image(systemName: "arrow.turn.up.right").font(.caption2).foregroundStyle(Color.secondaryText) }
         }
         .contentShape(Rectangle())
         .task(id: file.path) {

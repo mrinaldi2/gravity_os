@@ -28,7 +28,7 @@ struct LinkProjectSheet: View {
                 if !store.hasLinkedProjects {
                     Section {
                         Text("The Hermes on \(store.computerName) does not link projects yet. It needs a Hermes service with linked projects; this phone already speaks it.")
-                            .foregroundStyle(.secondary)
+                            .foregroundStyle(Color.secondaryText)
                     }
                 }
                 if let links = project?.links, !links.isEmpty {
@@ -38,7 +38,7 @@ struct LinkProjectSheet: View {
                                 VStack(alignment: .leading, spacing: 2) {
                                     Text(link.remoteProjectName)
                                     Text("on \(link.peerName)\(link.online ? "" : " · offline")")
-                                        .font(.caption).foregroundStyle(.secondary)
+                                        .font(.caption).foregroundStyle(Color.secondaryText)
                                 }
                                 Spacer()
                                 Button("Unlink", role: .destructive) { unlinking = link }
@@ -54,7 +54,7 @@ struct LinkProjectSheet: View {
                             Text(peers.isEmpty
                                  ? "\(store.computerName) is not connected to another computer yet."
                                  : "Linked with every connected computer.")
-                                .foregroundStyle(.secondary)
+                                .foregroundStyle(Color.secondaryText)
                             Button("Open the network", systemImage: "point.3.connected.trianglepath.dotted") { showingNetwork = true }
                         }
                     } else {
@@ -65,7 +65,7 @@ struct LinkProjectSheet: View {
                                 }
                             }
                         } header: {
-                            Text("Link with")
+                            Text("Link with").foregroundStyle(Color.secondaryText)
                         }
                         Section {
                             choice(nil, title: "New project “\(project?.name ?? "")”", detail: "Created there, named like this one")
@@ -78,9 +78,9 @@ struct LinkProjectSheet: View {
                                     .disabled(taken)
                             }
                         } header: {
-                            Text("Project there")
+                            Text("Project there").foregroundStyle(Color.secondaryText)
                         } footer: {
-                            Text("Every bot on each side joins the other as a linked bot, and stays in step as bots come and go. They hand each other tasks and files like local bots. Bot names must be unique across both.")
+                            Text("Every bot on each side joins the other as a linked bot, and stays in step as bots come and go. They hand each other tasks and files like local bots. Bot names must be unique across both.").foregroundStyle(Color.secondaryText)
                         }
                     }
                 }
@@ -121,7 +121,7 @@ struct LinkProjectSheet: View {
             HStack {
                 VStack(alignment: .leading, spacing: 2) {
                     Text(title).foregroundStyle(.primary)
-                    Text(detail).font(.caption).foregroundStyle(.secondary)
+                    Text(detail).font(.caption).foregroundStyle(Color.secondaryText)
                 }
                 Spacer()
                 if remoteId == id { Image(systemName: "checkmark").foregroundStyle(Color.accentColor) }

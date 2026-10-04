@@ -22,11 +22,11 @@ struct WorkersView: View {
                 Section {
                     Text("\(listing.runningHere) of \(listing.maxHere) slots in use here")
                         .font(.subheadline)
-                        .foregroundStyle(.secondary)
+                        .foregroundStyle(Color.secondaryText)
                     if listing.workers.isEmpty {
                         Text("No workers yet. Bots spawn temporary workers for pieces of a larger job; they wait here when every slot is busy.")
                             .font(.callout)
-                            .foregroundStyle(.secondary)
+                            .foregroundStyle(Color.secondaryText)
                     }
                 }
             }
@@ -172,21 +172,21 @@ struct RepoSheet: View {
         NavigationStack {
             Form {
                 Section {
-                    TextField("git@github.com:you/project.git", text: $url)
+                    TextField("git@github.com:you/project.git", text: $url, prompt: .placeholder("git@github.com:you/project.git"))
                         .textInputAutocapitalization(.never)
                         .autocorrectionDisabled()
                         .keyboardType(.URL)
                 } header: {
-                    Text("Clone URL")
+                    Text("Clone URL").foregroundStyle(Color.secondaryText)
                 }
                 Section {
-                    TextField("main", text: $branch)
+                    TextField("main", text: $branch, prompt: .placeholder("main"))
                         .textInputAutocapitalization(.never)
                         .autocorrectionDisabled()
                 } header: {
-                    Text("Branch")
+                    Text("Branch").foregroundStyle(Color.secondaryText)
                 } footer: {
-                    Text("Each worker a bot spawns clones this branch when it starts and pushes its work back before it reports. Whatever a worker leaves unpushed is saved to a branch of its own. Each computer uses its own git credentials.")
+                    Text("Each worker a bot spawns clones this branch when it starts and pushes its work back before it reports. Whatever a worker leaves unpushed is saved to a branch of its own. Each computer uses its own git credentials.").foregroundStyle(Color.secondaryText)
                 }
                 if project?.repo != nil {
                     Section {

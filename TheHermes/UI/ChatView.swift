@@ -52,7 +52,7 @@ struct ChatView: View {
 
     private var composer: some View {
         HStack(alignment: .bottom, spacing: 8) {
-            TextField("Message", text: $draft, axis: .vertical)
+            TextField("Message", text: $draft, prompt: .placeholder("Message"), axis: .vertical)
                 .lineLimit(1...6)
                 .padding(.horizontal, 12)
                 .padding(.vertical, 8)
@@ -91,7 +91,7 @@ private struct MessageBubble: View {
                         .background(.quaternary, in: Capsule())
                 }
                 if let at = message.createdAt {
-                    Text(at, style: .time).font(.caption2).foregroundStyle(.secondary)
+                    Text(at, style: .time).font(.caption2).foregroundStyle(Color.secondaryText)
                 }
             }
             Text(message.body)

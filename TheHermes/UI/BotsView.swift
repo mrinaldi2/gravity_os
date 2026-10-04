@@ -33,11 +33,11 @@ struct BotsView: View {
                     } header: {
                         Button { path.append(ProjectPageLink(id: project.id)) } label: {
                             HStack(spacing: 6) {
-                                Text(project.name)
-                                Text("\(store.bots(in: project).count)").foregroundStyle(.secondary)
+                                Text(project.name).foregroundStyle(Color.secondaryText)
+                                Text("\(store.bots(in: project).count)").foregroundStyle(Color.secondaryText)
                                 if !project.links.isEmpty {
                                     Image(systemName: "link").font(.caption2.weight(.semibold))
-                                        .foregroundStyle(project.links.contains(where: \.online) ? .green : .secondary)
+                                        .foregroundStyle(project.links.contains(where: \.online) ? .green : Color.secondaryText)
                                 }
                                 Spacer()
                                 Text("Open").font(.footnote.weight(.semibold)).foregroundStyle(.tint).textCase(nil)

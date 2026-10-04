@@ -70,14 +70,14 @@ struct TurnCard: View {
                 if turn.open {
                     ProgressView().controlSize(.mini)
                 } else if let at = turn.updated {
-                    Text(at.relative).font(.caption).foregroundStyle(.tertiary)
+                    Text(at.relative).font(.caption).foregroundStyle(Color.secondaryText)
                 }
             }
             if showBot { trigger }
             if !turn.trigger.text.isEmpty {
                 Text(plain(turn.trigger.text))
                     .font(.subheadline)
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(Color.secondaryText)
                     .lineLimit(2)
             }
             if turn.open, !turn.current.isEmpty {
@@ -110,7 +110,7 @@ struct TurnCard: View {
                     }
                 }
                 .font(.caption)
-                .foregroundStyle(.secondary)
+                .foregroundStyle(Color.secondaryText)
             }
         }
         .padding(.vertical, 4)
@@ -119,7 +119,7 @@ struct TurnCard: View {
     private var trigger: some View {
         Label(turn.trigger.headline, systemImage: turn.trigger.symbol)
             .font(.caption.weight(.medium))
-            .foregroundStyle(.secondary)
+            .foregroundStyle(Color.secondaryText)
             .lineLimit(1)
     }
 

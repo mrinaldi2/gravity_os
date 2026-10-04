@@ -57,6 +57,32 @@ final class ContrastTests: XCTestCase {
         }
     }
 
+    /// Captions, footers, headers and placeholders (Text.placeholder) use one
+    /// secondary colour.
+    /// It must hold on lists, cards, fills and the orange permission card.
+    func testSecondaryTextAndPlaceholdersMeetAA() {
+        for traits in [light, dark] {
+            let text = rgb(UIColor(Color.secondaryText), traits)
+            let card = rgb(.secondarySystemGroupedBackground, traits)
+            let grouped = rgb(.systemGroupedBackground, traits)
+            var backgrounds: [(String, (Double, Double, Double))] = [
+                ("background", rgb(.systemBackground, traits)),
+                ("grouped", grouped),
+                ("card", card),
+                ("secondary background", rgb(.secondarySystemBackground, traits)),
+                ("tertiary background", rgb(.tertiarySystemBackground, traits)),
+                ("permission card", over(rgb(.systemOrange, traits), grouped, 0.08)),
+            ]
+            var fill: CGFloat = 0
+            UIColor.tertiarySystemFill.resolvedColor(with: traits).getWhite(nil, alpha: &fill)
+            backgrounds.append(("tertiary fill", over(rgb(.tertiarySystemFill, traits), card, Double(fill))))
+            let mode = traits.userInterfaceStyle == .dark ? "dark" : "light"
+            for (name, background) in backgrounds {
+                XCTAssertGreaterThanOrEqual(ratio(text, background), 4.5, "secondary text on \(name), \(mode)")
+            }
+        }
+    }
+
     func testAccentHasALightAndADarkShade() {
         let accent = UIColor(named: "AccentColor")!
         XCTAssertNotEqual(luminance(rgb(accent, light)), luminance(rgb(accent, dark)))

@@ -193,7 +193,7 @@ private struct Bubble: View {
                     }
                     Spacer(minLength: 0)
                     if let at = message.createdAt {
-                        Text(TaskTime.text(at)).font(.caption2).foregroundStyle(.secondary)
+                        Text(TaskTime.text(at)).font(.caption2).foregroundStyle(Color.secondaryText)
                     }
                 }
                 MarkdownText(message.body)

@@ -99,7 +99,7 @@ struct ReportView: View {
                         Text(text).font(.system(size: 12, design: .monospaced)).textSelection(.enabled)
                     }
                 } else if let error {
-                    Text(error).foregroundStyle(.secondary)
+                    Text(error).foregroundStyle(Color.secondaryText)
                 } else {
                     ProgressView()
                 }

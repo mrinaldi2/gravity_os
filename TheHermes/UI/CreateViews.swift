@@ -20,12 +20,12 @@ struct NewProjectSheet: View {
         NavigationStack {
             Form {
                 Section {
-                    TextField("Project name", text: $name)
+                    TextField("Project name", text: $name, prompt: .placeholder("Project name"))
                         .focused($focused)
                         .submitLabel(.done)
                         .onSubmit(create)
                 } footer: {
-                    Text("Its bots share a folder of artifacts on \(store.computerName): ~/.gravity/projects/<name>.")
+                    Text("Its bots share a folder of artifacts on \(store.computerName): ~/.gravity/projects/<name>.").foregroundStyle(Color.secondaryText)
                 }
                 if store.hasLinkedProjects, !peers.isEmpty {
                     Section {
@@ -39,6 +39,7 @@ struct NewProjectSheet: View {
                         Text(linkPeerId.isEmpty
                              ? "Link it with a connected computer to have bots on both computers in one team."
                              : "A project of the same name is made there and linked: bots on either computer work as one team.")
+                            .foregroundStyle(Color.secondaryText)
                     }
                 }
                 Section {
@@ -123,7 +124,7 @@ struct NewBotSheet: View {
                     Picker("Project", selection: $projectId) {
                         ForEach(store.sortedProjects) { Text($0.name).tag($0.id) }
                     }
-                    TextField("Name (empty: New Bot)", text: $name)
+                    TextField("Name (empty: New Bot)", text: $name, prompt: .placeholder("Name (empty: New Bot)"))
                         .textInputAutocapitalization(.words)
                 } footer: {
                     if full {
@@ -149,23 +150,24 @@ struct NewBotSheet: View {
                             }
                         }
                     } header: {
-                        Text("Engine and computer")
+                        Text("Engine and computer").foregroundStyle(Color.secondaryText)
                     } footer: {
                         Text(peerId.isEmpty
                              ? "Default is the engine Hermes on \(store.computerName) is set to. The bot can switch engines later and keeps its workspace."
                              : "It runs on \(links.first { $0.peerId == peerId }?.peerName ?? "the other computer"), in the linked project, and works with the bots here as one team.")
+                            .foregroundStyle(Color.secondaryText)
                     }
                 }
 
                 Section {
-                    TextField("One line: what this bot is for", text: $description, axis: .vertical)
+                    TextField("One line: what this bot is for", text: $description, prompt: .placeholder("One line: what this bot is for"), axis: .vertical)
                         .lineLimit(1...3)
-                    TextField("Instructions", text: $instructions, axis: .vertical)
+                    TextField("Instructions", text: $instructions, prompt: .placeholder("Instructions"), axis: .vertical)
                         .lineLimit(4...12)
                 } header: {
-                    Text("Profile")
+                    Text("Profile").foregroundStyle(Color.secondaryText)
                 } footer: {
-                    Text("Optional. Without one, the bot asks you what it is for and writes the answer down itself. It can change its own charter later.")
+                    Text("Optional. Without one, the bot asks you what it is for and writes the answer down itself. It can change its own charter later.").foregroundStyle(Color.secondaryText)
                 }
 
                 Section("Avatar") {
@@ -220,7 +222,7 @@ private struct AvatarPicker: View {
                 RoundedRectangle(cornerRadius: 12, style: .continuous)
                     .fill(Color(.tertiarySystemFill))
                     .frame(width: 44, height: 44)
-                    .overlay { Image(systemName: "shuffle").foregroundStyle(.secondary) }
+                    .overlay { Image(systemName: "shuffle").foregroundStyle(Color.secondaryText) }
                     .overlay(ring(selection == nil))
             }
             .accessibilityLabel("Random avatar")

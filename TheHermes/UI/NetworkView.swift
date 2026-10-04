@@ -66,20 +66,20 @@ struct NetworkView: View {
                             .disabled(working != nil || !a.store.canControl || !b.store.canControl)
                         }
                     } header: {
-                        Text("Connect")
+                        Text("Connect").foregroundStyle(Color.secondaryText)
                     } footer: {
-                        Text("\(unpaired.first?.1.name ?? "The second computer") listens for the other, so it needs its Tailscale address under bind in gravityd.toml, as it does for this phone.")
+                        Text("\(unpaired.first?.1.name ?? "The second computer") listens for the other, so it needs its Tailscale address under bind in gravityd.toml, as it does for this phone.").foregroundStyle(Color.secondaryText)
                     }
                 }
 
                 ForEach(fleet.computers) { computer in
                     Section {
                         if let error = errors[computer.id] {
-                            Text(error).font(.footnote).foregroundStyle(.secondary)
+                            Text(error).font(.footnote).foregroundStyle(Color.secondaryText)
                         }
                         let peers = computer.store.peers.filter(\.isActive)
                         if peers.isEmpty, errors[computer.id] == nil {
-                            Text("Not connected to another computer.").foregroundStyle(.secondary)
+                            Text("Not connected to another computer.").foregroundStyle(Color.secondaryText)
                         }
                         ForEach(peers) { peer in
                             PeerRow(peer: peer, known: known(peer, of: computer))
@@ -97,10 +97,10 @@ struct NetworkView: View {
                                 }
                         }
                     } header: {
-                        Label(computer.name, systemImage: computer.kind.symbol)
+                        Label(computer.name, systemImage: computer.kind.symbol).foregroundStyle(Color.secondaryText)
                     } footer: {
                         if computer.store.status != .connected {
-                            Text(computer.store.status.label)
+                            Text(computer.store.status.label).foregroundStyle(Color.secondaryText)
                         }
                     }
                 }
@@ -112,7 +112,7 @@ struct NetworkView: View {
                         Label("Connect a computer this phone doesn't know", systemImage: "qrcode")
                     }
                 } footer: {
-                    Text("Connected computers can link projects, so their bots work as one team and hand each other tasks and files. Unlinking stops that on both sides; history is kept.")
+                    Text("Connected computers can link projects, so their bots work as one team and hand each other tasks and files. Unlinking stops that on both sides; history is kept.").foregroundStyle(Color.secondaryText)
                 }
             }
             .listStyle(.insetGrouped)
@@ -223,7 +223,7 @@ private struct InviteView: View {
                 Picker("This phone's computer", selection: $computerId) {
                     ForEach(fleet.computers) { Text($0.name).tag($0.id) }
                 }
-                TextField("Name for the other computer", text: $otherName)
+                TextField("Name for the other computer", text: $otherName, prompt: .placeholder("Name for the other computer"))
             }
             Section {
                 Button("Create an invite code") { createInvite() }
@@ -233,21 +233,21 @@ private struct InviteView: View {
                     Button("Copy code", systemImage: "doc.on.doc") { UIPasteboard.general.string = invite }
                 }
             } header: {
-                Text("The other computer connects to this one")
+                Text("The other computer connects to this one").foregroundStyle(Color.secondaryText)
             } footer: {
-                Text("Paste the code on the other computer: hermesd peer add <name> \"<code>\". It holds a token and works once.")
+                Text("Paste the code on the other computer: hermesd peer add <name> \"<code>\". It holds a token and works once.").foregroundStyle(Color.secondaryText)
             }
             Section {
-                TextField("ws://…/peer#…", text: $code, axis: .vertical)
+                TextField("ws://…/peer#…", text: $code, prompt: .placeholder("ws://…/peer#…"), axis: .vertical)
                     .textInputAutocapitalization(.never)
                     .autocorrectionDisabled()
                     .font(.caption.monospaced())
                 Button(added ? "Added" : "Add with this code") { addPeer() }
                     .disabled(name.isEmpty || code.isEmpty || busy || added)
             } header: {
-                Text("This computer connects to the other")
+                Text("This computer connects to the other").foregroundStyle(Color.secondaryText)
             } footer: {
-                Text("Make the code on the other computer: hermesd peer invite <name>.")
+                Text("Make the code on the other computer: hermesd peer invite <name>.").foregroundStyle(Color.secondaryText)
             }
         }
         .navigationTitle("Invite codes")

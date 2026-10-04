@@ -18,7 +18,7 @@ struct LensImageView: View {
                     Image(systemName: "photo.badge.exclamationmark")
                     Text("Unavailable").font(.caption2)
                 }
-                .foregroundStyle(.secondary)
+                .foregroundStyle(Color.secondaryText)
             } else {
                 ProgressView()
             }
@@ -91,7 +91,7 @@ struct ImageViewer: View {
                     Button("Done") { dismiss() }
                 }
                 ToolbarItem(placement: .topBarTrailing) {
-                    Text("\(index + 1) of \(sources.count)").font(.caption).foregroundStyle(.secondary)
+                    Text("\(index + 1) of \(sources.count)").font(.caption).foregroundStyle(Color.secondaryText)
                 }
             }
         }

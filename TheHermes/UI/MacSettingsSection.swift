@@ -18,18 +18,19 @@ struct MacSettingsSection: View {
 
     var body: some View {
         Section {
-            TextField("Address (empty: same as the Hermes service)", text: $host)
+            TextField("Address (empty: same as the Hermes service)", text: $host, prompt: .placeholder("Address (empty: same as the Hermes service)"))
                 .textInputAutocapitalization(.never)
                 .autocorrectionDisabled()
                 .keyboardType(.URL)
-            TextField("Port", text: $port).keyboardType(.numberPad)
+            TextField("Port", text: $port, prompt: .placeholder("Port")).keyboardType(.numberPad)
             if isMac {
-                TextField("Mac user name", text: $username)
+                TextField("Mac user name", text: $username, prompt: .placeholder("Mac user name"))
                     .textInputAutocapitalization(.never)
                     .autocorrectionDisabled()
                     .textContentType(.username)
             }
-            SecureField(hasPassword ? "Password (saved)" : (isMac ? "Mac password" : "VNC password"), text: $password)
+            let passwordTitle = hasPassword ? "Password (saved)" : (isMac ? "Mac password" : "VNC password")
+            SecureField(passwordTitle, text: $password, prompt: .placeholder(passwordTitle))
                 .textContentType(.password)
             Button("Save") { save() }
                 .disabled((isMac && username.isEmpty) || (password.isEmpty && !hasPassword))
@@ -37,12 +38,14 @@ struct MacSettingsSection: View {
                 .onChange(of: fastColours) { _, _ in screen.disconnect() }
             if let stats = screen.stats { LabeledContent("Last connection", value: describe(stats)) }
         } header: {
-            Text("\(computer.name): screen")
+            Text("\(computer.name): screen").foregroundStyle(Color.secondaryText)
         } footer: {
             if isMac {
                 Text("Turn on Screen Sharing on the Mac: System Settings → General → Sharing → Screen Sharing, and allow your user. Sign in here with that Mac account. The password stays in this iPhone's Keychain and only goes to the Mac. Fast colours sends 16-bit colour: about a third less data, with slight banding on gradients.")
+                    .foregroundStyle(Color.secondaryText)
             } else {
                 Text("Install TightVNC Server on the Windows computer and set its primary password (8 characters at most) in TightVNC Service Configuration. Allow port 5900 only from Tailscale in Windows Firewall. The password stays in this iPhone's Keychain. Fast colours sends 16-bit colour: about a third less data, with slight banding on gradients.")
+                    .foregroundStyle(Color.secondaryText)
             }
         }
         .onAppear(perform: loadSettings)
@@ -53,6 +56,7 @@ struct MacSettingsSection: View {
             Text(isMac
                  ? "To browse the Mac's files, run on the Mac: companion/install.sh --with-files. Needs a device with control access."
                  : "To browse this computer's files, run on it: companion\\install.ps1 -WithFiles. Needs a device with control access.")
+                .foregroundStyle(Color.secondaryText)
         }
         .task(id: computer.id) { await checkFiles() }
     }

@@ -30,7 +30,7 @@ enum Tone {
         case .working: .accentColor
         case .needsYou: .warningText
         case .failed: .errorText
-        case .quiet: .quietText
+        case .quiet: .secondaryText
         case .worker: .workerText
         }
     }
@@ -42,8 +42,10 @@ extension Color {
     static let successText = Color(light: 0x1E7B34, dark: 0x30D158)
     static let errorText = Color(light: 0xD70015, dark: 0xFF6961)
     static let workerText = Color(light: 0x007A8F, dark: 0x40CBE0)
-    /// Secondary words that still have to be read inside a tinted badge.
-    static let quietText = Color(light: 0x6C6C70, dark: 0xAEAEB2)
+    /// Secondary words: captions, footers, placeholders, quiet badges. The
+    /// system's secondary and placeholder greys are 3.4:1 and 1.7:1 on white;
+    /// this stays above 4.5:1 on every list, fill and card background.
+    static let secondaryText = Color(light: 0x636366, dark: 0xAEAEB2)
 
     /// A colour that follows light and dark mode.
     init(light: UInt32, dark: UInt32) {
@@ -64,6 +66,19 @@ extension BotState {
         case .authFailed, .crashed: .failed
         case .starting, .stopping, .stopped, .unknown: .quiet
         }
+    }
+}
+
+extension Text {
+    /// A text field's placeholder in the readable secondary colour: the
+    /// system placeholder grey is 1.7:1 on white.
+    static func placeholder(_ text: LocalizedStringKey) -> Text {
+        Text(text).foregroundStyle(Color.secondaryText)
+    }
+
+    @_disfavoredOverload
+    static func placeholder(_ text: String) -> Text {
+        Text(text).foregroundStyle(Color.secondaryText)
     }
 }
 
@@ -92,7 +107,7 @@ struct StatusLabel: View {
             }
             Text(text)
                 .font(.caption.weight(.medium))
-                .foregroundStyle(tone == .needsYou || tone == .failed ? tone.text : .secondary)
+                .foregroundStyle(tone == .needsYou || tone == .failed ? tone.text : Color.secondaryText)
                 .lineLimit(1)
         }
         .accessibilityElement(children: .combine)
@@ -159,11 +174,11 @@ struct ItemRow<Leading: View, Trailing: View>: View {
                 if let subtitle, !subtitle.isEmpty {
                     Text(subtitle)
                         .font(monoSubtitle ? .caption.monospaced() : .footnote)
-                        .foregroundStyle(.secondary)
+                        .foregroundStyle(Color.secondaryText)
                         .lineLimit(subtitleLines)
                 }
                 if let detail, !detail.isEmpty {
-                    Text(detail).font(.footnote).foregroundStyle(.tertiary).lineLimit(1)
+                    Text(detail).font(.footnote).foregroundStyle(Color.secondaryText).lineLimit(1)
                 }
             }
             Spacer(minLength: 4)
@@ -197,8 +212,10 @@ struct SectionTitle: View {
     var body: some View {
         HStack(spacing: 6) {
             Text(text)
-            if let count { Text("\(count)").foregroundStyle(.secondary) }
+            if let count { Text("\(count)") }
         }
+        // List headers are the system grey, 3.3:1 on the grouped background.
+        .foregroundStyle(Color.secondaryText)
     }
 }
 
@@ -210,7 +227,7 @@ struct EmptyNote: View {
     var body: some View {
         Label(text, systemImage: systemImage)
             .font(.callout)
-            .foregroundStyle(.secondary)
+            .foregroundStyle(Color.secondaryText)
             .padding(.vertical, 6)
     }
 }
@@ -240,7 +257,7 @@ struct ListEnd: View {
                 } else {
                     HStack(spacing: 10) {
                         ProgressView().controlSize(.small)
-                        Text("Loading earlier \(noun)…").foregroundStyle(.secondary)
+                        Text("Loading earlier \(noun)…").foregroundStyle(Color.secondaryText)
                     }
                     .accessibilityElement(children: .combine)
                 }
@@ -255,7 +272,7 @@ struct ListEnd: View {
         } else if loaded > Page.size {
             Text("All \(loaded) \(noun)")
                 .font(.footnote)
-                .foregroundStyle(.secondary)
+                .foregroundStyle(Color.secondaryText)
                 .frame(maxWidth: .infinity)
         }
     }

@@ -15,13 +15,13 @@ struct SettingsView: View {
                 } header: {
                     SectionTitle("Terminal")
                 } footer: {
-                    Text("Opening a bot's terminal resizes it to fit this screen. The terminal is shared, so Hermes on the computer shows that size too until it resizes it again.")
+                    Text("Opening a bot's terminal resizes it to fit this screen. The terminal is shared, so Hermes on the computer shows that size too until it resizes it again.").foregroundStyle(Color.secondaryText)
                 }
 
                 Section {
                     Label("Computers, their screens and tokens are in the Computers tab.", systemImage: "desktopcomputer")
                         .font(.footnote)
-                        .foregroundStyle(.secondary)
+                        .foregroundStyle(Color.secondaryText)
                 }
 
                 Section {
@@ -36,7 +36,7 @@ struct SettingsView: View {
                 } header: {
                     SectionTitle("About")
                 } footer: {
-                    Text("The Hermes is open source under the MIT License. Based on Gravity by P. Mikołajczuk.")
+                    Text("The Hermes is open source under the MIT License. Based on Gravity by P. Mikołajczuk.").foregroundStyle(Color.secondaryText)
                 }
             }
             .navigationTitle("Settings")

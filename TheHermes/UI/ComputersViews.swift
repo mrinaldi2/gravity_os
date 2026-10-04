@@ -25,7 +25,7 @@ struct ComputerSwitcher: View {
                         ForEach(fleet.computers) { StatusDot(tone: $0.statusTone, size: 6) }
                     }
                 }
-                Image(systemName: "chevron.down").font(.caption2.weight(.bold)).foregroundStyle(.secondary)
+                Image(systemName: "chevron.down").font(.caption2.weight(.bold)).foregroundStyle(Color.secondaryText)
             }
             .foregroundStyle(.primary)
         }
@@ -75,33 +75,33 @@ struct ComputerEditor: View {
     var body: some View {
         Form {
             Section("Computer") {
-                TextField("Name", text: $record.name)
+                TextField("Name", text: $record.name, prompt: .placeholder("Name"))
                 Picker("Type", selection: $record.kind) {
                     Text("Mac").tag(ComputerKind.mac)
                     Text("Windows").tag(ComputerKind.windows)
                 }
             }
             Section {
-                TextField("Tailscale name or 100.x.y.z", text: $record.host)
+                TextField("Tailscale name or 100.x.y.z", text: $record.host, prompt: .placeholder("Tailscale name or 100.x.y.z"))
                     .textInputAutocapitalization(.never)
                     .autocorrectionDisabled()
                     .keyboardType(.URL)
                 LabeledContent("Port") {
-                    TextField("49777", text: $port).keyboardType(.numberPad).multilineTextAlignment(.trailing)
+                    TextField("49777", text: $port, prompt: .placeholder("49777")).keyboardType(.numberPad).multilineTextAlignment(.trailing)
                 }
             } header: {
-                Text("Hermes service")
+                Text("Hermes service").foregroundStyle(Color.secondaryText)
             }
             Section {
-                TextField("Address (empty: same as the Hermes service)", text: $record.lensHost)
+                TextField("Address (empty: same as the Hermes service)", text: $record.lensHost, prompt: .placeholder("Address (empty: same as the Hermes service)"))
                     .textInputAutocapitalization(.never)
                     .autocorrectionDisabled()
                     .keyboardType(.URL)
                 LabeledContent("Port") {
-                    TextField("49778", text: $lensPort).keyboardType(.numberPad).multilineTextAlignment(.trailing)
+                    TextField("49778", text: $lensPort, prompt: .placeholder("49778")).keyboardType(.numberPad).multilineTextAlignment(.trailing)
                 }
             } header: {
-                Text("Lens")
+                Text("Lens").foregroundStyle(Color.secondaryText)
             }
             Section {
                 Button("Save") {
@@ -111,7 +111,7 @@ struct ComputerEditor: View {
                 .disabled(!valid || edited == computer.record)
             }
             Section {
-                SecureField("New device token", text: $token)
+                SecureField("New device token", text: $token, prompt: .placeholder("New device token"))
                     .textInputAutocapitalization(.never)
                     .autocorrectionDisabled()
                 Button("Replace token") {
@@ -120,12 +120,12 @@ struct ComputerEditor: View {
                 }
                 .disabled(token.trimmingCharacters(in: .whitespaces).isEmpty)
             } footer: {
-                Text("For a token that was revoked or rejected. Create one in Hermes on \(computer.name): Settings → Devices.")
+                Text("For a token that was revoked or rejected. Create one in Hermes on \(computer.name): Settings → Devices.").foregroundStyle(Color.secondaryText)
             }
             Section {
                 Button("Remove \(computer.name)", role: .destructive) { confirmRemove = true }
             } footer: {
-                Text("Removes its token and screen password from this iPhone. To cut off a lost phone, revoke the device in Hermes on that computer.")
+                Text("Removes its token and screen password from this iPhone. To cut off a lost phone, revoke the device in Hermes on that computer.").foregroundStyle(Color.secondaryText)
             }
         }
         .navigationTitle(computer.name)

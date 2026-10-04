@@ -14,7 +14,7 @@ struct StepDetailView: View {
                 VStack(alignment: .leading, spacing: 4) {
                     Label(event.title, systemImage: StepRow.symbol(event.tool)).font(.headline)
                     if let path = event.path {
-                        Text(path).font(.caption.monospaced()).foregroundStyle(.secondary).textSelection(.enabled)
+                        Text(path).font(.caption.monospaced()).foregroundStyle(Color.secondaryText).textSelection(.enabled)
                     }
                     if event.error == true {
                         Label("This step failed", systemImage: "exclamationmark.triangle.fill")
@@ -35,7 +35,7 @@ struct StepDetailView: View {
                         CodeBlock(title: "Input", text: input)
                     }
                 } else if let error {
-                    Text(error).foregroundStyle(.secondary)
+                    Text(error).foregroundStyle(Color.secondaryText)
                 } else {
                     ProgressView().frame(maxWidth: .infinity)
                 }
@@ -65,7 +65,7 @@ private struct ImageGrid: View {
                             .frame(height: 120)
                             .frame(maxWidth: .infinity)
                             .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
-                        Text(ref.name).font(.caption2).foregroundStyle(.secondary).lineLimit(1)
+                        Text(ref.name).font(.caption2).foregroundStyle(Color.secondaryText).lineLimit(1)
                     }
                 }
                 .buttonStyle(.plain)
@@ -89,7 +89,7 @@ struct CodeBlock: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
             HStack {
-                Text(title).font(.caption.weight(.semibold)).foregroundStyle(.secondary)
+                Text(title).font(.caption.weight(.semibold)).foregroundStyle(Color.secondaryText)
                 Spacer()
                 Button { UIPasteboard.general.string = text } label: { Image(systemName: "doc.on.doc") }
                     .font(.caption)
@@ -112,7 +112,7 @@ struct DiffView: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
-            Text("Changes").font(.caption.weight(.semibold)).foregroundStyle(.secondary)
+            Text("Changes").font(.caption.weight(.semibold)).foregroundStyle(Color.secondaryText)
             ScrollView(.horizontal) {
                 VStack(alignment: .leading, spacing: 0) {
                     ForEach(Array(lines.enumerated()), id: \.offset) { _, line in

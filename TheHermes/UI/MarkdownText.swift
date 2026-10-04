@@ -63,7 +63,7 @@ private struct MarkdownImage: View {
         } else {
             Label("Image not available", systemImage: "photo")
                 .font(.caption)
-                .foregroundStyle(.secondary)
+                .foregroundStyle(Color.secondaryText)
         }
     }
 }

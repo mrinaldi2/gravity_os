@@ -70,7 +70,7 @@ struct ComputersView: View {
                 } header: {
                     SectionTitle("This iPhone reaches", count: fleet.computers.count)
                 } footer: {
-                    Text("Every computer stays connected, so notifications and decisions come from all of them.")
+                    Text("Every computer stays connected, so notifications and decisions come from all of them.").foregroundStyle(Color.secondaryText)
                 }
                 Section {
                     NavigationLink {
@@ -128,12 +128,12 @@ struct ComputerPage: View {
                     IconTile(systemImage: computer.kind.symbol, tone: computer.connectionTone, size: 44)
                     VStack(alignment: .leading, spacing: 2) {
                         StatusLabel(text: computer.statusLine, tone: computer.connectionTone, busy: store.status == .connecting)
-                        Text(computer.botsLine).font(.footnote).foregroundStyle(.secondary)
+                        Text(computer.botsLine).font(.footnote).foregroundStyle(Color.secondaryText)
                     }
                 }
                 .padding(.vertical, 4)
                 if case .disconnected(let reason) = store.status {
-                    Text(reason).font(.footnote).foregroundStyle(.secondary)
+                    Text(reason).font(.footnote).foregroundStyle(Color.secondaryText)
                     Button("Reconnect now") { store.client.reconnectNow() }
                 }
                 if case .authFailed(let reason) = store.status { Text(reason).font(.footnote).foregroundStyle(Color.errorText) }
@@ -163,7 +163,7 @@ struct ComputerPage: View {
                 } header: {
                     SectionTitle("Bots here", count: bots.count)
                 } footer: {
-                    if bots.count > 8 { Text("All of them are on the Bots tab, with \(computer.name) picked.") }
+                    if bots.count > 8 { Text("All of them are on the Bots tab, with \(computer.name) picked.").foregroundStyle(Color.secondaryText) }
                 }
             }
             Section {
@@ -193,14 +193,14 @@ struct ComputerPage: View {
             Section {
                 LabeledContent("Status", value: lens.status.label)
                 if case .unreachable(let reason) = lens.status {
-                    Text(reason).font(.footnote).foregroundStyle(.secondary)
+                    Text(reason).font(.footnote).foregroundStyle(Color.secondaryText)
                 }
                 LabeledContent("Port", value: String(lens.port))
                 Button("Check now") { Task { await lens.refresh() } }
             } header: {
                 SectionTitle("Lens")
             } footer: {
-                Text("The companion that turns the bots' logs into Activity and artifacts, and serves the file browser. It uses the same device token as the Hermes service.")
+                Text("The companion that turns the bots' logs into Activity and artifacts, and serves the file browser. It uses the same device token as the Hermes service.").foregroundStyle(Color.secondaryText)
             }
             MacSettingsSection()
             Section {
@@ -234,7 +234,7 @@ struct ComputerPage: View {
             VStack(alignment: .leading, spacing: 8) {
                 IconTile(systemImage: symbol, tone: .working, size: 36)
                 Text(title).font(.subheadline.weight(.semibold)).foregroundStyle(.primary)
-                Text(subtitle).font(.footnote).foregroundStyle(.secondary)
+                Text(subtitle).font(.footnote).foregroundStyle(Color.secondaryText)
             }
             .frame(maxWidth: .infinity, alignment: .leading)
             .padding(14)

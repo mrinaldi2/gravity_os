@@ -21,7 +21,7 @@ struct DecisionDetailView: View {
                 stateActions(decision)
                 commentsSection(decision)
             } else {
-                Text("This decision is no longer available.").foregroundStyle(.secondary)
+                Text("This decision is no longer available.").foregroundStyle(Color.secondaryText)
             }
         }
         .listStyle(.insetGrouped)
@@ -41,7 +41,7 @@ struct DecisionDetailView: View {
                 HStack(spacing: 8) {
                     AvatarView(avatar: decision.raisedByAvatar, name: decision.raisedByName, size: 28)
                     Text(decision.raisedByName).font(.subheadline.weight(.semibold))
-                    Text(store.projectName(decision.projectId)).font(.subheadline).foregroundStyle(.secondary)
+                    Text(store.projectName(decision.projectId)).font(.subheadline).foregroundStyle(Color.secondaryText)
                     Spacer()
                     if decision.urgent { Pill(text: "Urgent", tone: .failed) }
                 }
@@ -68,7 +68,7 @@ struct DecisionDetailView: View {
             if let picked { LabeledContent("Option", value: picked.label) }
             if ruling.text != picked?.label { Text(ruling.text) }
             if let reason = ruling.reason {
-                Text(reason).font(.callout).foregroundStyle(.secondary)
+                Text(reason).font(.callout).foregroundStyle(Color.secondaryText)
             }
             if ruling.answeredBy.hasPrefix("owner-via-bot") {
                 Label("Relayed by a bot, not yet confirmed by you", systemImage: "exclamationmark.triangle")
@@ -88,14 +88,14 @@ struct DecisionDetailView: View {
                     } label: {
                         HStack(alignment: .top, spacing: 10) {
                             Image(systemName: option == item.key ? "largecircle.fill.circle" : "circle")
-                                .foregroundStyle(option == item.key ? AnyShapeStyle(.tint) : AnyShapeStyle(.secondary))
+                                .foregroundStyle(option == item.key ? AnyShapeStyle(.tint) : AnyShapeStyle(Color.secondaryText))
                             VStack(alignment: .leading, spacing: 3) {
                                 HStack {
                                     Text(item.label).font(.body.weight(.medium)).foregroundStyle(.primary)
                                     if decision.recommendation == item.key { Pill(text: "Recommended", tone: .ready) }
                                 }
                                 if !item.description.isEmpty {
-                                    Text(item.description).font(.footnote).foregroundStyle(.secondary)
+                                    Text(item.description).font(.footnote).foregroundStyle(Color.secondaryText)
                                 }
                             }
                         }
@@ -109,9 +109,9 @@ struct DecisionDetailView: View {
         }
         if store.canApprove {
             Section {
-                TextField(decision.options.isEmpty ? "Your ruling" : "Your ruling (optional with an option)",
-                          text: $rulingText, axis: .vertical).lineLimit(2...8)
-                TextField("Reason (optional)", text: $reason, axis: .vertical).lineLimit(1...4)
+                let rulingTitle = decision.options.isEmpty ? "Your ruling" : "Your ruling (optional with an option)"
+                TextField(rulingTitle, text: $rulingText, prompt: .placeholder(rulingTitle), axis: .vertical).lineLimit(2...8)
+                TextField("Reason (optional)", text: $reason, prompt: .placeholder("Reason (optional)"), axis: .vertical).lineLimit(1...4)
                 Button("Publish ruling") {
                     act { try await store.answerAndPublish(decision.id, option: option, text: ruling(decision), reason: reason) }
                 }
@@ -125,15 +125,15 @@ struct DecisionDetailView: View {
                     act { try await store.decide("hold_decision", ["decision_id": decision.id]) }
                 }
             } header: {
-                Text("Your answer")
+                Text("Your answer").foregroundStyle(Color.secondaryText)
             } footer: {
-                Text("Publishing settles the decision and tells the bot that asked, in your words.")
+                Text("Publishing settles the decision and tells the bot that asked, in your words.").foregroundStyle(Color.secondaryText)
             }
         } else {
             Section {
                 Text("This device can’t approve decisions.")
                     .font(.footnote)
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(Color.secondaryText)
             }
         }
     }
@@ -174,7 +174,7 @@ struct DecisionDetailView: View {
                     HStack {
                         Text(entry.authorName).font(.caption.weight(.semibold))
                         if let at = entry.createdAt {
-                            Text(at.relative).font(.caption).foregroundStyle(.secondary)
+                            Text(at.relative).font(.caption).foregroundStyle(Color.secondaryText)
                         }
                     }
                     Text(markdown(entry.body)).font(.callout).textSelection(.enabled)
@@ -182,7 +182,7 @@ struct DecisionDetailView: View {
             }
             if store.canControl {
                 HStack(alignment: .bottom) {
-                    TextField("Ask or comment", text: $comment, axis: .vertical).lineLimit(1...5)
+                    TextField("Ask or comment", text: $comment, prompt: .placeholder("Ask or comment"), axis: .vertical).lineLimit(1...5)
                     Button("Send") {
                         let body = comment
                         comment = ""

@@ -38,31 +38,31 @@ struct ConnectView: View {
                         Text("Windows").tag(ComputerKind.windows)
                     }
                     .pickerStyle(.segmented)
-                    TextField("Name (\(kind.label))", text: $name)
+                    TextField("Name (\(kind.label))", text: $name, prompt: .placeholder("Name (\(kind.label))"))
                 } header: {
-                    Text("Computer")
+                    Text("Computer").foregroundStyle(Color.secondaryText)
                 }
 
                 Section {
-                    TextField("Tailscale name or 100.x.y.z", text: $host)
+                    TextField("Tailscale name or 100.x.y.z", text: $host, prompt: .placeholder("Tailscale name or 100.x.y.z"))
                         .textInputAutocapitalization(.never)
                         .autocorrectionDisabled()
                         .keyboardType(.URL)
-                    TextField("Port", text: $port).keyboardType(.numberPad)
+                    TextField("Port", text: $port, prompt: .placeholder("Port")).keyboardType(.numberPad)
                 } header: {
-                    Text("Hermes service")
+                    Text("Hermes service").foregroundStyle(Color.secondaryText)
                 } footer: {
-                    Text("The computer running The Hermes, as Tailscale shows it. The Hermes service must list that Tailscale address under bind in \(configPath).")
+                    Text("The computer running The Hermes, as Tailscale shows it. The Hermes service must list that Tailscale address under bind in \(configPath).").foregroundStyle(Color.secondaryText)
                 }
 
                 Section {
-                    SecureField("Device token", text: $token)
+                    SecureField("Device token", text: $token, prompt: .placeholder("Device token"))
                         .textInputAutocapitalization(.never)
                         .autocorrectionDisabled()
                 } header: {
-                    Text("Device token")
+                    Text("Device token").foregroundStyle(Color.secondaryText)
                 } footer: {
-                    Text("In The Hermes on that computer: Settings → Devices → add a device with read, control and approve. The token is shown once. It is stored in this iPhone's Keychain.")
+                    Text("In The Hermes on that computer: Settings → Devices → add a device with read, control and approve. The token is shown once. It is stored in this iPhone's Keychain.").foregroundStyle(Color.secondaryText)
                 }
 
                 if adding, !linkable.isEmpty {
@@ -78,9 +78,9 @@ struct ConnectView: View {
                             }
                         }
                     } header: {
-                        Text("Link it with")
+                        Text("Link it with").foregroundStyle(Color.secondaryText)
                     } footer: {
-                        Text("Linked computers can share projects and hand each other tasks. You can change this later under Computers → Network.")
+                        Text("Linked computers can share projects and hand each other tasks. You can change this later under Computers → Network.").foregroundStyle(Color.secondaryText)
                     }
                 }
 

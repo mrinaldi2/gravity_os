@@ -43,9 +43,10 @@ struct SendToBotSheet: View {
                     Text(route == .terminal
                          ? "Typed into the bot's Claude Code prompt and submitted, as if you typed it at \(store.computerName)."
                          : "Delivered to the bot's inbox; it reads it between steps.")
+                    .foregroundStyle(Color.secondaryText)
                 }
                 Section("Text") {
-                    TextField("Message", text: $text, axis: .vertical)
+                    TextField("Message", text: $text, prompt: .placeholder("Message"), axis: .vertical)
                         .lineLimit(3...10)
                         .font(.callout.monospaced())
                 }

@@ -29,11 +29,11 @@ struct TurnDetailView: View {
                 if turn.open {
                     HStack(spacing: 8) {
                         ProgressView().controlSize(.small)
-                        Text("Working…").foregroundStyle(.secondary)
+                        Text("Working…").foregroundStyle(Color.secondaryText)
                     }
                 }
             } else if let error {
-                Text(error).foregroundStyle(.secondary)
+                Text(error).foregroundStyle(Color.secondaryText)
             } else {
                 ProgressView()
             }
@@ -56,7 +56,7 @@ struct TurnDetailView: View {
                 Text(started.formatted(date: .abbreviated, time: .shortened)
                      + (turn.durationMs.map { " · took \(Self.duration($0))" } ?? ""))
                     .font(.caption)
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(Color.secondaryText)
             }
             if !turn.trigger.text.isEmpty {
                 MarkdownText(turn.trigger.text)
@@ -65,7 +65,7 @@ struct TurnDetailView: View {
                     .background(Color(.secondarySystemBackground), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
             }
             if !turn.stats.line.isEmpty {
-                Text(turn.stats.line).font(.caption).foregroundStyle(.secondary)
+                Text(turn.stats.line).font(.caption).foregroundStyle(Color.secondaryText)
             }
         }
         .padding(.vertical, 4)
@@ -166,14 +166,14 @@ struct StepGroup: View {
             }
         } label: {
             HStack {
-                Image(systemName: "gearshape.2").foregroundStyle(.secondary)
+                Image(systemName: "gearshape.2").foregroundStyle(Color.secondaryText)
                 VStack(alignment: .leading, spacing: 2) {
                     Text("\(steps.count) step\(steps.count == 1 ? "" : "s")").font(.subheadline.weight(.medium))
-                    Text(summary).font(.caption).foregroundStyle(.secondary)
+                    Text(summary).font(.caption).foregroundStyle(Color.secondaryText)
                 }
                 if steps.contains(where: { !($0.images ?? []).isEmpty }) {
                 Spacer()
-                Image(systemName: "photo").foregroundStyle(.secondary)
+                Image(systemName: "photo").foregroundStyle(Color.secondaryText)
             }
             if steps.contains(where: { $0.error == true }) {
                     Spacer()
@@ -204,20 +204,20 @@ struct StepRow: View {
         HStack(alignment: .top, spacing: 10) {
             Image(systemName: Self.symbol(step.tool))
                 .frame(width: 20)
-                .foregroundStyle(step.error == true ? AnyShapeStyle(.orange) : AnyShapeStyle(.secondary))
+                .foregroundStyle(step.error == true ? AnyShapeStyle(.orange) : AnyShapeStyle(Color.secondaryText))
             VStack(alignment: .leading, spacing: 2) {
                 Text(step.title)
                     .font(.subheadline)
                     .foregroundStyle(step.minor == true ? .secondary : .primary)
                     .lineLimit(2)
                 if let subtitle = step.subtitle, !subtitle.isEmpty {
-                    Text(subtitle).font(.caption.monospaced()).foregroundStyle(.secondary).lineLimit(1)
+                    Text(subtitle).font(.caption.monospaced()).foregroundStyle(Color.secondaryText).lineLimit(1)
                 }
             }
             Spacer(minLength: 4)
             if step.running == true { ProgressView().controlSize(.mini) }
             if let added = step.added, let removed = step.removed, added + removed > 0 {
-                Text("+\(added) −\(removed)").font(.caption.monospaced()).foregroundStyle(.secondary)
+                Text("+\(added) −\(removed)").font(.caption.monospaced()).foregroundStyle(Color.secondaryText)
             }
         }
     }
@@ -253,18 +253,18 @@ struct EventRow: View {
                                 .lineLimit(1)
                         }
                     } else {
-                        Label(path, systemImage: "doc").font(.caption.monospaced()).foregroundStyle(.secondary)
+                        Label(path, systemImage: "doc").font(.caption.monospaced()).foregroundStyle(Color.secondaryText)
                     }
                 }
             }
         case "compacted":
             Label("Memory compacted, the bot continued from a summary", systemImage: "arrow.down.right.and.arrow.up.left")
                 .font(.caption)
-                .foregroundStyle(.secondary)
+                .foregroundStyle(Color.secondaryText)
         case "interrupted":
             Label(event.text?.isEmpty == false ? event.text! : "You interrupted the turn", systemImage: "stop.circle")
                 .font(.caption)
-                .foregroundStyle(.secondary)
+                .foregroundStyle(Color.secondaryText)
         case "decision":
             if let id = event.decisionId {
                 NavigationLink {
@@ -277,7 +277,7 @@ struct EventRow: View {
             }
         default:
             VStack(alignment: .leading, spacing: 4) {
-                Label("Said", systemImage: "text.bubble").font(.caption.weight(.semibold)).foregroundStyle(.secondary)
+                Label("Said", systemImage: "text.bubble").font(.caption.weight(.semibold)).foregroundStyle(Color.secondaryText)
                 MarkdownText(event.text ?? "")
                 if let images = event.images, !images.isEmpty { ImageStrip(botId: botId, refs: images, size: 70) }
             }
@@ -300,7 +300,7 @@ struct EventRow: View {
             HStack {
                 Label(label, systemImage: symbol).font(.caption.weight(.semibold)).foregroundStyle(tint)
                 Spacer()
-                if let at = event.date { Text(at, style: .time).font(.caption2).foregroundStyle(.secondary) }
+                if let at = event.date { Text(at, style: .time).font(.caption2).foregroundStyle(Color.secondaryText) }
             }
             if let text = event.text, !text.isEmpty { MarkdownText(text) }
             if let images = event.images, !images.isEmpty { ImageStrip(botId: botId, refs: images, size: 70) }
