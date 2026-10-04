@@ -241,7 +241,10 @@ final class CapabilityTests: XCTestCase {
     func testPermissionToolNamesNeverShowMCP() {
         func request(_ tool: String) -> PermissionRequest { PermissionRequest(["id": "p", "bot_id": "b", "tool": tool]) }
         XCTAssertEqual(request("Bash").toolName, "Bash")
-        XCTAssertEqual(request("mcp__hermes-bus__send_message").toolName, "send message")
-        XCTAssertEqual(request("mcp__playwright__browser_click").toolName, "browser click")
+        XCTAssertEqual(request("mcp__hermes-bus__send_message").toolName, "Send message")
+        XCTAssertEqual(request("mcp__gravity-bus__complete_task").toolName, "Complete task")
+        XCTAssertEqual(request("mcp__playwright__browser_click").toolName, "Playwright: browser click")
+        XCTAssertEqual(request("mcp__claude-in-chrome__read_page").toolName, "Claude in chrome: read page")
+        XCTAssertEqual(request("WebFetch").toolName, "WebFetch")
     }
 }

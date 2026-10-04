@@ -30,6 +30,8 @@ struct ConnectView: View {
     @State private var trying: Computer?
     @State private var failure: PairingFailure?
 
+    private static let errorRow = "pairing-error"
+
     /// How long to wait for the Hermes service to answer.
     static let answerTimeout: Duration = .seconds(15)
 
@@ -54,85 +56,96 @@ struct ConnectView: View {
 
     var body: some View {
         NavigationStack {
-            Form {
-                Section {
-                    Button { scan() } label: {
-                        Label("Scan pairing code", systemImage: "qrcode.viewfinder")
-                            .labelStyle(.titleAndIcon)
-                            .font(.body.weight(.semibold))
-                            .frame(maxWidth: .infinity, minHeight: 44)
-                    }
-                    .buttonStyle(.borderedProminent)
-                    .listRowInsets(EdgeInsets(top: 8, leading: 16, bottom: 8, trailing: 16))
-                    // A plain button rather than PasteButton, whose label is
-                    // fixed to "Paste"; iOS asks once before the app reads it.
-                    Button { pasted(UIPasteboard.general.string ?? "") } label: {
-                        Label("Paste pairing link", systemImage: "doc.on.clipboard")
-                            .labelStyle(.titleAndIcon)
-                    }
-                    Button { withAnimation { manual.toggle() } } label: {
-                        HStack {
-                            Text("Enter manually")
-                            Spacer()
-                            Image(systemName: manual ? "chevron.down" : "chevron.right")
-                                .font(.caption.weight(.semibold))
+            ScrollViewReader { proxy in
+                Form {
+                    Section {
+                        Button { scan() } label: {
+                            Label("Scan pairing code", systemImage: "qrcode.viewfinder")
+                                .labelStyle(.titleAndIcon)
+                                .font(.body.weight(.semibold))
+                                .frame(maxWidth: .infinity, minHeight: 44)
+                        }
+                        .buttonStyle(.borderedProminent)
+                        .listRowInsets(EdgeInsets(top: 8, leading: 16, bottom: 8, trailing: 16))
+                        // A plain button rather than PasteButton, whose label is
+                        // fixed to "Paste"; iOS asks once before the app reads it.
+                        Button { pasted(UIPasteboard.general.string ?? "") } label: {
+                            Label("Paste pairing link", systemImage: "doc.on.clipboard")
+                                .labelStyle(.titleAndIcon)
+                        }
+                        Button { withAnimation { manual.toggle() } } label: {
+                            HStack {
+                                Text("Enter manually")
+                                Spacer()
+                                Image(systemName: manual ? "chevron.down" : "chevron.right")
+                                    .font(.caption.weight(.semibold))
+                                    .foregroundStyle(Color.secondaryText)
+                            }
+                        }
+                    } footer: {
+                        if pasteFailed {
+                            Text("That isn’t a pairing link. It starts with thehermes://pair and comes from The Hermes on your computer: Settings → Devices.")
+                                .foregroundStyle(Color.warningText)
+                        } else {
+                            // Until desktop shows pairing codes (H-010 desktop), it may show only a token.
+                            Text("On your computer, open The Hermes → Settings → Devices and create a device. Scan its pairing code, or, if it shows only a token, choose Enter manually.")
                                 .foregroundStyle(Color.secondaryText)
                         }
                     }
-                } footer: {
-                    if pasteFailed {
-                        Text("That isn’t a pairing link. It starts with thehermes://pair and comes from The Hermes on your computer: Settings → Devices.")
-                            .foregroundStyle(Color.warningText)
-                    } else {
-                        // Until desktop shows pairing codes (H-010 desktop), it may show only a token.
-                        Text("On your computer, open The Hermes → Settings → Devices and create a device. Scan its pairing code, or, if it shows only a token, choose Enter manually.")
-                            .foregroundStyle(Color.secondaryText)
-                    }
-                }
-                .disabled(trying != nil)
+                    .disabled(trying != nil)
 
-                if fromLink, trying == nil, failure == nil {
-                    Section {
-                        Label("Opened from a pairing link. Check the computer and its address, then tap Connect.",
-                              systemImage: "link")
-                            .font(.footnote)
-                    }
-                }
-
-                if let trying {
-                    Section {
-                        HStack(spacing: 10) {
-                            ProgressView()
-                            Text("Connecting to \(trying.name)…")
+                    if fromLink, trying == nil, failure == nil {
+                        Section {
+                            Label("Opened from a pairing link. Check the computer and its address, then tap Connect.",
+                                  systemImage: "link")
+                                .font(.footnote)
                         }
-                        .accessibilityElement(children: .combine)
                     }
-                } else if let failure {
-                    // Also next to the field, but a scanned link leaves the
-                    // fields below the fold.
-                    Section { failureText(failure) }
-                }
 
-                if manual {
-                    manualSections
-                }
+                    if let trying {
+                        Section {
+                            HStack(spacing: 10) {
+                                ProgressView()
+                                Text("Connecting to \(trying.name)…")
+                            }
+                            .accessibilityElement(children: .combine)
+                        }
+                    } else if let failure, failure.field == .version {
+                        // No field to fix: said here. The others are said next
+                        // to their field, which is scrolled into view.
+                        Section { failureText(failure) }
+                    }
 
-                if adding, !linkable.isEmpty {
-                    Section {
-                        ForEach(linkable) { computer in
-                            Toggle(isOn: Binding(
-                                get: { linkWith.contains(computer.id) },
-                                set: { if $0 { linkWith.insert(computer.id) } else { linkWith.remove(computer.id) } })
-                            ) {
-                                ItemRow(title: computer.name, subtitle: "Its bots can work with the new computer's") {
-                                    IconTile(systemImage: computer.kind.symbol, tone: .ready)
+                    if manual {
+                        manualSections
+                    }
+
+                    if adding, !linkable.isEmpty {
+                        Section {
+                            ForEach(linkable) { computer in
+                                Toggle(isOn: Binding(
+                                    get: { linkWith.contains(computer.id) },
+                                    set: { if $0 { linkWith.insert(computer.id) } else { linkWith.remove(computer.id) } })
+                                ) {
+                                    ItemRow(title: computer.name, subtitle: "Its bots can work with the new computer's") {
+                                        IconTile(systemImage: computer.kind.symbol, tone: .ready)
+                                    }
                                 }
                             }
+                        } header: {
+                            Text("Link it with").foregroundStyle(Color.secondaryText)
+                        } footer: {
+                            Text("Linked computers can share projects and hand each other tasks. You can change this later under Computers → Network.").foregroundStyle(Color.secondaryText)
                         }
-                    } header: {
-                        Text("Link it with").foregroundStyle(Color.secondaryText)
-                    } footer: {
-                        Text("Linked computers can share projects and hand each other tasks. You can change this later under Computers → Network.").foregroundStyle(Color.secondaryText)
+                    }
+                }
+                // A scanned link leaves the fields below the fold: bring the
+                // field to fix into view.
+                .onChange(of: failure) { _, failure in
+                    guard let failure, failure.field != .version else { return }
+                    Task { @MainActor in
+                        try? await Task.sleep(for: .milliseconds(300))
+                        withAnimation { proxy.scrollTo(Self.errorRow, anchor: .center) }
                     }
                 }
             }
@@ -192,7 +205,7 @@ struct ConnectView: View {
                     .keyboardType(.numberPad)
                     .multilineTextAlignment(.trailing)
             }
-            if let failure, failure.field == .address { failureText(failure) }
+            if let failure, failure.field == .address { failureText(failure).id(Self.errorRow) }
         } header: {
             Text("Hermes service").foregroundStyle(Color.secondaryText)
         } footer: {
@@ -206,7 +219,7 @@ struct ConnectView: View {
                     .autocorrectionDisabled()
                     .multilineTextAlignment(.trailing)
             }
-            if let failure, failure.field == .token { failureText(failure) }
+            if let failure, failure.field == .token { failureText(failure).id(Self.errorRow) }
         } header: {
             Text("Device token").foregroundStyle(Color.secondaryText)
         } footer: {
