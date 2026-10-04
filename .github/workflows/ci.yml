@@ -42,6 +42,10 @@ jobs:
     runs-on: macos-15
     steps:
       - uses: actions/checkout@v4
+      - name: Wire contract is current
+        # The generated Swift must match the vendored schema; the unit tests
+        # below decode every golden fixture with it.
+        run: scripts/contract/generate-swift.sh --check
       - name: Build for the simulator
         run: |
           xcodebuild -project TheHermes.xcodeproj -scheme TheHermes \

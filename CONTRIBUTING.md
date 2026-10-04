@@ -39,6 +39,9 @@ stamps the commit it was built from into About.
   [control-plane protocol](https://github.com/ahilles107/gravity/blob/main/docs/protocol.md).
 - `TheHermes/Core/Lens.swift` and `companion/gravity_lens.py`: the activity, image and report side.
 - `demo/make_demo.py`: add to the demo world when a feature needs data to show.
+- `contract/`: typed wire contracts vendored from the daemon repo (schema, golden fixtures, `SOURCE`).
+  `scripts/contract/vendor.sh <repo> <commit>` refreshes them, `scripts/contract/generate-swift.sh`
+  regenerates `TheHermes/Core/Generated/` (never edit it by hand), and `--check` is the CI drift check.
 
 Style: follow the code around you. Swift uses SwiftUI and Observation. Keep the companion to the
 standard library.

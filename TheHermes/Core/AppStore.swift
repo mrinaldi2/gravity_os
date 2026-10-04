@@ -36,6 +36,8 @@ final class AppStore {
     /// What the daemon serves, from `hello_ok`.
     var capabilities: Set<String> = []
     var serverVersion = ""
+    /// The typed contracts the daemon serves and their versions ({board: 1}).
+    var contracts: [String: Int] = [:]
     var deviceId: String?
     /// The daemon's stable id, as its peers know it (newer daemons).
     var daemonId: String?
@@ -210,6 +212,13 @@ final class AppStore {
         serverVersion = hello.str("server_version")
         deviceId = hello.optStr("device_id")
         daemonId = hello.optStr("daemon_id")
+        contracts = Contracts.served(by: hello)
+    }
+
+    /// True when the daemon serves `name` at the version this app speaks.
+    func speaks(_ name: String) -> Bool {
+        guard let mine = Contracts.client[name] else { return false }
+        return contracts[name] == mine
     }
 
     func refresh() async {

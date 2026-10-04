@@ -227,6 +227,7 @@ final class DaemonClient {
                 "protocol_version": Self.protocolVersion,
                 "token": token, "client": Self.clientId,
                 "features": Self.features,
+                "contracts": Contracts.client,
             ]
             try await socket.send(.string(JSONText.encode(hello) ?? "{}"))
             let first = try await receive(socket)

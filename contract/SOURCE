@@ -1,0 +1,4 @@
+board.schema.json and fixtures/board/ come from the Hermes repo at
+fbda7e7d083bd31ce5648051fefbeb813721b8be
+(contract/board.schema.json and crates/bus/fixtures/board/).
+Refresh with scripts/contract/vendor.sh.

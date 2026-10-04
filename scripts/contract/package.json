@@ -1,0 +1,8 @@
+{
+  "name": "thehermes-contract",
+  "private": true,
+  "description": "Generates the Swift types for the wire contracts from their vendored JSON Schemas.",
+  "devDependencies": {
+    "quicktype": "26.0.0"
+  }
+}
