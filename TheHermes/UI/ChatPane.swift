@@ -36,7 +36,7 @@ struct BotChatPane: View {
                             .frame(maxWidth: .infinity)
                         }
                         if let error {
-                            Text(error).font(.footnote).foregroundStyle(.red)
+                            Text(error).font(.footnote).foregroundStyle(Color.errorText)
                         }
                         if loaded, turns.isEmpty, pending.isEmpty {
                             Text("Nothing here yet. Messages you send, and everything \(bot?.name ?? "the bot") does, show up here.")
@@ -262,7 +262,7 @@ private struct PendingBubble: View {
                 .background(Color.accentColor.opacity(0.16), in: RoundedRectangle(cornerRadius: 14, style: .continuous))
             Text(message.label)
                 .font(.caption2)
-                .foregroundStyle(message.state == .sent || message.state == .queued ? AnyShapeStyle(.secondary) : AnyShapeStyle(.red))
+                .foregroundStyle(message.state == .sent || message.state == .queued ? AnyShapeStyle(.secondary) : AnyShapeStyle(Color.errorText))
         }
         .frame(maxWidth: .infinity, alignment: .trailing)
         .padding(.leading, 40)
@@ -287,10 +287,10 @@ private struct ChatComposer: View {
             if let blocked {
                 Text(blocked).font(.caption).foregroundStyle(.secondary)
             } else if case .failed(let reason) = dictation.phase {
-                Text(reason).font(.caption).foregroundStyle(.red)
+                Text(reason).font(.caption).foregroundStyle(Color.errorText)
             } else if dictation.isListening {
                 Label("Listening… tap the microphone when you are done.", systemImage: "waveform")
-                    .font(.caption).foregroundStyle(.red)
+                    .font(.caption).foregroundStyle(Color.errorText)
             } else if text.hasPrefix("/") {
                 Text("Runs in the terminal, as if you typed it there.").font(.caption).foregroundStyle(.secondary)
             }

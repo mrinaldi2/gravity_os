@@ -482,7 +482,7 @@ private struct DictationPanel: View {
                     Image(systemName: "waveform").symbolEffect(.variableColor.iterative, isActive: true).foregroundStyle(.red)
                     Text("Listening…").font(.caption.weight(.semibold))
                 } else if case .failed(let reason) = dictation.phase {
-                    Text(reason).font(.caption).foregroundStyle(.orange)
+                    Text(reason).font(.caption).foregroundStyle(Color.warningText)
                 } else {
                     Text("Type this on \(target)?").font(.caption.weight(.semibold))
                 }

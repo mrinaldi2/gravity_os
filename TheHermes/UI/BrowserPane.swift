@@ -96,7 +96,7 @@ struct BrowserPane: View {
         VStack(alignment: .leading, spacing: 10) {
             Text("Activity").font(.headline).padding(.top, 8)
             if let activityError {
-                Text(activityError).font(.footnote).foregroundStyle(.red)
+                Text(activityError).font(.footnote).foregroundStyle(Color.errorText)
             }
             if loaded, groups.isEmpty, activityError == nil {
                 EmptyNote(text: "No browsing yet.", systemImage: "globe")
@@ -186,12 +186,7 @@ private struct ActionRow: View {
                 HStack(spacing: 6) {
                     Text(action.title).font(.footnote)
                     if action.ownersChrome {
-                        Text("your Chrome")
-                            .font(.caption2.weight(.semibold))
-                            .padding(.horizontal, 6)
-                            .padding(.vertical, 1)
-                            .foregroundStyle(.orange)
-                            .background(Color.orange.opacity(0.15), in: Capsule())
+                        Pill(text: "your Chrome", tone: .needsYou)
                     }
                 }
                 if let subtitle = action.subtitle {

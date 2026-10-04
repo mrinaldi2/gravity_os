@@ -31,7 +31,7 @@ struct WorkersView: View {
                 }
             }
             if let error {
-                Text(error).font(.footnote).foregroundStyle(.red)
+                Text(error).font(.footnote).foregroundStyle(Color.errorText)
             }
             section("Running", sections.running)
             section("Queued", sections.queued)

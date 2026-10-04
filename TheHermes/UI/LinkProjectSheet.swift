@@ -14,6 +14,8 @@ struct LinkProjectSheet: View {
     @State private var busy = false
     @State private var failure: String?
     @State private var showingNetwork = false
+    /// The link waiting for the owner to confirm Unlink.
+    @State private var unlinking: ProjectLink?
 
     private var project: Project? { store.projects.first { $0.id == projectId } }
     private var peers: [Peer] { store.peers.filter(\.isActive) }
@@ -39,7 +41,7 @@ struct LinkProjectSheet: View {
                                         .font(.caption).foregroundStyle(.secondary)
                                 }
                                 Spacer()
-                                Button("Unlink", role: .destructive) { unlink(link) }
+                                Button("Unlink", role: .destructive) { unlinking = link }
                                     .buttonStyle(.borderless)
                                     .disabled(busy || !store.canControl)
                             }
@@ -94,6 +96,15 @@ struct LinkProjectSheet: View {
                         Button("Link", action: link).disabled(peerId.isEmpty || !store.canControl)
                     }
                 }
+            }
+            .confirmationDialog("Unlink \(unlinking?.remoteProjectName ?? "")?", isPresented: Binding(
+                get: { unlinking != nil }, set: { if !$0 { unlinking = nil } }), titleVisibility: .visible
+            ) {
+                if let unlinking {
+                    Button("Unlink", role: .destructive) { unlink(unlinking) }
+                }
+            } message: {
+                Text("The bots on \(unlinking?.peerName ?? "the other computer") leave \(project?.name ?? "this project"), and this project's bots leave theirs. History is kept, and you can link again later.")
             }
             .errorAlert($failure)
             .task {

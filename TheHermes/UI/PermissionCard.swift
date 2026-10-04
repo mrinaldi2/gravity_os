@@ -71,7 +71,7 @@ struct PermissionCard: View {
                     .foregroundStyle(.secondary)
             }
             if let failure {
-                Text(failure).font(.caption).foregroundStyle(.red)
+                Text(failure).font(.caption).foregroundStyle(Color.errorText)
             }
         }
         .padding(12)
@@ -94,8 +94,7 @@ struct PermissionCard: View {
             .font(.footnote.weight(.semibold))
             .frame(maxWidth: .infinity)
         }
-        .buttonStyle(.bordered)
-        .tint(answer == .deny ? .red : prominent ? .green : .accentColor)
+        .buttonStyle(AnswerButtonStyle(tone: answer == .deny ? .failed : prominent ? .ready : .working))
         .disabled(!canAnswer)
         .accessibilityLabel(answer.label)
     }
@@ -112,5 +111,22 @@ struct PermissionCard: View {
             }
             busy = nil
         }
+    }
+}
+
+/// A bordered button whose words keep 4.5:1 on the orange card: its tone's
+/// text colour on a light wash of the tint, laid over the plain card colour.
+private struct AnswerButtonStyle: ButtonStyle {
+    let tone: Tone
+    @Environment(\.isEnabled) private var isEnabled
+
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .foregroundStyle(tone.text)
+            .padding(.vertical, 8)
+            .padding(.horizontal, 10)
+            .background(tone.color.opacity(0.12), in: Capsule())
+            .background(Color(.secondarySystemGroupedBackground), in: Capsule())
+            .opacity(configuration.isPressed ? 0.6 : isEnabled ? 1 : 0.4)
     }
 }

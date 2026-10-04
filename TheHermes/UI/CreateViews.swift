@@ -128,7 +128,7 @@ struct NewBotSheet: View {
                 } footer: {
                     if full {
                         Text("This project already has 12 bots on \(store.computerName), the most Gravity allows. Delete one first\(links.isEmpty ? "" : ", or run the new one on a linked computer").")
-                            .foregroundStyle(.orange)
+                            .foregroundStyle(Color.warningText)
                     }
                 }
 

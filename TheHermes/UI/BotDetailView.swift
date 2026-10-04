@@ -167,7 +167,7 @@ struct BotDetailView: View {
     private func approvalLabel(_ detail: String, link: Bool) -> some View {
         HStack(spacing: 10) {
             IconTile(systemImage: "hand.raised.fill", tone: .needsYou, size: 28)
-            Text(detail).font(.footnote.weight(.medium)).foregroundStyle(.orange).lineLimit(2)
+            Text(detail).font(.footnote.weight(.medium)).foregroundStyle(Color.warningText).lineLimit(2)
             Spacer(minLength: 4)
             if link {
                 Text("Terminal").font(.footnote.weight(.semibold))
@@ -343,7 +343,7 @@ private struct BotMorePane: View {
                 if store.canRestart {
                     Section {
                         Button { confirming = .restart } label: { Label("Restart session", systemImage: "arrow.clockwise") }
-                        Button { confirming = .clear } label: { Label("Clear chat", systemImage: "eraser") }
+                        Button(role: .destructive) { confirming = .clear } label: { Label("Clear chat", systemImage: "eraser") }
                     } header: {
                         SectionTitle("Session")
                     } footer: {

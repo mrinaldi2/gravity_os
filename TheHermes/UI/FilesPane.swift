@@ -19,7 +19,7 @@ struct BotFilesPane: View {
     var body: some View {
         List {
             if let error {
-                Text(error).font(.footnote).foregroundStyle(.red)
+                Text(error).font(.footnote).foregroundStyle(Color.errorText)
             }
             if loaded, error == nil, files.isEmpty {
                 EmptyNote(text: "No files in this project yet.", systemImage: "doc")

@@ -49,7 +49,7 @@ struct TaskRowView: View {
                 MarkdownText(shown.request)
                 if let result = shown.result, !result.isEmpty {
                     VStack(alignment: .leading, spacing: 4) {
-                        Label("Result", systemImage: "checkmark.seal").font(.caption.weight(.semibold)).foregroundStyle(.green)
+                        Label("Result", systemImage: "checkmark.seal").font(.caption.weight(.semibold)).foregroundStyle(Color.successText)
                         MarkdownText(result)
                     }
                     .padding(10)
@@ -57,7 +57,7 @@ struct TaskRowView: View {
                     .background(Color.green.opacity(0.08), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
                 }
                 if loading { ProgressView().controlSize(.small) }
-                if let error { Text(error).font(.caption).foregroundStyle(.red) }
+                if let error { Text(error).font(.caption).foregroundStyle(Color.errorText) }
             }
         }
     }

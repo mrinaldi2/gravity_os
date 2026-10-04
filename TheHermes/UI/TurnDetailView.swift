@@ -243,7 +243,7 @@ struct EventRow: View {
                    tint: .accentColor, background: Color.accentColor.opacity(0.10))
         case "completed":
             VStack(alignment: .leading, spacing: 8) {
-                bubble(label: "Task completed", symbol: "checkmark.seal.fill", tint: .green, background: Color.green.opacity(0.10))
+                bubble(label: "Task completed", symbol: "checkmark.seal.fill", tint: .successText, background: Color.green.opacity(0.10))
                 ForEach(event.artifacts ?? [], id: \.self) { path in
                     if let report = lens.report(forPath: path) {
                         NavigationLink(value: LensArtifact(project: report.project, name: report.name,

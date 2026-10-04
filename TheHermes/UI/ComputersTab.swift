@@ -136,8 +136,8 @@ struct ComputerPage: View {
                     Text(reason).font(.footnote).foregroundStyle(.secondary)
                     Button("Reconnect now") { store.client.reconnectNow() }
                 }
-                if case .authFailed(let reason) = store.status { Text(reason).font(.footnote).foregroundStyle(.red) }
-                if case .versionMismatch(let reason) = store.status { Text(reason).font(.footnote).foregroundStyle(.red) }
+                if case .authFailed(let reason) = store.status { Text(reason).font(.footnote).foregroundStyle(Color.errorText) }
+                if case .versionMismatch(let reason) = store.status { Text(reason).font(.footnote).foregroundStyle(Color.errorText) }
             }
             Section {
                 HStack(spacing: 12) {
@@ -184,7 +184,7 @@ struct ComputerPage: View {
                     if diagnostics.staleBuild {
                         Label("The daemon was updated on disk and needs a restart.", systemImage: "exclamationmark.triangle")
                             .font(.footnote)
-                            .foregroundStyle(.orange)
+                            .foregroundStyle(Color.warningText)
                     }
                 }
             } header: {
