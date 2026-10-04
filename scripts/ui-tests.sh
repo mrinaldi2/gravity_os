@@ -5,32 +5,36 @@
 #
 # for example `scripts/ui-tests.sh -only-testing:UITests/SmokeTests`. It starts
 # demo/make_demo.py with a linked peer in its own folder and ports, erases the
-# suite's own simulator, runs the tests there, and stops the demo. Answers and
-# unlinks only touch that demo.
+# simulator, runs the tests there, and stops the demo. Answers and unlinks only
+# touch that demo.
 #
-#   SIMULATOR       simulator name (default "iOS QA – iPhone": an iPhone 18 Pro,
-#                   created when missing and erased before each run; nobody else uses it)
+#   SIMULATOR       name of an existing simulator that is yours alone (default
+#                   Gravity-iOSQA); it is addressed by UDID and ERASED before each run
 #   SCREENSHOT_DIR  where the tests also write their screenshots as PNG
-#   DEMO_OUT, DEMO_PORT, DEMO_LENS_PORT, DEMO_PEER_PORT
-#                   defaults /tmp/hermes-qa-demo, 49990, 49988, 49991; pick
-#                   others when another demo uses them (make_demo.py wipes its folder)
+#   DEMO_OUT        the demo's folder, wiped on each run (default build/ui-tests-demo)
+#   DEMO_PORT, DEMO_LENS_PORT, DEMO_PEER_PORT
+#                   the demo's ports (default 41300, 41301, 41302)
+#
+# On a shared computer it touches only what it started: the demo's processes,
+# by the pids make_demo.py records, and the one simulator.
 #
 # Result bundles (screenshots, contrast figures): build/ui-tests.xcresult, and
 # build/ui-tests-dark.xcresult for the dark-mode checks.
 set -eu
 cd "$(dirname "$0")/.."
-simulator=${SIMULATOR:-iOS QA – iPhone}
-out=${DEMO_OUT:-/tmp/hermes-qa-demo}
-port=${DEMO_PORT:-49990}
-lens_port=${DEMO_LENS_PORT:-49988}
-peer_port=${DEMO_PEER_PORT:-49991}
+simulator=${SIMULATOR:-Gravity-iOSQA}
+out=${DEMO_OUT:-$PWD/build/ui-tests-demo}
+port=${DEMO_PORT:-41300}
+lens_port=${DEMO_LENS_PORT:-41301}
+peer_port=${DEMO_PEER_PORT:-41302}
 log="$out.log"
 project=$(dirname "$(ls -d *.xcodeproj/project.pbxproj | head -1)")
 
 device=$(xcrun simctl list devices available | grep -F "    $simulator (" | head -1 | sed -E 's/.*\(([0-9A-F-]{36})\).*/\1/')
 if [ -z "$device" ]; then
-    runtime=$(xcrun simctl list runtimes available | grep -o 'com.apple.CoreSimulator.SimRuntime.iOS-[0-9-]*' | tail -1)
-    device=$(xcrun simctl create "$simulator" com.apple.CoreSimulator.SimDeviceType.iPhone-18-Pro "$runtime")
+    echo "No simulator named $simulator. Create one that is yours alone, for example:" >&2
+    echo "  xcrun simctl create '$simulator' com.apple.CoreSimulator.SimDeviceType.iPhone-18-Pro" >&2
+    exit 1
 fi
 
 for p in "$port" "$lens_port" "$peer_port"; do
@@ -39,12 +43,16 @@ for p in "$port" "$lens_port" "$peer_port"; do
         exit 1
     fi
 done
+mkdir -p "$(dirname "$out")"
 demo=
+# The demo, then each process it recorded starting (daemons, Lens): only those.
 stop_demo() {
-    kill $demo 2>/dev/null || true
-    wait $demo 2>/dev/null || true
-    pkill -f "$out(-peer)?/gravityd.toml" 2>/dev/null || true
-    pkill -f "gravity_lens.py --port $lens_port " 2>/dev/null || true
+    [ -n "$demo" ] && kill "$demo" 2>/dev/null || true
+    [ -n "$demo" ] && wait "$demo" 2>/dev/null || true
+    if [ -f "$out/pids" ]; then
+        while read -r pid; do kill "$pid" 2>/dev/null || true; done <"$out/pids"
+        rm -f "$out/pids"
+    fi
 }
 trap stop_demo EXIT INT TERM
 # The demo first, on a quiet machine; a second try when its daemon trips while starting.
@@ -55,7 +63,7 @@ for attempt in 1 2; do
     tries=0
     until grep -q '^Serving' "$log"; do
         tries=$((tries + 1))
-        if [ $tries -gt 180 ] || ! kill -0 $demo 2>/dev/null; then break; fi
+        if [ $tries -gt 180 ] || ! kill -0 "$demo" 2>/dev/null; then break; fi
         sleep 1
     done
     grep -q '^Serving' "$log" && break
@@ -99,15 +107,35 @@ run_tests() { # <result bundle> <xcodebuild args…>
     xcodebuild -project "$project" -scheme UITests -destination "id=$device" \
         -derivedDataPath build/ui-tests -resultBundlePath "$bundle" test "$@"
 }
+# Apps on the simulator that this suite did not install: something else used it
+# mid-run, and the results can't be trusted.
+foreign_apps() {
+    ours=$(for plist in build/ui-tests/Build/Products/Debug-iphonesimulator/*.app/Info.plist; do
+        plutil -extract CFBundleIdentifier raw "$plist"; done 2>/dev/null)
+    xcrun simctl listapps "$device" | plutil -convert json -o - - | python3 -c '
+import json, sys
+ours = set(sys.argv[1].split())
+apps = json.load(sys.stdin)
+print(" ".join(k for k, v in apps.items() if v.get("ApplicationType") == "User" and k not in ours))' "$ours"
+}
+check_simulator() {
+    others=$(foreign_apps)
+    if [ -n "$others" ]; then
+        echo "STOPPED: something else installed onto $simulator ($device) during the run: $others" >&2
+        exit 2
+    fi
+}
 status=0
 xcrun simctl ui "$device" appearance light
 run_tests build/ui-tests.xcresult \
     -skip-testing:UITests/H003Tests/testPermissionCardContrastDark \
     -skip-testing:UITests/H003Tests/testDecisionDetailContrastDark "$@" || status=1
+check_simulator
 if [ $# -eq 0 ] || echo "$*" | grep -q Dark; then
     xcrun simctl ui "$device" appearance dark
     # shellcheck disable=SC2086
     run_tests build/ui-tests-dark.xcresult $dark || status=1
     xcrun simctl ui "$device" appearance light
+    check_simulator
 fi
 exit $status
