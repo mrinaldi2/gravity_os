@@ -134,6 +134,17 @@ def healthy(port: int) -> bool:
         return False
 
 
+# Every process the demo starts, one pid per line, so whoever ran it can stop
+# exactly those (scripts/ui-tests.sh does) even when the demo itself died.
+PIDS: Optional[str] = None
+
+
+def remember(process: subprocess.Popen) -> None:
+    if PIDS:
+        with open(PIDS, "a") as handle:
+            handle.write(f"{process.pid}\n")
+
+
 def start_daemon(gravityd: str, out: str, port: int) -> subprocess.Popen:
     home = os.path.join(out, "gravity")
     os.makedirs(home, exist_ok=True)
@@ -147,6 +158,7 @@ def start_daemon(gravityd: str, out: str, port: int) -> subprocess.Popen:
                      'permission_timeout_seconds = 3600\n')
     log = open(os.path.join(out, "gravityd.log"), "ab")
     daemon = subprocess.Popen([gravityd, "--config", config], stdout=log, stderr=log)
+    remember(daemon)
     for _ in range(50):
         if healthy(port):
             return daemon
@@ -225,7 +237,7 @@ def spawn_workers(ws: "Socket", port: int, home: str, out: str, bots: Dict[str, 
 def link_peer(ws: "Socket", out: str, gravityd: str, port: int, project_id: str) -> subprocess.Popen:
     """A second throwaway gravityd, "Studio PC", peered with the demo one and linked
     into one project, so the app has a link to show (and to unlink)."""
-    peer_out = out + "-peer"
+    peer_out = os.path.join(out, "peer")
     if os.path.exists(peer_out):
         shutil.rmtree(peer_out)
     peer = start_daemon(gravityd, peer_out, port)
@@ -667,6 +679,8 @@ def main() -> None:
     claude = os.path.join(out, "user-home", ".claude", "projects")
     shots = os.path.join(out, "shots")
     os.makedirs(shots)
+    global PIDS
+    PIDS = os.path.join(out, "pids")
     for image in os.listdir(ASSETS):
         shutil.copy(os.path.join(ASSETS, image), os.path.join(shots, image))
 
@@ -735,6 +749,7 @@ def main() -> None:
                              "--files-root", mac_home, "--displays-json", json.dumps([
                                  {"id": 1, "main": True, "x": 0, "y": 0, "width": 1920, "height": 1200},
                                  {"id": 2, "main": False, "x": 1920, "y": 0, "width": 1920, "height": 1200}])])
+    remember(lens)
     print(f"  Gravity Lens: 127.0.0.1:{args.lens_port}\nServing. Ctrl-C stops both.")
     if "permissions" in hello.get("capabilities", []):
         ask_permissions(args.port, home, bots)
