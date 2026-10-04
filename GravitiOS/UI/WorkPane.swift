@@ -27,7 +27,7 @@ struct WorkPane: View {
     var body: some View {
         List {
             if let error {
-                Text(error).font(.footnote).foregroundStyle(.red)
+                Text(error).font(.footnote).foregroundStyle(Color.errorText)
             }
             if loaded, error == nil, commands.isEmpty, tasks.isEmpty, upcoming.isEmpty {
                 EmptyNote(text: "\(store.bot(botId)?.name ?? "This bot") has not run anything yet.", systemImage: "hammer")

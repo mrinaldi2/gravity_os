@@ -113,7 +113,7 @@ private struct CopyButton: View {
             } else {
                 Label(copied ? "Copied" : "Copy", systemImage: copied ? "checkmark" : "doc.on.doc")
                     .font(.caption2.weight(.semibold))
-                    .foregroundStyle(copied ? Color.green : Color.accentColor)
+                    .foregroundStyle(copied ? Color.successText : Color.accentColor)
             }
         }
         // Its own tap target in a List row, not the row's.
@@ -176,7 +176,7 @@ struct MemoryPane: View {
                 case .missing:
                     Text("\(name) has not written any memory yet.").foregroundStyle(.secondary)
                 case .failed(let error):
-                    Text(error).font(.footnote).foregroundStyle(.red)
+                    Text(error).font(.footnote).foregroundStyle(Color.errorText)
                 case .loaded(let text, let truncated):
                     if text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
                         Text("\(name)'s memory is empty.").foregroundStyle(.secondary)

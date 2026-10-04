@@ -106,7 +106,7 @@ struct TurnCard: View {
                 HStack(spacing: 8) {
                     Text(turn.stats.line)
                     if turn.stats.errors > 0 {
-                        Label("\(turn.stats.errors)", systemImage: "exclamationmark.triangle.fill").foregroundStyle(.orange)
+                        Label("\(turn.stats.errors)", systemImage: "exclamationmark.triangle.fill").foregroundStyle(Color.warningText)
                     }
                 }
                 .font(.caption)
@@ -134,7 +134,7 @@ struct TurnCard: View {
                         .font(.caption.weight(.semibold)).foregroundStyle(.tint)
                 } else if turn.outcome.kind == "completed" {
                     Label("Task completed", systemImage: "checkmark.seal.fill")
-                        .font(.caption.weight(.semibold)).foregroundStyle(.green)
+                        .font(.caption.weight(.semibold)).foregroundStyle(Color.successText)
                 }
                 Text(plain(turn.outcome.text)).font(.callout).lineLimit(4)
             }

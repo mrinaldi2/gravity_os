@@ -20,6 +20,39 @@ enum Tone {
         case .worker: .teal
         }
     }
+
+    /// The colour for words in this tone. The system tints are for fills and
+    /// dots; as text on white most fall under WCAG AA (4.5:1), so light mode
+    /// uses darker shades of the same hue.
+    var text: Color {
+        switch self {
+        case .ready: .successText
+        case .working: .accentColor
+        case .needsYou: .warningText
+        case .failed: .errorText
+        case .quiet: .quietText
+        case .worker: .workerText
+        }
+    }
+}
+
+extension Color {
+    /// Warning words. System orange stays for fills and dots only.
+    static let warningText = Color(light: 0xC93400, dark: 0xFF9F0A)
+    static let successText = Color(light: 0x1E7B34, dark: 0x30D158)
+    static let errorText = Color(light: 0xD70015, dark: 0xFF6961)
+    static let workerText = Color(light: 0x007A8F, dark: 0x40CBE0)
+    /// Secondary words that still have to be read inside a tinted badge.
+    static let quietText = Color(light: 0x6C6C70, dark: 0xAEAEB2)
+
+    /// A colour that follows light and dark mode.
+    init(light: UInt32, dark: UInt32) {
+        self.init(uiColor: UIColor { traits in
+            let rgb = traits.userInterfaceStyle == .dark ? dark : light
+            return UIColor(red: CGFloat(rgb >> 16 & 0xFF) / 255, green: CGFloat(rgb >> 8 & 0xFF) / 255,
+                           blue: CGFloat(rgb & 0xFF) / 255, alpha: 1)
+        })
+    }
 }
 
 extension BotState {
@@ -59,14 +92,15 @@ struct StatusLabel: View {
             }
             Text(text)
                 .font(.caption.weight(.medium))
-                .foregroundStyle(tone == .needsYou || tone == .failed ? tone.color : .secondary)
+                .foregroundStyle(tone == .needsYou || tone == .failed ? tone.text : .secondary)
                 .lineLimit(1)
         }
         .accessibilityElement(children: .combine)
     }
 }
 
-/// The one badge: a word in a tinted capsule.
+/// The one badge: a word in a tinted capsule. The tint is kept light so the
+/// word, in its tone's text colour, stays at 4.5:1 or more on it.
 struct Pill: View {
     let text: String
     var tone: Tone = .quiet
@@ -77,8 +111,8 @@ struct Pill: View {
             .lineLimit(1)
             .padding(.horizontal, 7)
             .padding(.vertical, 2)
-            .foregroundStyle(tone.color)
-            .background(tone.color.opacity(0.16), in: Capsule())
+            .foregroundStyle(tone.text)
+            .background(tone.color.opacity(0.12), in: Capsule())
     }
 }
 
@@ -120,7 +154,7 @@ struct ItemRow<Leading: View, Trailing: View>: View {
             VStack(alignment: .leading, spacing: 2) {
                 Text(title)
                     .font(.subheadline.weight(.semibold))
-                    .foregroundStyle(titleTone?.color ?? .primary)
+                    .foregroundStyle(titleTone?.text ?? .primary)
                     .lineLimit(titleLines)
                 if let subtitle, !subtitle.isEmpty {
                     Text(subtitle)
@@ -199,7 +233,7 @@ struct ListEnd: View {
             Group {
                 if failed {
                     HStack {
-                        Text("Couldn’t load earlier \(noun)").foregroundStyle(.orange)
+                        Text("Couldn’t load earlier \(noun)").foregroundStyle(Color.warningText)
                         Spacer()
                         Button("Try again") { failed = false; trying += 1 }.fontWeight(.semibold)
                     }

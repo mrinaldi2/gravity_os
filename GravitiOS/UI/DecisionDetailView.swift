@@ -43,7 +43,7 @@ struct DecisionDetailView: View {
                     Text(decision.raisedByName).font(.subheadline.weight(.semibold))
                     Text(store.projectName(decision.projectId)).font(.subheadline).foregroundStyle(.secondary)
                     Spacer()
-                    if decision.urgent { Chip(text: "Urgent", color: .red) }
+                    if decision.urgent { Pill(text: "Urgent", tone: .failed) }
                 }
                 Text(decision.title).font(.title3.weight(.semibold))
                 if !decision.body.isEmpty {
@@ -52,10 +52,10 @@ struct DecisionDetailView: View {
                 if let deadline = decision.deadlineAt {
                     Label("Due \(deadline.formatted(date: .abbreviated, time: .shortened))", systemImage: "clock")
                         .font(.footnote)
-                        .foregroundStyle(.orange)
+                        .foregroundStyle(Color.warningText)
                 }
                 if !decision.tags.isEmpty {
-                    HStack { ForEach(decision.tags, id: \.self) { Chip(text: $0, color: .secondary) } }
+                    HStack { ForEach(decision.tags, id: \.self) { Pill(text: $0) } }
                 }
             }
             .padding(.vertical, 4)
@@ -73,7 +73,7 @@ struct DecisionDetailView: View {
             if ruling.answeredBy.hasPrefix("owner-via-bot") {
                 Label("Relayed by a bot, not yet confirmed by you", systemImage: "exclamationmark.triangle")
                     .font(.footnote)
-                    .foregroundStyle(.orange)
+                    .foregroundStyle(Color.warningText)
             }
         }
     }
@@ -92,7 +92,7 @@ struct DecisionDetailView: View {
                             VStack(alignment: .leading, spacing: 3) {
                                 HStack {
                                     Text(item.label).font(.body.weight(.medium)).foregroundStyle(.primary)
-                                    if decision.recommendation == item.key { Chip(text: "Recommended", color: .green) }
+                                    if decision.recommendation == item.key { Pill(text: "Recommended", tone: .ready) }
                                 }
                                 if !item.description.isEmpty {
                                     Text(item.description).font(.footnote).foregroundStyle(.secondary)

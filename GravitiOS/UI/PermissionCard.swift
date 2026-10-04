@@ -71,7 +71,7 @@ struct PermissionCard: View {
                     .foregroundStyle(.secondary)
             }
             if let failure {
-                Text(failure).font(.caption).foregroundStyle(.red)
+                Text(failure).font(.caption).foregroundStyle(Color.errorText)
             }
         }
         .padding(12)

@@ -18,7 +18,7 @@ struct StepDetailView: View {
                     }
                     if event.error == true {
                         Label("This step failed", systemImage: "exclamationmark.triangle.fill")
-                            .font(.footnote).foregroundStyle(.orange)
+                            .font(.footnote).foregroundStyle(Color.warningText)
                     }
                 }
                 if let images = event.images?.filter({ $0.exists != false }), !images.isEmpty {

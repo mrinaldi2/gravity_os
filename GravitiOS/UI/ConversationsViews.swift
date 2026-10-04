@@ -23,7 +23,7 @@ struct ConversationsView: View {
     var body: some View {
         List {
             if let error {
-                Text(error).font(.footnote).foregroundStyle(.red)
+                Text(error).font(.footnote).foregroundStyle(Color.errorText)
             }
             if loaded, conversations.isEmpty, error == nil {
                 EmptyNote(text: "When bots message each other, their conversations appear here.", systemImage: "bubble.left.and.bubble.right")
@@ -118,7 +118,7 @@ struct ConversationThreadView: View {
                             .buttonStyle(.bordered)
                     }
                     if let error {
-                        Text(error).font(.footnote).foregroundStyle(.red)
+                        Text(error).font(.footnote).foregroundStyle(Color.errorText)
                     }
                     ForEach(messages) { message in
                         Bubble(message: message,
@@ -189,12 +189,7 @@ private struct Bubble: View {
                         .padding(.vertical, 1)
                         .background(Color(.tertiarySystemFill), in: Capsule())
                     if let state = message.taskState {
-                        Text(state)
-                            .font(.caption2.weight(.semibold))
-                            .padding(.horizontal, 5)
-                            .padding(.vertical, 1)
-                            .foregroundStyle(state == "done" ? .green : state == "open" ? .orange : .secondary)
-                            .background((state == "done" ? Color.green : state == "open" ? .orange : .gray).opacity(0.15), in: Capsule())
+                        Pill(text: state, tone: state == "done" ? .ready : state == "open" ? .needsYou : .quiet)
                     }
                     Spacer(minLength: 0)
                     if let at = message.createdAt {
