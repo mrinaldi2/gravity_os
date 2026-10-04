@@ -30,17 +30,16 @@ final class SmokeTests: XCTestCase {
 
     func testBotChat() {
         app.tab("Bots")
-        let bot = waitFor(app.buttons.containing(NSPredicate(format: "label CONTAINS ', iOS Dev,'")).firstMatch)
-        bot.tap()
+        waitFor(app.botRow("iOS Dev")).tap()
         waitFor(app.buttons["Chat"])
-        // The owner's message the demo sent to iOS Dev.
-        waitFor(app.staticTexts.containing(NSPredicate(format: "label CONTAINS 'Keep it behind the flag'")).firstMatch)
-        let field = waitFor(app.textFields["Message iOS Dev"].exists ? app.textFields["Message iOS Dev"] : app.textViews["Message iOS Dev"])
-        field.tap()
+        // The bot's own transcript.
+        waitFor(app.staticTexts.containing(NSPredicate(format: "label BEGINSWITH 'Starting on the conflict banner'")).firstMatch)
+        let field = app.textViews.firstMatch.exists ? app.textViews.firstMatch : app.textFields.firstMatch
+        waitFor(field).tap()
         let text = "UI smoke \(Int(Date().timeIntervalSince1970))"
         field.typeText(text)
         app.buttons["Send"].tap()
-        waitFor(app.staticTexts[text])
+        waitFor(app.staticTexts.containing(NSPredicate(format: "label CONTAINS %@", text)).firstMatch)
         screenshot("QA-001-smoke-chat")
     }
 
@@ -62,7 +61,10 @@ final class SmokeTests: XCTestCase {
 
     func testLinkSheetUnlink() {
         app.tab("Bots")
-        waitFor(app.buttons.containing(NSPredicate(format: "label BEGINSWITH 'Aurora Notes,'")).firstMatch).tap()
+        // The project's header row opens it from its "Open".
+        let header = waitFor(app.buttons.containing(NSPredicate(format: "label BEGINSWITH 'Aurora Notes,'")).firstMatch)
+        header.staticTexts["Open"].tap()
+        waitFor(app.navigationBars["Aurora Notes"])
         let change = app.buttons["Change linked computers"]
         app.scroll(to: change)
         waitFor(change).tap()
@@ -72,7 +74,7 @@ final class SmokeTests: XCTestCase {
         waitFor(app.staticTexts["Unlink Aurora Notes?"])
         XCTAssertTrue(app.staticTexts["on Studio PC"].exists)
         screenshot("QA-001-unlink-confirm")
-        app.buttons.matching(NSPredicate(format: "label == 'Unlink'")).allElementsBoundByIndex.last!.tap()
+        waitFor(app.buttons["Unlink project"]).tap()
         XCTAssertTrue(app.staticTexts["on Studio PC"].waitForNonExistence(timeout: 10), "Still linked after confirming Unlink")
         screenshot("QA-001-unlink-done")
     }

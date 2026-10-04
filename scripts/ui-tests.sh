@@ -15,7 +15,8 @@
 #                   defaults /tmp/hermes-qa-demo, 49990, 49988, 49991; pick
 #                   others when another demo uses them (make_demo.py wipes its folder)
 #
-# The result bundle (screenshots, contrast figures) is build/ui-tests.xcresult.
+# Result bundles (screenshots, contrast figures): build/ui-tests.xcresult, and
+# build/ui-tests-dark.xcresult for the dark-mode checks.
 set -eu
 cd "$(dirname "$0")/.."
 simulator=${SIMULATOR:-iOS QA – iPhone}
@@ -31,9 +32,6 @@ if [ -z "$device" ]; then
     runtime=$(xcrun simctl list runtimes available | grep -o 'com.apple.CoreSimulator.SimRuntime.iOS-[0-9-]*' | tail -1)
     device=$(xcrun simctl create "$simulator" com.apple.CoreSimulator.SimDeviceType.iPhone-18-Pro "$runtime")
 fi
-xcrun simctl shutdown "$device" 2>/dev/null || true
-xcrun simctl erase "$device"
-xcrun simctl boot "$device"
 
 for p in "$port" "$lens_port" "$peer_port"; do
     if nc -z 127.0.0.1 "$p" 2>/dev/null; then
@@ -41,22 +39,37 @@ for p in "$port" "$lens_port" "$peer_port"; do
         exit 1
     fi
 done
-python3 -u demo/make_demo.py --serve --out "$out" --port "$port" --lens-port "$lens_port" \
-    --peer-port "$peer_port" >"$log" 2>&1 &
-demo=$!
-# make_demo.py stops its daemons and Lens on SIGTERM; the pkill catches them
-# when it died before it could.
-trap 'kill $demo 2>/dev/null; wait $demo 2>/dev/null; pkill -f "$out(-peer)?/gravityd.toml" 2>/dev/null; pkill -f "gravity_lens.py --port $lens_port " 2>/dev/null || true' EXIT INT TERM
-tries=0
-until grep -q '^Serving' "$log"; do
-    tries=$((tries + 1))
-    if [ $tries -gt 120 ] || ! kill -0 $demo 2>/dev/null; then
+demo=
+stop_demo() {
+    kill $demo 2>/dev/null || true
+    wait $demo 2>/dev/null || true
+    pkill -f "$out(-peer)?/gravityd.toml" 2>/dev/null || true
+    pkill -f "gravity_lens.py --port $lens_port " 2>/dev/null || true
+}
+trap stop_demo EXIT INT TERM
+# The demo first, on a quiet machine; a second try when its daemon trips while starting.
+for attempt in 1 2; do
+    python3 -u demo/make_demo.py --serve --out "$out" --port "$port" --lens-port "$lens_port" \
+        --peer-port "$peer_port" >"$log" 2>&1 &
+    demo=$!
+    tries=0
+    until grep -q '^Serving' "$log"; do
+        tries=$((tries + 1))
+        if [ $tries -gt 180 ] || ! kill -0 $demo 2>/dev/null; then break; fi
+        sleep 1
+    done
+    grep -q '^Serving' "$log" && break
+    stop_demo
+    if [ $attempt = 2 ]; then
         echo "The demo world did not start; see $log" >&2
         exit 1
     fi
-    sleep 1
 done
 sleep 3 # the demo's permission prompts reach the daemon just after it serves
+
+xcrun simctl shutdown "$device" 2>/dev/null || true
+xcrun simctl erase "$device"
+xcrun simctl boot "$device"
 
 # Ids the routing tests open: the designer's question and iOS Dev.
 ids=$(python3 - "$out" "$port" <<'EOF'
@@ -73,10 +86,28 @@ print(decision["id"], bot["id"])
 EOF
 )
 
-rm -rf build/ui-tests.xcresult
-TEST_RUNNER_GRAV_TOKEN=$(cat "$out/gravity/secrets/client.token") \
-TEST_RUNNER_GRAV_PORT=$port TEST_RUNNER_LENS_PORT=$lens_port \
-TEST_RUNNER_DEMO_DECISION_ID=${ids% *} TEST_RUNNER_DEMO_BOT_ID=${ids#* } \
-TEST_RUNNER_SCREENSHOT_DIR=${SCREENSHOT_DIR:-} \
-xcodebuild -project "$project" -scheme UITests -destination "id=$device" \
-    -derivedDataPath build/ui-tests -resultBundlePath build/ui-tests.xcresult test "$@"
+# Two passes, because a freshly erased simulator ignores the tests' own appearance
+# switch: everything in light, then the *Dark tests with the simulator in dark.
+dark="-only-testing:UITests/H003Tests/testPermissionCardContrastDark -only-testing:UITests/H003Tests/testDecisionDetailContrastDark"
+run_tests() { # <result bundle> <xcodebuild args…>
+    bundle=$1; shift
+    rm -rf "$bundle"
+    TEST_RUNNER_GRAV_TOKEN=$(cat "$out/gravity/secrets/client.token") \
+    TEST_RUNNER_GRAV_PORT=$port TEST_RUNNER_LENS_PORT=$lens_port \
+    TEST_RUNNER_DEMO_DECISION_ID=${ids% *} TEST_RUNNER_DEMO_BOT_ID=${ids#* } \
+    TEST_RUNNER_SCREENSHOT_DIR=${SCREENSHOT_DIR:-} \
+    xcodebuild -project "$project" -scheme UITests -destination "id=$device" \
+        -derivedDataPath build/ui-tests -resultBundlePath "$bundle" test "$@"
+}
+status=0
+xcrun simctl ui "$device" appearance light
+run_tests build/ui-tests.xcresult \
+    -skip-testing:UITests/H003Tests/testPermissionCardContrastDark \
+    -skip-testing:UITests/H003Tests/testDecisionDetailContrastDark "$@" || status=1
+if [ $# -eq 0 ] || echo "$*" | grep -q Dark; then
+    xcrun simctl ui "$device" appearance dark
+    # shellcheck disable=SC2086
+    run_tests build/ui-tests-dark.xcresult $dark || status=1
+    xcrun simctl ui "$device" appearance light
+fi
+exit $status

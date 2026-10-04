@@ -28,12 +28,26 @@ enum DemoApp {
 
     static func launch(_ extra: [String] = [], dark: Bool = false) throws -> XCUIApplication {
         let token = try XCTUnwrap(token, "No demo token: run scripts/ui-tests.sh, or start `python3 demo/make_demo.py --serve --peer-port 49791`")
-        XCUIDevice.shared.appearance = dark ? .dark : .light
         let app = XCUIApplication()
         app.launchArguments = ["-gravHost", "127.0.0.1", "-gravPort", environment["GRAV_PORT"] ?? "49790",
                                "-lensPort", environment["LENS_PORT"] ?? "49788", "-gravToken", token] + extra
-        app.launch()
+        // A freshly erased simulator can ignore the first appearance change, which
+        // once let "dark" checks measure light mode: the screen must show it.
+        for _ in 0..<3 {
+            XCUIDevice.shared.appearance = dark ? .dark : .light
+            app.launch()
+            sleep(2)
+            if isDark(app) == dark { return app }
+            app.terminate()
+            sleep(1)
+        }
+        XCTFail("The simulator would not switch to \(dark ? "dark" : "light") mode")
         return app
+    }
+
+    /// The screen's most common colour is dark.
+    static func isDark(_ app: XCUIApplication) -> Bool {
+        Contrast(of: app).background.luminance < 0.2
     }
 }
 
@@ -84,8 +98,27 @@ extension XCTestCase {
 }
 
 extension XCUIApplication {
+    /// Taps a tab; from a pushed screen, whose tab bar can be hidden, goes back first.
     func tab(_ name: String) {
+        var tries = 0
+        while !(tabBars.buttons[name].exists && tabBars.buttons[name].isHittable), tries < 4 {
+            let back = navigationBars.buttons.element(boundBy: 0)
+            if back.exists { back.tap() } else { swipeDown() }
+            tries += 1
+        }
         tabBars.buttons[name].tap()
+    }
+
+    /// A bot's row in Bots, scrolled into view.
+    func botRow(_ name: String) -> XCUIElement {
+        let row = buttons.matching(NSPredicate(format: "label BEGINSWITH %@ OR label BEGINSWITH %@", "\(name), ", "Unread, \(name), ")).firstMatch
+        scroll(to: row)
+        return row
+    }
+
+    /// Any element whose label is `label`: combined rows are not always StaticText.
+    func labelled(_ label: String) -> XCUIElement {
+        descendants(matching: .any).matching(NSPredicate(format: "label == %@", label)).firstMatch
     }
 
     /// Scrolls the current list until `element` is hittable: down first, then back up.

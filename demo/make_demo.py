@@ -42,7 +42,12 @@ class Socket:
     """Just enough WebSocket for the daemon's control plane."""
 
     def __init__(self, port: int):
-        self.sock = socket.create_connection(("127.0.0.1", port), timeout=10)
+        self.port = port
+        self.hello: Optional[Dict[str, Any]] = None
+        self.connect()
+
+    def connect(self) -> None:
+        self.sock = socket.create_connection(("127.0.0.1", self.port), timeout=10)
         key = base64.b64encode(os.urandom(16)).decode()
         self.sock.sendall((f"GET /ws HTTP/1.1\r\nHost: 127.0.0.1\r\nUpgrade: websocket\r\nConnection: Upgrade\r\n"
                            f"Sec-WebSocket-Key: {key}\r\nSec-WebSocket-Version: 13\r\n\r\n").encode())
@@ -88,6 +93,20 @@ class Socket:
         return json.loads(data)
 
     def request(self, kind: str, **fields: Any) -> Dict[str, Any]:
+        if kind == "hello":
+            self.hello = fields
+        try:
+            return self.exchange(kind, **fields)
+        except (BrokenPipeError, ConnectionResetError, json.JSONDecodeError, IndexError):
+            # The daemon closes a client that was silent for 60s, as this one is
+            # while the demo writes logs and waits on bots: reconnect and go on.
+            self.sock.close()
+            self.connect()
+            if self.hello is not None and kind != "hello":
+                self.exchange("hello", **self.hello)
+            return self.exchange(kind, **fields)
+
+    def exchange(self, kind: str, **fields: Any) -> Dict[str, Any]:
         self.next += 1
         req_id = str(self.next)
         self.send({"type": kind, "req_id": req_id, **fields})

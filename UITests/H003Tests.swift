@@ -12,7 +12,7 @@ final class H003Tests: XCTestCase {
         let app = try DemoApp.launch()
         allowSystemAlerts()
         app.tab("Bots")
-        waitFor(app.buttons.containing(NSPredicate(format: "label CONTAINS ', Architect,'")).firstMatch).tap()
+        waitFor(app.botRow("Architect")).tap()
         waitFor(app.buttons["More"]).tap()
         let clear = app.buttons["Clear conversation"]
         app.scroll(to: clear)
@@ -27,8 +27,13 @@ final class H003Tests: XCTestCase {
         let confirm = app.buttons.matching(identifier: "Clear conversation").allElementsBoundByIndex.last!
         screenshot("QA-001-clear-chat-confirm")
         XCTAssertTrue(Contrast(of: confirm).redShare > 0.01, "The confirming Clear conversation is not destructive")
-        // Cancel: the demo keeps its history.
-        if app.buttons["Cancel"].exists { app.buttons["Cancel"].tap() } else { app.tap() }
+        // Dismiss without confirming (away from the popover's button): the demo keeps its history.
+        if app.buttons["Cancel"].exists {
+            app.buttons["Cancel"].tap()
+        } else {
+            app.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.95)).tap()
+        }
+        XCTAssertTrue(confirm.waitForNonExistence(timeout: 5), "The confirmation did not close")
     }
 
     func testPermissionCardContrastLight() throws { try permissionCard(dark: false) }
@@ -41,8 +46,9 @@ final class H003Tests: XCTestCase {
         allowSystemAlerts()
         let allow = waitFor(app.buttons["Allow once"].firstMatch)
         sleep(1)
+        XCTAssertEqual(DemoApp.isDark(app), dark, "Measured in the wrong appearance")
         screenshot("QA-001-permission-card-\(dark ? "dark" : "light")")
-        for label in ["Allow once", "Allow for this session", "Deny"] {
+        for label in ["Allow once", "Allow for session", "Deny"] {
             check(app.buttons[label].firstMatch, label, dark)
         }
         _ = allow
@@ -57,6 +63,7 @@ final class H003Tests: XCTestCase {
         waitFor(row).tap()
         waitFor(app.navigationBars["Decision"])
         sleep(1)
+        XCTAssertEqual(DemoApp.isDark(app), dark, "Measured in the wrong appearance")
         screenshot("QA-001-decision-detail-\(dark ? "dark" : "light")")
         check(waitFor(app.staticTexts["Urgent"]), "Urgent pill", dark)
         let recommended = app.staticTexts["Recommended"]

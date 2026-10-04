@@ -20,38 +20,58 @@ final class PairingTests: XCTestCase {
         }
     }
 
-    private func paste(_ text: String, in app: XCUIApplication) {
-        UIPasteboard.general.string = text
+    /// The real paste. Neither the runner's clipboard writes nor `simctl pbcopy` reach
+    /// the app on the simulator (it reads nothing, with no paste prompt), so the link is
+    /// copied inside the app: typed into the Address field, ⌘A, ⌘C, cleared;
+    /// then Paste pairing link.
+    private func launchAndPaste(_ text: String) -> XCUIApplication {
+        let app = DemoApp.launchFirstRun()
+        waitFor(app.navigationBars["Connect to The Hermes"])
+        app.buttons["Enter manually"].tap()
+        let field = waitFor(app.textFields["Address"])
+        field.tap()
+        field.typeText(text)
+        // Select All and Copy with the simulator's hardware keyboard (no edit menu shows).
+        field.typeKey("a", modifierFlags: .command)
+        field.typeKey("c", modifierFlags: .command)
+        field.typeText(XCUIKeyboardKey.delete.rawValue)
+        app.buttons["Enter manually"].tap() // folds the form away again
         waitFor(app.buttons["Paste pairing link"]).tap()
         allowPaste(app)
+        return app
+    }
+
+    /// The app's Debug -pairLink: the same path as a paste or scan, without the clipboard.
+    private func launchWithLink(_ text: String) -> XCUIApplication {
+        XCUIApplication().terminate()
+        return DemoApp.launchFirstRun(["-pairLink", text])
     }
 
     func testPasteLinkConnectingErrorsThenSuccess() throws {
         let token = try XCTUnwrap(DemoApp.token)
-        let app = DemoApp.launchFirstRun()
-        waitFor(app.navigationBars["Connect to The Hermes"])
-        screenshot("QA-002-pairing-first-run")
 
-        // Not a link: a warning, nothing tried.
-        paste("hello there", in: app)
-        waitFor(app.staticTexts.containing(NSPredicate(format: "label BEGINSWITH 'That isn’t a pairing link'")).firstMatch)
-
-        // A service that never answers: Connecting… for the whole wait, then the address error.
-        paste(link(host: "10.255.255.1", port: "49777", token: token), in: app)
-        waitFor(app.staticTexts["Connecting to Demo Mac…"], 5)
-        screenshot("QA-002-pairing-connecting")
-        waitFor(app.staticTexts.containing(NSPredicate(format: "label BEGINSWITH 'Couldn’t reach 10.255.255.1:49777'")).firstMatch, 25)
-        screenshot("QA-002-pairing-unreachable")
-
-        // A wrong token: rejected, said next to the token field, nothing saved.
-        paste(link(token: "not-the-token"), in: app)
+        // Pasted, with a wrong token: rejected, said next to the token field, nothing saved.
+        var app = launchAndPaste(link(token: "not-the-token"))
         waitFor(app.staticTexts.containing(NSPredicate(format: "label BEGINSWITH 'Token rejected'")).firstMatch)
-        XCTAssertTrue(app.secureTextFields["Device token"].exists, "The token field is not shown with the error")
+        XCTAssertTrue(app.secureTextFields["Token"].exists, "The token field is not shown with the error")
         XCTAssertFalse(app.tabBars.firstMatch.exists, "A rejected computer opened the app")
         screenshot("QA-002-pairing-bad-token")
 
+        // Not a link: a warning, nothing tried.
+        app = launchWithLink("hello there")
+        waitFor(app.staticTexts.containing(NSPredicate(format: "label BEGINSWITH 'That isn’t a pairing link'")).firstMatch)
+        screenshot("QA-002-pairing-not-a-link")
+
+        // A service that never answers: Connecting… for the whole wait, then the address error.
+        app = launchWithLink(link(host: "10.255.255.1", port: "49777", token: token))
+        waitFor(app.descendants(matching: .any).matching(NSPredicate(format: "label CONTAINS 'Connecting to Demo Mac'")).firstMatch, 5)
+        screenshot("QA-002-pairing-connecting")
+        waitFor(app.staticTexts.containing(NSPredicate(format: "label BEGINSWITH 'Couldn’t reach 10.255.255.1:49777'")).firstMatch, 25)
+        XCTAssertFalse(app.tabBars.firstMatch.exists, "An unreachable computer opened the app")
+        screenshot("QA-002-pairing-unreachable")
+
         // The right link: connected, saved, and the app opens on Home.
-        paste(link(token: token), in: app)
+        app = launchWithLink(link(token: token))
         waitFor(app.tabBars.buttons["Home"], 20)
         // After pairing, a word on notifications before iOS asks.
         let explainer = app.staticTexts["Get told when a bot needs you"]
@@ -69,14 +89,13 @@ final class PairingTests: XCTestCase {
         waitFor(app.navigationBars["Connect to The Hermes"])
         open(link(token: token), in: app)
         waitFor(app.staticTexts["Opened from a pairing link. Check the computer and its address, then tap Connect."])
-        let host = app.textFields["Tailscale name or 100.x.y.z"]
-        XCTAssertEqual(host.value as? String, "127.0.0.1")
+        XCTAssertEqual(app.textFields["Address"].value as? String, "127.0.0.1")
         XCTAssertEqual(app.textFields["Port"].value as? String, DemoApp.environment["GRAV_PORT"] ?? "49790")
-        XCTAssertEqual(app.textFields["Name (Mac)"].value as? String, "Demo Mac")
+        XCTAssertEqual(app.textFields["Name"].value as? String, "Demo Mac")
         screenshot("QA-002-deeplink-prefilled")
         // It waits for Connect: nothing is tried or added on its own.
         sleep(4)
-        XCTAssertFalse(app.staticTexts["Connecting to Demo Mac…"].exists, "The link started connecting on its own")
+        XCTAssertFalse(app.descendants(matching: .any).matching(NSPredicate(format: "label CONTAINS 'Connecting to'")).firstMatch.exists, "The link started connecting on its own")
         XCTAssertFalse(app.tabBars.firstMatch.exists, "The link added the computer on its own")
         let connect = app.buttons["Connect"]
         app.scroll(to: connect)
@@ -93,7 +112,7 @@ final class PairingTests: XCTestCase {
         waitFor(app.navigationBars["Add a computer"])
         waitFor(app.staticTexts["Opened from a pairing link. Check the computer and its address, then tap Connect."])
         sleep(3)
-        XCTAssertFalse(app.staticTexts["Connecting to Second Mac…"].exists, "The link started connecting on its own")
+        XCTAssertFalse(app.descendants(matching: .any).matching(NSPredicate(format: "label CONTAINS 'Connecting to'")).firstMatch.exists, "The link started connecting on its own")
         screenshot("QA-002-deeplink-add-sheet")
         app.buttons["Cancel"].tap()
         XCTAssertFalse(app.buttons["Computer: Second Mac"].exists)

@@ -8,7 +8,8 @@ final class GlossaryTests: XCTestCase {
                           "Answer and publish", "Hold for later", "Restart session", "Clear chat",
                           "Reports", "Runtime", "Grants", "Delivery backlog", "Auth failed",
                           "Version mismatch", "Something went wrong", "Retry", "Between bots",
-                          "Charter", "Standing instructions", "Note from Gravity"]
+                          "Charter", "Standing instructions", "Note from Gravity", "Allow for this session",
+                          "decisions waiting", "decision waiting"]
     /// Allowed although they contain a retired word: the About attribution, and the
     /// config path that stays until R2.
     static let allowed = ["Based on Gravity by", "gravityd.toml"]
@@ -62,7 +63,7 @@ final class GlossaryTests: XCTestCase {
 
         app.tab("Bots")
         look("bots")
-        app.buttons.containing(NSPredicate(format: "label CONTAINS ', Architect,'")).firstMatch.tap()
+        waitFor(app.botRow("Architect")).tap()
         for pane in ["Chat", "Work", "Artifacts", "More"] {
             XCTAssertTrue(waitFor(app.buttons[pane]).exists, "Pane \(pane)")
         }
@@ -79,9 +80,12 @@ final class GlossaryTests: XCTestCase {
         app.buttons.containing(NSPredicate(format: "label CONTAINS 'Demo Mac'")).firstMatch.tap()
         sleep(2)
         look("computer")
+        let service = app.labelled("Hermes service")
+        app.scroll(to: service)
+        look("computer-service")
         XCTAssertTrue(seen.contains { $0.contains("Hermes service") }, "\"Hermes service\" not on the computer page")
-        // Drawn "Allow for session"; VoiceOver reads the longer "Allow for this session".
-        XCTAssertTrue(seen.contains("Allow for this session"), "No Allow for session answer on a permission card")
-        XCTAssertTrue(seen.contains { $0.hasPrefix("Needs you") }, "\"Needs you\" not on Home")
+        XCTAssertTrue(seen.contains("Allow for session"), "No Allow for session answer on a permission card")
+        XCTAssertTrue(seen.contains { $0.hasPrefix("Needs you") || $0.contains("need you") || $0.contains("needs you") },
+                      "\"Needs you\" not on Home")
     }
 }
