@@ -371,11 +371,11 @@ final class AppStore {
 
     private func approvalPending(_ frame: JSONDict) {
         let id = frame.str("bot_id")
-        let detail = frame.str("detail")
-        approvals[id] = detail
+        // Never the daemon's `detail`: that is the engine's own wording.
+        let approval = Approval(tool: frame.optStr("tool"))
+        approvals[id] = approval.line
         if inBackground {
-            notify("\(bot(id)?.name ?? "A bot") needs approval", detail, id: "approval-\(id)",
-                   about: (.approval, id, id))
+            notify(approval.title(bot(id)?.name ?? "A bot"), "", id: "approval-\(id)", about: (.approval, id, id))
         }
     }
 

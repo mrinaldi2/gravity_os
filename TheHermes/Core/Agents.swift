@@ -436,7 +436,11 @@ struct PermissionRequest: Identifiable, Equatable {
 
     /// The tool as people read it: "Bash", or "send message" for
     /// `mcp__hermes-bus__send_message`, never the `mcp__` form.
-    var toolName: String {
+    var toolName: String { Self.displayName(ofTool: tool) }
+
+    /// Any tool id as people read it, for prompts answered here and in the
+    /// bot's terminal alike.
+    static func displayName(ofTool tool: String) -> String {
         guard tool.hasPrefix("mcp__") else { return tool }
         return (tool.components(separatedBy: "__").last ?? tool).replacingOccurrences(of: "_", with: " ")
     }
@@ -491,5 +495,25 @@ enum TaskStateLabel {
         case "expired": "Expired"
         default: state.prefix(1).uppercased() + state.dropFirst().replacingOccurrences(of: "_", with: " ")
         }
+    }
+}
+
+/// A bot waiting for approval in its own terminal (`approval_pending`), said
+/// from the tool it wants to run when the daemon names it.
+struct Approval: Equatable {
+    var tool: String?
+
+    init(tool: String?) {
+        self.tool = tool.flatMap { $0.trimmingCharacters(in: .whitespaces).isEmpty ? nil : $0 }
+    }
+
+    /// Notification title: "Backend Dev wants to run Bash", else "Backend Dev needs approval".
+    func title(_ bot: String) -> String {
+        tool.map { "\(bot) wants to run \(PermissionRequest.displayName(ofTool: $0))" } ?? "\(bot) needs approval"
+    }
+
+    /// The line under a bot's name: "Wants to run Bash", else "Needs approval".
+    var line: String {
+        tool.map { "Wants to run \(PermissionRequest.displayName(ofTool: $0))" } ?? "Needs approval"
     }
 }
