@@ -22,6 +22,8 @@ No signing is needed for the simulator. For a device, put your team in `Config/L
 
 - `python3 -m unittest discover tests` passes (the companion must keep working on Python 3.9).
 - The app builds: `xcodebuild -project TheHermes.xcodeproj -scheme TheHermes -destination 'generic/platform=iOS Simulator' CODE_SIGNING_ALLOWED=NO build`.
+- UI tests pass: `scripts/ui-tests.sh` (starts its own demo world, runs the `UITests` scheme on the
+  iPhone 18 Pro simulator; `SIMULATOR=…` for another, extra args go to xcodebuild).
 - UI changes come with a before/after screenshot from the demo world, never from real bots.
 - No personal data in commits: tokens, Tailscale addresses, team IDs, real bot logs or screenshots.
 

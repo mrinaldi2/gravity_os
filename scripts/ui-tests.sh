@@ -4,10 +4,12 @@
 #   scripts/ui-tests.sh [xcodebuild args…]
 #
 # for example `scripts/ui-tests.sh -only-testing:UITests/SmokeTests`. It starts
-# demo/make_demo.py with a linked peer in its own folder and ports, runs the tests
-# on the simulator, and stops the demo. Answers and unlinks only touch that demo.
+# demo/make_demo.py with a linked peer in its own folder and ports, erases the
+# suite's own simulator, runs the tests there, and stops the demo. Answers and
+# unlinks only touch that demo.
 #
-#   SIMULATOR       simulator name (default: iPhone 18 Pro)
+#   SIMULATOR       simulator name (default "iOS QA – iPhone": an iPhone 18 Pro,
+#                   created when missing and erased before each run; nobody else uses it)
 #   SCREENSHOT_DIR  where the tests also write their screenshots as PNG
 #   DEMO_OUT, DEMO_PORT, DEMO_LENS_PORT, DEMO_PEER_PORT
 #                   defaults /tmp/hermes-qa-demo, 49990, 49988, 49991; pick
@@ -16,13 +18,22 @@
 # The result bundle (screenshots, contrast figures) is build/ui-tests.xcresult.
 set -eu
 cd "$(dirname "$0")/.."
-simulator=${SIMULATOR:-iPhone 18 Pro}
+simulator=${SIMULATOR:-iOS QA – iPhone}
 out=${DEMO_OUT:-/tmp/hermes-qa-demo}
 port=${DEMO_PORT:-49990}
 lens_port=${DEMO_LENS_PORT:-49988}
 peer_port=${DEMO_PEER_PORT:-49991}
 log="$out.log"
-project=$(ls -d *.xcodeproj | head -1)
+project=$(dirname "$(ls -d *.xcodeproj/project.pbxproj | head -1)")
+
+device=$(xcrun simctl list devices available | grep -F "    $simulator (" | head -1 | sed -E 's/.*\(([0-9A-F-]{36})\).*/\1/')
+if [ -z "$device" ]; then
+    runtime=$(xcrun simctl list runtimes available | grep -o 'com.apple.CoreSimulator.SimRuntime.iOS-[0-9-]*' | tail -1)
+    device=$(xcrun simctl create "$simulator" com.apple.CoreSimulator.SimDeviceType.iPhone-18-Pro "$runtime")
+fi
+xcrun simctl shutdown "$device" 2>/dev/null || true
+xcrun simctl erase "$device"
+xcrun simctl boot "$device"
 
 for p in "$port" "$lens_port" "$peer_port"; do
     if nc -z 127.0.0.1 "$p" 2>/dev/null; then
@@ -33,8 +44,9 @@ done
 python3 -u demo/make_demo.py --serve --out "$out" --port "$port" --lens-port "$lens_port" \
     --peer-port "$peer_port" >"$log" 2>&1 &
 demo=$!
-# make_demo.py stops its daemons and Lens on SIGTERM.
-trap 'kill $demo 2>/dev/null; wait $demo 2>/dev/null || true' EXIT INT TERM
+# make_demo.py stops its daemons and Lens on SIGTERM; the pkill catches them
+# when it died before it could.
+trap 'kill $demo 2>/dev/null; wait $demo 2>/dev/null; pkill -f "$out(-peer)?/gravityd.toml" 2>/dev/null; pkill -f "gravity_lens.py --port $lens_port " 2>/dev/null || true' EXIT INT TERM
 tries=0
 until grep -q '^Serving' "$log"; do
     tries=$((tries + 1))
@@ -46,9 +58,25 @@ until grep -q '^Serving' "$log"; do
 done
 sleep 3 # the demo's permission prompts reach the daemon just after it serves
 
+# Ids the routing tests open: the designer's question and iOS Dev.
+ids=$(python3 - "$out" "$port" <<'EOF'
+import os, sys
+sys.path.insert(0, "demo")
+from make_demo import Socket
+out, port = sys.argv[1], int(sys.argv[2])
+ws = Socket(port)
+ws.request("hello", protocol_version=2, token=open(os.path.join(out, "gravity", "secrets", "client.token")).read().strip(),
+           client="ui-tests")
+decision = next(d for d in ws.request("list_decisions")["decisions"] if d["title"].startswith("Which accent colour"))
+bot = next(b for b in ws.request("list_bots")["bots"] if b["name"] == "iOS Dev" and not b.get("peer"))
+print(decision["id"], bot["id"])
+EOF
+)
+
 rm -rf build/ui-tests.xcresult
 TEST_RUNNER_GRAV_TOKEN=$(cat "$out/gravity/secrets/client.token") \
 TEST_RUNNER_GRAV_PORT=$port TEST_RUNNER_LENS_PORT=$lens_port \
+TEST_RUNNER_DEMO_DECISION_ID=${ids% *} TEST_RUNNER_DEMO_BOT_ID=${ids#* } \
 TEST_RUNNER_SCREENSHOT_DIR=${SCREENSHOT_DIR:-} \
-xcodebuild -project "$project" -scheme UITests -destination "platform=iOS Simulator,name=$simulator" \
+xcodebuild -project "$project" -scheme UITests -destination "id=$device" \
     -derivedDataPath build/ui-tests -resultBundlePath build/ui-tests.xcresult test "$@"

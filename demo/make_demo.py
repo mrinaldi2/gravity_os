@@ -54,9 +54,11 @@ class Socket:
         self.next = 0
 
     def send(self, message: Dict[str, Any]) -> None:
-        payload = json.dumps(message).encode()
+        self.frame(0x81, json.dumps(message).encode())
+
+    def frame(self, first: int, payload: bytes) -> None:
         mask = os.urandom(4)
-        header = bytearray([0x81])
+        header = bytearray([first])
         if len(payload) < 126:
             header.append(0x80 | len(payload))
         elif len(payload) < 65536:
@@ -75,8 +77,11 @@ class Socket:
             elif length == 127:
                 length = int.from_bytes(self.reader.read(8), "big")
             payload = self.reader.read(length)
+            if first[0] & 0x0F == 0x9:
+                self.frame(0x8A, payload)  # pong, or the daemon closes a silent client after 60s
+                continue
             if first[0] & 0x0F >= 0x8:
-                continue  # a control frame (ping) between messages
+                continue  # another control frame between messages
             data += payload
             if first[0] & 0x80:
                 break

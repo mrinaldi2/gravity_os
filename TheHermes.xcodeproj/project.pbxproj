@@ -16,10 +16,18 @@
 		6A0000000000000000000011 /* Config/Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Config/Info.plist; sourceTree = "<group>"; };
 		6A0000000000000000000012 /* Config/Signing.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = Config/Signing.xcconfig; sourceTree = "<group>"; };
 		6A0000000000000000000013 /* TheHermesTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = TheHermesTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+		6A0000000000000000000090 /* UITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = UITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
 /* Begin PBXContainerItemProxy section */
 		6A0000000000000000000053 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 6A0000000000000000000060 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = 6A0000000000000000000050;
+			remoteInfo = TheHermes;
+		};
+		6A0000000000000000000091 /* PBXContainerItemProxy */ = {
 			isa = PBXContainerItemProxy;
 			containerPortal = 6A0000000000000000000060 /* Project object */;
 			proxyType = 1;
@@ -39,9 +47,21 @@
 			path = TheHermesTests;
 			sourceTree = "<group>";
 		};
+		6A0000000000000000000092 /* UITests */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			path = UITests;
+			sourceTree = "<group>";
+		};
 /* End PBXFileSystemSynchronizedRootGroup section */
 
 /* Begin PBXFrameworksBuildPhase section */
+		6A0000000000000000000093 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 		6A0000000000000000000030 /* Frameworks */ = {
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
@@ -66,6 +86,7 @@
 			children = (
 				6A0000000000000000000020 /* TheHermes */,
 				6A0000000000000000000021 /* TheHermesTests */,
+				6A0000000000000000000092 /* UITests */,
 				6A0000000000000000000011 /* Config/Info.plist */,
 				6A0000000000000000000012 /* Config/Signing.xcconfig */,
 				6A0000000000000000000041 /* Products */,
@@ -77,6 +98,7 @@
 			children = (
 				6A0000000000000000000010 /* TheHermes.app */,
 				6A0000000000000000000013 /* TheHermesTests.xctest */,
+				6A0000000000000000000090 /* UITests.xctest */,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -129,6 +151,27 @@
 			productReference = 6A0000000000000000000013 /* TheHermesTests.xctest */;
 			productType = "com.apple.product-type.bundle.unit-test";
 		};
+		6A0000000000000000000094 /* UITests */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 6A0000000000000000000099 /* Build configuration list for PBXNativeTarget "UITests" */;
+			buildPhases = (
+				6A0000000000000000000095 /* Sources */,
+				6A0000000000000000000093 /* Frameworks */,
+				6A0000000000000000000096 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				6A0000000000000000000097 /* PBXTargetDependency */,
+			);
+			fileSystemSynchronizedGroups = (
+				6A0000000000000000000092 /* UITests */,
+			);
+			name = UITests;
+			productName = UITests;
+			productReference = 6A0000000000000000000090 /* UITests.xctest */;
+			productType = "com.apple.product-type.bundle.ui-testing";
+		};
 /* End PBXNativeTarget section */
 
 /* Begin PBXProject section */
@@ -143,6 +186,10 @@
 						CreatedOnToolsVersion = 27.0;
 					};
 					6A0000000000000000000051 = {
+						CreatedOnToolsVersion = 27.0;
+						TestTargetID = 6A0000000000000000000050;
+					};
+					6A0000000000000000000094 = {
 						CreatedOnToolsVersion = 27.0;
 						TestTargetID = 6A0000000000000000000050;
 					};
@@ -168,11 +215,19 @@
 			targets = (
 				6A0000000000000000000050 /* TheHermes */,
 				6A0000000000000000000051 /* TheHermesTests */,
+				6A0000000000000000000094 /* UITests */,
 			);
 		};
 /* End PBXProject section */
 
 /* Begin PBXResourcesBuildPhase section */
+		6A0000000000000000000096 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 		6A0000000000000000000032 /* Resources */ = {
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
@@ -190,6 +245,13 @@
 /* End PBXResourcesBuildPhase section */
 
 /* Begin PBXSourcesBuildPhase section */
+		6A0000000000000000000095 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 		6A0000000000000000000031 /* Sources */ = {
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
@@ -212,9 +274,44 @@
 			target = 6A0000000000000000000050 /* TheHermes */;
 			targetProxy = 6A0000000000000000000053 /* PBXContainerItemProxy */;
 		};
+		6A0000000000000000000097 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = 6A0000000000000000000050 /* TheHermes */;
+			targetProxy = 6A0000000000000000000091 /* PBXContainerItemProxy */;
+		};
 /* End PBXTargetDependency section */
 
 /* Begin XCBuildConfiguration section */
+		6A000000000000000000009A /* Debug */ = {
+			isa = XCBuildConfiguration;
+			baseConfigurationReference = 6A0000000000000000000012 /* Config/Signing.xcconfig */;
+			buildSettings = {
+				CODE_SIGN_STYLE = Automatic;
+				GENERATE_INFOPLIST_FILE = YES;
+				PRODUCT_BUNDLE_IDENTIFIER = "$(inherited).uitests";
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SWIFT_EMIT_LOC_STRINGS = NO;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				TEST_TARGET_NAME = TheHermes;
+			};
+			name = Debug;
+		};
+		6A000000000000000000009B /* Release */ = {
+			isa = XCBuildConfiguration;
+			baseConfigurationReference = 6A0000000000000000000012 /* Config/Signing.xcconfig */;
+			buildSettings = {
+				CODE_SIGN_STYLE = Automatic;
+				GENERATE_INFOPLIST_FILE = YES;
+				PRODUCT_BUNDLE_IDENTIFIER = "$(inherited).uitests";
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SWIFT_EMIT_LOC_STRINGS = NO;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				TEST_TARGET_NAME = TheHermes;
+			};
+			name = Release;
+		};
 		6A0000000000000000000080 /* Debug */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
@@ -347,6 +444,15 @@
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
+		6A0000000000000000000099 /* Build configuration list for PBXNativeTarget "UITests" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				6A000000000000000000009A /* Debug */,
+				6A000000000000000000009B /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
 		6A0000000000000000000070 /* Build configuration list for PBXNativeTarget "TheHermes" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (

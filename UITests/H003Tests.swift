@@ -2,6 +2,7 @@ import XCTest
 
 /// H-003: safe destructive actions and the AA contrast floor (4.5:1), checked on screen
 /// in light and dark. Unlink's confirmation is in `SmokeTests.testLinkSheetUnlink`.
+/// Labels follow the R1-I1 glossary (Clear conversation, Publish ruling, Put on hold).
 final class H003Tests: XCTestCase {
     static let floor = 4.5
 
@@ -13,15 +14,17 @@ final class H003Tests: XCTestCase {
         app.tab("Bots")
         waitFor(app.buttons.containing(NSPredicate(format: "label CONTAINS ', Architect,'")).firstMatch).tap()
         waitFor(app.buttons["More"]).tap()
-        let clear = app.buttons["Clear chat"]
+        let clear = app.buttons["Clear conversation"]
         app.scroll(to: clear)
         waitFor(clear)
         // The words, not the icon: the eraser keeps the tint.
-        XCTAssertTrue(Contrast(of: clear).redShare > 0.01, "Clear chat is not drawn in the destructive red")
+        XCTAssertTrue(Contrast(of: clear).redShare > 0.01, "Clear conversation is not drawn in the destructive red")
         screenshot("QA-001-clear-chat-row")
         clear.tap()
         waitFor(app.staticTexts["Clear Architect's conversation?"])
-        let confirm = waitFor(app.buttons["Clear conversation"])
+        // The dialog's button carries the same words as the row.
+        XCTAssertTrue(app.buttons.matching(identifier: "Clear conversation").count >= 2, "No confirming button")
+        let confirm = app.buttons.matching(identifier: "Clear conversation").allElementsBoundByIndex.last!
         screenshot("QA-001-clear-chat-confirm")
         XCTAssertTrue(Contrast(of: confirm).redShare > 0.01, "The confirming Clear conversation is not destructive")
         // Cancel: the demo keeps its history.
@@ -60,11 +63,11 @@ final class H003Tests: XCTestCase {
         app.scroll(to: recommended)
         check(recommended, "Recommended pill", dark)
         app.buttons.containing(NSPredicate(format: "label CONTAINS 'Always ask'")).firstMatch.tap()
-        let publish = app.buttons["Hold for later"]
+        let publish = app.buttons["Put on hold"]
         app.scroll(to: publish)
         sleep(1)
         screenshot("QA-001-decision-answer-\(dark ? "dark" : "light")")
-        for label in ["Answer and publish", "Save as draft", "Hold for later"] {
+        for label in ["Publish ruling", "Save as draft", "Put on hold"] {
             check(app.buttons[label], label, dark)
         }
     }

@@ -51,12 +51,12 @@ final class SmokeTests: XCTestCase {
         waitFor(row).tap()
         waitFor(app.navigationBars["Decision"])
         app.buttons.containing(NSPredicate(format: "label CONTAINS 'Yes, go live Monday'")).firstMatch.tap()
-        let publish = app.buttons["Answer and publish"]
+        let publish = app.buttons["Publish ruling"]
         app.scroll(to: publish)
         XCTAssertTrue(publish.isEnabled)
         publish.tap()
         // Settled: the answer form gives way to the ruling.
-        XCTAssertTrue(publish.waitForNonExistence(timeout: 10), "Still open after Answer and publish")
+        XCTAssertTrue(publish.waitForNonExistence(timeout: 10), "Still open after Publish ruling")
         screenshot("QA-001-smoke-decision-answered")
     }
 
