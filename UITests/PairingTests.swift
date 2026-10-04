@@ -54,6 +54,7 @@ final class PairingTests: XCTestCase {
         var app = launchAndPaste(link(token: "not-the-token"))
         waitFor(app.staticTexts.containing(NSPredicate(format: "label BEGINSWITH 'Token rejected'")).firstMatch)
         XCTAssertTrue(app.secureTextFields["Token"].exists, "The token field is not shown with the error")
+        assertOnceBelow(app, "Token rejected", field: app.secureTextFields["Token"])
         XCTAssertFalse(app.tabBars.firstMatch.exists, "A rejected computer opened the app")
         screenshot("QA-002-pairing-bad-token")
 
@@ -68,6 +69,7 @@ final class PairingTests: XCTestCase {
         screenshot("QA-002-pairing-connecting")
         waitFor(app.staticTexts.containing(NSPredicate(format: "label BEGINSWITH 'Couldn’t reach 10.255.255.1:49777'")).firstMatch, 25)
         XCTAssertFalse(app.tabBars.firstMatch.exists, "An unreachable computer opened the app")
+        assertOnceBelow(app, "Couldn’t reach", field: app.textFields["Address"])
         screenshot("QA-002-pairing-unreachable")
 
         // The right link: connected, saved, and the app opens on Home.
@@ -116,6 +118,17 @@ final class PairingTests: XCTestCase {
         screenshot("QA-002-deeplink-add-sheet")
         app.buttons["Cancel"].tap()
         XCTAssertFalse(app.buttons["Computer: Second Mac"].exists)
+    }
+
+    /// H-025: a pairing error is said once, under the field to fix.
+    private func assertOnceBelow(_ app: XCUIApplication, _ start: String, field: XCUIElement,
+                                 file: StaticString = #filePath, line: UInt = #line) {
+        let errors = app.staticTexts.matching(NSPredicate(format: "label BEGINSWITH %@", start))
+        XCTAssertEqual(errors.count, 1, "\"\(start)…\" is shown \(errors.count) times", file: file, line: line)
+        guard let error = errors.allElementsBoundByIndex.first, field.exists else {
+            return XCTFail("No \"\(start)…\" error with its field", file: file, line: line)
+        }
+        XCTAssertGreaterThan(error.frame.minY, field.frame.minY, "The error is not under its field", file: file, line: line)
     }
 
     /// The system's "Open in “The Hermes”?" is confirmed when it shows.
