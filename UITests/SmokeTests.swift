@@ -25,9 +25,12 @@ final class SmokeTests: XCTestCase {
         try DemoControl.ensurePermissionPrompts()
         app.tab("Needs you")
         // The demo's three permission prompts, as rows here and as cards in Decisions.
-        waitFor(app.needsRow("Backend Dev wants to run Bash"))
-        waitFor(app.needsRow("iOS Dev wants to run Write"))
-        waitFor(app.needsRow("Web Dev wants to run WebFetch"))
+        // Titled by the app ("… wants to run Bash") or, on 0.17, by the daemon ("… asks: Bash: …").
+        for (bot, tool) in [("Backend Dev", "Bash"), ("iOS Dev", "Write"), ("Web Dev", "WebFetch")] {
+            let row = app.buttons.matching(NSPredicate(format: "label BEGINSWITH %@ AND label CONTAINS %@", bot, tool)).firstMatch
+            app.scroll(to: row)
+            waitFor(row)
+        }
         screenshot("QA-004-smoke-needs-you")
         app.openDecisions()
         waitFor(app.staticTexts["Bash: rm -rf build/ && npm ci"])

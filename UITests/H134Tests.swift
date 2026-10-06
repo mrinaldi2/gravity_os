@@ -31,7 +31,7 @@ final class H134Tests: XCTestCase {
         label(gravity, contains: ["Rank 1", "1 Run card · 1 permission request · 1 bot waiting",
                                   "0.17.0 ready for you to test",
                                   "5 tasks running · 6 bots, 2 working, 1 waiting for you",
-                                  "“Stand-up: H-130 in review.”", "imac away · as of"])
+                                  "“Stand-up: H-130 in review.”", "imac is offline · last seen"])
         let calm = waitFor(app.projectCard("calm"))
         XCTAssertTrue(calm.label.hasPrefix("Nothing needs you, calm"), "calm: \(calm.label)")
         XCTAssertLessThan(gravity.frame.minY, calm.frame.minY, "Ranked #1 is not first")
@@ -80,7 +80,9 @@ final class H134Tests: XCTestCase {
         app.tab("Needs you")
 
         // A permission request opens the bot, its card on top.
-        waitFor(app.needsRow("Backend Dev wants to run Bash")).tap()
+        let permission = app.buttons.matching(NSPredicate(format: "label BEGINSWITH 'Backend Dev' AND label CONTAINS 'Bash'")).firstMatch
+        app.scroll(to: permission)
+        waitFor(permission).tap()
         sleep(2)
         screenshot("QA-004-i1-needs-permission-tapped")
         waitFor(app.pane("Reports"))

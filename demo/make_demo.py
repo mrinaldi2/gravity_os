@@ -299,7 +299,7 @@ def hold_permissions(port: int, token: str) -> None:
             try:
                 holder = Socket(port)
                 holder.request("hello", protocol_version=2, token=token, client="gravitios-demo-holder",
-                               features=["permission_cards"])
+                               features=["permission_cards", "terminal_card", "owner_actions", "decision_grants"])
                 while True:
                     holder.receive()
             except (OSError, ValueError, IndexError):
@@ -307,19 +307,102 @@ def hold_permissions(port: int, token: str) -> None:
     threading.Thread(target=run, daemon=True).start()
 
 
+def bot_call(port: int, home: str, bot_id: str, tool: str, **arguments: Any) -> Dict[str, Any]:
+    """A bot's MCP tool, with its error kept: {"ok": bool, "text": …, "data": parsed text or None}."""
+    body = json.dumps({"jsonrpc": "2.0", "id": 1, "method": "tools/call",
+                       "params": {"name": tool, "arguments": arguments}}).encode()
+    request = urllib.request.Request(f"http://127.0.0.1:{port}/mcp", data=body, headers={
+        "Authorization": f"Bearer {bot_token(home, bot_id)}", "Content-Type": "application/json",
+        "Accept": "application/json, text/event-stream"})
+    reply = json.loads(urllib.request.urlopen(request, timeout=20).read())
+    if "error" in reply:
+        return {"ok": False, "text": json.dumps(reply["error"]), "data": None}
+    result = reply.get("result", {})
+    text = "".join(part.get("text", "") for part in result.get("content", []))
+    try:
+        data = json.loads(text)
+    except ValueError:
+        data = None
+    return {"ok": not result.get("isError", False), "text": text, "data": data}
+
+
+# The 0.17 flows (UI tests, on demand): a project whose bots have board roles by name.
+LAB = ("Hermes Lab", [
+    ("Team Lead", "icon:orbit", "Leads Hermes Lab: plans releases and runs the stand-up."),
+    ("Desktop Dev", "icon:ember", "Builds the desktop app for Hermes Lab."),
+    ("DevOps", "icon:frost", "Ships Hermes Lab: builds, installs and restarts."),
+])
+
+
 def serve_control(control_port: int, port: int, home: str, token: str, bots: Dict[str, Dict[str, str]]) -> None:
     """A small HTTP endpoint for UI tests to set the demo up per test (127.0.0.1 only):
 
     POST /permissions          the 3 demo prompts are pending again (missing ones re-asked)
     POST /approval?bot=<name>  that bot waits on a permission prompt in its own terminal
+
+    0.17 daemons, in the "Hermes Lab" project (created on first use):
+    POST /lab                  the project and its bots; {"project_id", "caps"}
+    POST /grants               Team Lead raises a decision whose first option grants extras
+    POST /runcard              Desktop Dev proposes a Run card (owner action)
+    POST /question             Desktop Dev asks the owner a question (owner thread)
+    POST /items                Desktop Dev files 3 board items (the board must exist: open it first)
+    POST /terminal             a terminal command asks to act as the owner (H-108), from
+                               inside Desktop Dev's workspace; held until answered or timed out
+    POST /pins                 {"pinned": [project names]} from projects_overview
     """
+    lab: Dict[str, Any] = {}
+
+    caps: List[str] = []
+
+    def owner() -> "Socket":
+        ws = Socket(port)
+        hello = ws.request("hello", protocol_version=2, token=token, client="gravitios-demo-control",
+                           features=["permission_cards", "terminal_card", "owner_actions", "decision_grants"])
+        caps[:] = hello.get("capabilities", [])
+        return ws
+
+    def ensure_lab() -> Dict[str, Any]:
+        if lab:
+            return lab
+        ws = owner()
+        projects = {p["name"]: p for p in ws.request("list_projects")["projects"]}
+        project = projects.get(LAB[0]) or ws.request("create_project", name=LAB[0])["project"]
+        existing = {b["name"]: b for b in ws.request("list_bots", project_id=project["id"])["bots"]}
+        lab_bots: Dict[str, Dict[str, str]] = {}
+        for name, avatar, description in LAB[1]:
+            bot = existing.get(name) or ws.request("create_bot", project_id=project["id"], name=name, avatar=avatar,
+                                                   description=description, instructions=description)["bot"]
+            lab_bots[name] = {"id": bot["id"], "workspace": os.path.join(home, "projects", project["dir_name"],
+                                                                         "bots", bot["dir_name"], "workspace")}
+        for _ in range(50):  # the bots' tokens are written as they start
+            if all(os.path.exists(os.path.join(home, "secrets", f"bot-{b['id']}.token")) for b in lab_bots.values()):
+                break
+            time.sleep(0.2)
+        lab.update(project_id=project["id"], bots=lab_bots, caps=list(caps))
+        return lab
+
+    def terminal_request(cwd: str) -> None:
+        """What `hermesd peer …` does from a terminal: hermes/owner_request on the bus socket,
+        from a process whose working folder is cwd (the daemon reads the origin from it)."""
+        path = os.path.join(home, "run", "bus.sock")
+        try:
+            with open(os.path.join(home, "run", "endpoint")) as handle:
+                path = handle.read().strip() or path
+        except OSError:
+            pass
+        script = ("import json, socket, sys\n"
+                  "c = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM); c.settimeout(3700); c.connect(sys.argv[1])\n"
+                  "c.sendall(json.dumps({'jsonrpc': '2.0', 'id': 1, 'method': 'hermes/owner_request',"
+                  " 'params': {'command': 'git push --force origin main', 'cwd': sys.argv[2]}}).encode() + b'\\n')\n"
+                  "c.recv(65536)\n")
+        remember(subprocess.Popen([sys.executable, "-c", script, path, cwd], cwd=cwd,
+                                  stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL))
+
     from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
     from urllib.parse import parse_qs, urlparse
 
     def pending() -> List[Dict[str, Any]]:
-        ws = Socket(port)
-        ws.request("hello", protocol_version=2, token=token, client="gravitios-demo-control")
-        return ws.request("list_permissions")["permissions"]
+        return owner().request("list_permissions")["permissions"]
 
     class Handler(BaseHTTPRequestHandler):
         def do_POST(self) -> None:
@@ -336,7 +419,8 @@ def serve_control(control_port: int, port: int, home: str, token: str, bots: Dic
                         if all((bots[b]["id"], t) in waiting for b, t, _ in PROMPTS):
                             break
                         time.sleep(0.2)
-                    reply: Dict[str, Any] = {"pending": len(waiting)}
+                    demo = {(bots[b]["id"], t) for b, t, _ in PROMPTS}
+                    reply: Dict[str, Any] = {"pending": len(waiting & demo)}  # not a held terminal request
                 elif url.path == "/approval":
                     bot = bots[query["bot"][0]]["id"]
                     body = json.dumps({"hook_event_name": "Notification",
@@ -346,10 +430,44 @@ def serve_control(control_port: int, port: int, home: str, token: str, bots: Dic
                             "Authorization": f"Bearer {bot_token(home, bot)}",
                             "Content-Type": "application/json"}), timeout=10).read()
                     reply = {"ok": True}
+                elif url.path == "/lab":
+                    info = ensure_lab()
+                    reply = {"project_id": info["project_id"], "caps": info["caps"]}
+                elif url.path in ("/grants", "/runcard", "/question", "/items", "/terminal"):
+                    info = ensure_lab()
+                    lead, dev = info["bots"]["Team Lead"], info["bots"]["Desktop Dev"]
+                    if url.path == "/grants":
+                        reply = bot_call(port, home, lead["id"], "raise_decision", kind="decision",
+                                         title="Let DevOps install 0.17.1 and Desktop Dev publish the notes?",
+                                         body="The release is verified. Installing and publishing need your grant.",
+                                         options=[{"key": "grant", "label": "Grant both",
+                                                   "description": "DevOps installs, Desktop Dev publishes.",
+                                                   "grants": [{"bot": "DevOps", "extra": "install"},
+                                                              {"bot": "Desktop Dev", "extra": "publish"}]},
+                                                  {"key": "wait", "label": "Not yet"}],
+                                         recommendation="grant")
+                    elif url.path == "/runcard":
+                        reply = bot_call(port, home, dev["id"], "propose_owner_action", content="rm -rf ~/Library/Caches/hermes-lab",
+                                         reason="Clear the stale build cache", cwd=dev["workspace"])
+                    elif url.path == "/question":
+                        reply = bot_call(port, home, dev["id"], "message_owner", asks=True,
+                                         body="Should the release notes mention the new board?")
+                    elif url.path == "/items":
+                        made = []
+                        for title in ["Board chips on iPad", "Owner threads read marks", "Terminal card copy"]:
+                            made.append(bot_call(port, home, dev["id"], "item_create", type="chore", title=title,
+                                                 description="QA seed item.", platforms=["ios"]))
+                        reply = {"ok": all(m["ok"] for m in made), "items": made}
+                    else:
+                        terminal_request(dev["workspace"])
+                        reply = {"ok": True}
+                elif url.path == "/pins":
+                    rows = owner().request("projects_overview", project_ids=[])["overview"].get("rows", [])
+                    reply = {"pinned": [r["name"] for r in rows if r.get("pinned")]}
                 else:
                     self.send_error(404)
                     return
-            except Exception as error:  # the test reads the reason
+            except (Exception, SystemExit) as error:  # the test reads the reason (Socket raises SystemExit)
                 self.send_error(500, str(error))
                 return
             data = json.dumps(reply).encode()
