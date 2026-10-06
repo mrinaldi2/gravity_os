@@ -206,7 +206,7 @@ struct OverviewPane: View {
         }
         .listStyle(.insetGrouped)
         .refreshable { await load() }
-        .task { await load() }
+        .task(id: home?.computer.store.status == .connected) { await load() }
     }
 
     private func load() async {

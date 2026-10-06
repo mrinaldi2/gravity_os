@@ -47,7 +47,8 @@ struct BotReportsPane: View {
                 if let doing = doingNow {
                     Text(doing).font(.callout)
                 } else {
-                    Text(bot.map { $0.state.label } ?? "—").foregroundStyle(Color.secondaryText)
+                    // The state is in the header pill; this says what it is working on (UX-031).
+                    Text("No current item").foregroundStyle(Color.secondaryText)
                 }
             } header: {
                 SectionTitle("Doing now")

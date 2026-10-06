@@ -249,7 +249,8 @@ struct NeedsYouView: View {
                         SectionTitle(card.rank.map { "\(card.row.name) · #\($0)" } ?? card.row.name)
                     }
                     .id(card.id)
-                    .task(id: "\(card.id)/\(card.row.attention.count)/\(card.row.attention.score)") {
+                    // Cached cards show before their computer connects: reload once it does.
+                    .task(id: "\(card.id)/\(card.row.attention.count)/\(card.row.attention.score)/\(fleet.computer(id: card.computerId)?.store.status == .connected)") {
                         if let computer = fleet.computer(id: card.computerId) { await feed.loadAttention(card, on: computer) }
                     }
                 }
@@ -312,7 +313,7 @@ extension Fleet {
         case .releaseID(let id)?:
             if let on { return .release(computerId: on.id, releaseId: id) }
         case .actionID?:
-            return .note(title: row.title, text: "Run cards come to the phone in this release. For now, run or reject it on \(place), in The Hermes app.")
+            return .note(title: row.title, text: "Run cards come to the phone in a later update. For now, run or reject it on \(place), in The Hermes app.")
         case .itemID(let id)?:
             if let on { return .item(computerId: on.id, itemId: id) }
         case nil:
@@ -364,17 +365,61 @@ extension View {
 }
 
 /// One thing waiting: what it is and how long it has waited.
+/// A permission prompt row as people read it: "Backend Dev wants to run Bash",
+/// with the command apart. Parses the daemon's "<bot> asks: <Tool>: <command>";
+/// a title in another shape stays as it is.
+struct PermissionWords: Equatable {
+    let title: String
+    let command: String?
+
+    init(_ daemonTitle: String) {
+        guard let asks = daemonTitle.range(of: " asks: ") else {
+            title = daemonTitle
+            command = nil
+            return
+        }
+        let bot = daemonTitle[..<asks.lowerBound]
+        let rest = daemonTitle[asks.upperBound...]
+        let tool: Substring
+        let detail: Substring?
+        if let colon = rest.range(of: ": ") {
+            tool = rest[..<colon.lowerBound]
+            detail = rest[colon.upperBound...]
+        } else {
+            tool = rest
+            detail = nil
+        }
+        title = "\(bot) wants to run \(PermissionRequest.displayName(ofTool: String(tool)))"
+        let line = detail.map { $0.split(whereSeparator: \.isNewline).joined(separator: " ").trimmingCharacters(in: .whitespaces) }
+        command = line?.isEmpty == false ? line : nil
+    }
+
+    /// One line, cut in the middle when long, so both ends stay readable.
+    static func middleTruncated(_ text: String, limit: Int = 44) -> String {
+        guard text.count > limit else { return text }
+        let head = (limit - 1) / 2
+        return "\(text.prefix(head))…\(text.suffix(limit - 1 - head))"
+    }
+}
+
 struct NeedsRow: View {
     let row: HomeAttentionRow
 
+    /// A permission prompt in the glossary's words (UX-031), not the daemon's
+    /// "Backend Dev asks: Bash: rm -rf build/".
+    private var prompt: PermissionWords? { row.kind == .permissionPrompt ? PermissionWords(row.title) : nil }
+
     var body: some View {
-        ItemRow(title: row.title, subtitle: subtitle, titleLines: 2) {
+        // The command gets its own room, so "Permission request · 8m ago" stays whole.
+        ItemRow(title: prompt?.title ?? row.title, subtitle: subtitle, titleLines: 2,
+                subtitleLines: prompt?.command == nil ? 1 : 2) {
             IconTile(systemImage: symbol, tone: tone)
         }
     }
 
     private var subtitle: String {
         var parts = [kindWord]
+        if let command = prompt?.command { parts.insert(PermissionWords.middleTruncated(command), at: 0) }
         if row.hasCreatedAt { parts.append(row.createdAt.date.relative) }
         return parts.joined(separator: " · ")
     }

@@ -118,7 +118,14 @@ struct MainChatView: View {
                 }
             }
         }
-        threads = ThreadMerge.merge(lists)
+        var merged = ThreadMerge.merge(lists)
+        // A thread with an open question previews it: read those few threads.
+        for index in merged.indices where merged[index].openQuestion {
+            guard let computer = fleet.computer(id: merged[index].computerId) else { continue }
+            let entries = try? await computer.store.ownerThread(botId: merged[index].botId)
+            merged[index].preview(question: entries?.openQuestion)
+        }
+        threads = merged
         failure = failed.isEmpty ? nil : "Couldn’t load the threads on \(failed.joined(separator: ", "))."
         loaded = true
     }
