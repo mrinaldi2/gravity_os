@@ -54,6 +54,8 @@ struct BotChatPane: View {
                     .padding(.horizontal, 14)
                     .padding(.vertical, 12)
                 }
+                // The first row starts below the floating search button.
+                .contentMargins(.top, 52, for: .scrollContent)
                 .scrollDismissesKeyboard(.interactively)
                 .modifier(TracksBottom(following: $following))
                 // Search sits on the transcript, not in the navigation bar, so

@@ -434,11 +434,26 @@ struct PermissionRequest: Identifiable, Equatable {
         expiresAt = d.date("expires_at")
     }
 
-    /// The tool as people read it: "Bash", or "send message" for
-    /// `mcp__hermes-bus__send_message`, never the `mcp__` form.
-    var toolName: String {
-        guard tool.hasPrefix("mcp__") else { return tool }
-        return (tool.components(separatedBy: "__").last ?? tool).replacingOccurrences(of: "_", with: " ")
+    /// The tool as people read it, never the `mcp__` form: "Bash",
+    /// "Send message" for the bus's `mcp__hermes-bus__send_message`, and
+    /// "Playwright: browser click" for another server's tool.
+    var toolName: String { Self.displayName(ofTool: tool) }
+
+    /// Any tool id as people read it, for prompts answered here and in the
+    /// bot's terminal alike.
+    static func displayName(ofTool tool: String) -> String {
+        let parts = tool.components(separatedBy: "__")
+        guard tool.hasPrefix("mcp__"), parts.count >= 3 else { return sentence(tool) }
+        let action = sentence(parts.dropFirst(2).joined(separator: " "))
+        if BusTool.isBus(tool) { return action }
+        let server = sentence(parts[1].replacingOccurrences(of: "-", with: " "))
+        return "\(server): \(action.prefix(1).lowercased())\(action.dropFirst())"
+    }
+
+    /// "send_message" → "Send message".
+    private static func sentence(_ name: String) -> String {
+        let words = name.replacingOccurrences(of: "_", with: " ")
+        return words.prefix(1).uppercased() + words.dropFirst()
     }
 
     /// The owner's answer. A reason goes back to the bot with a deny only.
@@ -491,5 +506,25 @@ enum TaskStateLabel {
         case "expired": "Expired"
         default: state.prefix(1).uppercased() + state.dropFirst().replacingOccurrences(of: "_", with: " ")
         }
+    }
+}
+
+/// A bot waiting for approval in its own terminal (`approval_pending`), said
+/// from the tool it wants to run when the daemon names it.
+struct Approval: Equatable {
+    var tool: String?
+
+    init(tool: String?) {
+        self.tool = tool.flatMap { $0.trimmingCharacters(in: .whitespaces).isEmpty ? nil : $0 }
+    }
+
+    /// Notification title: "Backend Dev wants to run Bash", else "Backend Dev needs approval".
+    func title(_ bot: String) -> String {
+        tool.map { "\(bot) wants to run \(PermissionRequest.displayName(ofTool: $0))" } ?? "\(bot) needs approval"
+    }
+
+    /// The line under a bot's name: "Wants to run Bash", else "Needs approval".
+    var line: String {
+        tool.map { "Wants to run \(PermissionRequest.displayName(ofTool: $0))" } ?? "Needs approval"
     }
 }

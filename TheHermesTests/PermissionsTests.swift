@@ -72,4 +72,30 @@ final class PermissionsTests: XCTestCase {
     func testAnswersAreTheProtocolsWords() {
         XCTAssertEqual(PermissionRequest.Answer.allCases.map(\.rawValue), ["allow_once", "allow_session", "deny"])
     }
+
+    // MARK: Approvals in the bot's terminal (approval_pending)
+
+    func testApprovalIsSaidFromTheToolNeverTheDetail() {
+        let store = store()
+        store.pushReceived("approval_pending", ["bot_id": "b1", "tool": "Bash",
+                                                "detail": "Claude needs your permission to use Bash"])
+        XCTAssertEqual(store.approvals["b1"], "Wants to run Bash")
+        store.pushReceived("approval_pending", ["bot_id": "b2", "tool": "mcp__hermes-bus__send_message",
+                                                "detail": "Claude needs your permission to use mcp__hermes-bus__send_message"])
+        XCTAssertEqual(store.approvals["b2"], "Wants to run Send message")
+        XCTAssertFalse(store.approvals.values.contains { $0.contains("Claude") || $0.contains("mcp__") })
+    }
+
+    func testApprovalWithoutAToolFromAnOlderDaemon() {
+        let store = store()
+        store.pushReceived("approval_pending", ["bot_id": "b1", "detail": "Claude needs your permission to use Bash"])
+        XCTAssertEqual(store.approvals["b1"], "Needs approval")
+        store.pushReceived("approval_pending", ["bot_id": "b3", "tool": " ", "detail": "x"])
+        XCTAssertEqual(store.approvals["b3"], "Needs approval", "a blank tool counts as none")
+    }
+
+    func testApprovalNotificationTitle() {
+        XCTAssertEqual(Approval(tool: "Bash").title("Backend Dev"), "Backend Dev wants to run Bash")
+        XCTAssertEqual(Approval(tool: nil).title("Backend Dev"), "Backend Dev needs approval")
+    }
 }

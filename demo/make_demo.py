@@ -19,6 +19,7 @@ import json
 import os
 import re
 import shutil
+import signal
 import socket
 import subprocess
 import sys
@@ -41,7 +42,12 @@ class Socket:
     """Just enough WebSocket for the daemon's control plane."""
 
     def __init__(self, port: int):
-        self.sock = socket.create_connection(("127.0.0.1", port), timeout=10)
+        self.port = port
+        self.hello: Optional[Dict[str, Any]] = None
+        self.connect()
+
+    def connect(self) -> None:
+        self.sock = socket.create_connection(("127.0.0.1", self.port), timeout=10)
         key = base64.b64encode(os.urandom(16)).decode()
         self.sock.sendall((f"GET /ws HTTP/1.1\r\nHost: 127.0.0.1\r\nUpgrade: websocket\r\nConnection: Upgrade\r\n"
                            f"Sec-WebSocket-Key: {key}\r\nSec-WebSocket-Version: 13\r\n\r\n").encode())
@@ -53,9 +59,11 @@ class Socket:
         self.next = 0
 
     def send(self, message: Dict[str, Any]) -> None:
-        payload = json.dumps(message).encode()
+        self.frame(0x81, json.dumps(message).encode())
+
+    def frame(self, first: int, payload: bytes) -> None:
         mask = os.urandom(4)
-        header = bytearray([0x81])
+        header = bytearray([first])
         if len(payload) < 126:
             header.append(0x80 | len(payload))
         elif len(payload) < 65536:
@@ -73,12 +81,32 @@ class Socket:
                 length = int.from_bytes(self.reader.read(2), "big")
             elif length == 127:
                 length = int.from_bytes(self.reader.read(8), "big")
-            data += self.reader.read(length)
+            payload = self.reader.read(length)
+            if first[0] & 0x0F == 0x9:
+                self.frame(0x8A, payload)  # pong, or the daemon closes a silent client after 60s
+                continue
+            if first[0] & 0x0F >= 0x8:
+                continue  # another control frame between messages
+            data += payload
             if first[0] & 0x80:
                 break
         return json.loads(data)
 
     def request(self, kind: str, **fields: Any) -> Dict[str, Any]:
+        if kind == "hello":
+            self.hello = fields
+        try:
+            return self.exchange(kind, **fields)
+        except (BrokenPipeError, ConnectionResetError, json.JSONDecodeError, IndexError):
+            # The daemon closes a client that was silent for 60s, as this one is
+            # while the demo writes logs and waits on bots: reconnect and go on.
+            self.sock.close()
+            self.connect()
+            if self.hello is not None and kind != "hello":
+                self.exchange("hello", **self.hello)
+            return self.exchange(kind, **fields)
+
+    def exchange(self, kind: str, **fields: Any) -> Dict[str, Any]:
         self.next += 1
         req_id = str(self.next)
         self.send({"type": kind, "req_id": req_id, **fields})
@@ -192,6 +220,26 @@ def spawn_workers(ws: "Socket", port: int, home: str, out: str, bots: Dict[str, 
     write(second, "# Sync across devices\n\nDraft.\n")
     ws.request("cancel_worker", worker_id=second["id"], reason="The sync chapter waits for the new engine.")
     time.sleep(4)
+
+
+def link_peer(ws: "Socket", out: str, gravityd: str, port: int, project_id: str) -> subprocess.Popen:
+    """A second throwaway gravityd, "Studio PC", peered with the demo one and linked
+    into one project, so the app has a link to show (and to unlink)."""
+    peer_out = out + "-peer"
+    if os.path.exists(peer_out):
+        shutil.rmtree(peer_out)
+    peer = start_daemon(gravityd, peer_out, port)
+    with open(os.path.join(peer_out, "gravity", "secrets", "client.token")) as handle:
+        other = Socket(port)
+        other.request("hello", protocol_version=2, token=handle.read().strip(), client="gravitios-demo")
+    invite = other.request("create_peer_invite", name="Demo Mac", url=f"ws://127.0.0.1:{port}/peer")["invite"]
+    peer_id = ws.request("add_peer", name="Studio PC", invite=invite)["peer"]["id"]
+    for _ in range(50):
+        if any(p["id"] == peer_id and p.get("online") for p in ws.request("list_peers")["peers"]):
+            break
+        time.sleep(0.2)
+    ws.request("link_project", project_id=project_id, peer_id=peer_id)
+    return peer
 
 
 def ask_permissions(port: int, home: str, bots: Dict[str, Dict[str, str]]) -> None:
@@ -608,6 +656,8 @@ def main() -> None:
     parser.add_argument("--lens-port", type=int, default=49788)
     parser.add_argument("--gravityd", help="path to gravityd (default: the one Gravity installed)")
     parser.add_argument("--serve", action="store_true", help="keep the daemon running and start Gravity Lens")
+    parser.add_argument("--peer-port", type=int, default=0,
+                        help="also start a peer daemon on this port and link Aurora Notes with it")
     args = parser.parse_args()
 
     out = args.out
@@ -630,8 +680,10 @@ def main() -> None:
 
     bots: Dict[str, Dict[str, str]] = {}
     artifacts: Dict[str, str] = {}
+    project_ids: Dict[str, str] = {}
     for project_name, members in PROJECTS:
         project = ws.request("create_project", name=project_name)["project"]
+        project_ids[project_name] = project["id"]
         artifacts[project_name] = os.path.join(home, "projects", project["dir_name"], "artifacts")
         os.makedirs(artifacts[project_name], exist_ok=True)
         for name, avatar, description in members:
@@ -661,6 +713,9 @@ def main() -> None:
                    options=[{"key": "yes", "label": "Yes, go live Monday"}, {"key": "wait", "label": "Wait for sharing"}],
                    body="The page is built and staged.")
     hand_out_tasks(args.port, home, bots)
+    peer = None
+    if args.peer_port:
+        peer = link_peer(ws, out, find_gravityd(args.gravityd), args.peer_port, project_ids["Aurora Notes"])
     if "workers" in hello.get("capabilities", []):
         spawn_workers(ws, args.port, home, out, bots)
     ws.request("send_user_message", to_bot_id=bots["iOS Dev"]["id"],
@@ -671,7 +726,7 @@ def main() -> None:
     print(f"Demo ready in {out}\n  daemon: 127.0.0.1:{args.port}  token: {home}/secrets/client.token")
     print(f"  simulator (Debug build): {launch}")
     if not args.serve:
-        print("Stop the demo daemon with: kill", daemon.pid)
+        print("Stop the demo daemon with: kill", daemon.pid, *([peer.pid] if peer else []))
         return
     mac_home = os.path.join(out, "mac-home")
     write_home(mac_home)
@@ -683,6 +738,8 @@ def main() -> None:
     print(f"  Gravity Lens: 127.0.0.1:{args.lens_port}\nServing. Ctrl-C stops both.")
     if "permissions" in hello.get("capabilities", []):
         ask_permissions(args.port, home, bots)
+    # kill stops the lot as Ctrl-C does (scripts/ui-tests.sh runs the demo in the background).
+    signal.signal(signal.SIGTERM, signal.default_int_handler)
     try:
         daemon.wait()
     except KeyboardInterrupt:
@@ -690,6 +747,8 @@ def main() -> None:
     finally:
         lens.terminate()
         daemon.terminate()
+        if peer:
+            peer.terminate()
 
 
 if __name__ == "__main__":

@@ -8,5 +8,9 @@ struct SettingsButton: View {
         Button { showing = true } label: { Image(systemName: "gearshape") }
             .accessibilityLabel("Settings")
             .sheet(isPresented: $showing) { SettingsView() }
+            #if DEBUG
+            // Screenshots of the demo: -openSettings YES opens it.
+            .onAppear { if UserDefaults.standard.bool(forKey: "openSettings") { showing = true } }
+            #endif
     }
 }
