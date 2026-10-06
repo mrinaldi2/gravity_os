@@ -33,9 +33,13 @@ final class SmokeTests: XCTestCase {
         }
         screenshot("QA-004-smoke-needs-you")
         app.openDecisions()
-        waitFor(app.staticTexts["Bash: rm -rf build/ && npm ci"])
-        XCTAssertEqual(app.buttons.matching(identifier: "Allow once").count, 3)
-        XCTAssertEqual(app.buttons.matching(identifier: "Deny").count, 3)
+        // Each bot's card, scrolled to (a terminal card on top can push the third below the fold).
+        for command in ["Bash: rm -rf build/ && npm ci", "Write: Sources/Sync/ConflictBanner.swift", "WebFetch: https://example.com/pricing"] {
+            let card = app.staticTexts[command]
+            app.scroll(to: card)
+            waitFor(card)
+        }
+        XCTAssertGreaterThanOrEqual(app.buttons.matching(identifier: "Allow once").count, 1)
         screenshot("QA-004-smoke-decisions")
     }
 

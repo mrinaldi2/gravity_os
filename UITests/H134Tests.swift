@@ -66,8 +66,12 @@ final class H134Tests: XCTestCase {
         allowSystemAlerts()
         app.tab("Needs you")
         // Grouped by project, in rank order.
-        let first = waitFor(app.staticTexts["Aurora Notes · #1"])
-        let second = waitFor(app.staticTexts["Website · #2"])
+        // Ranks depend on what else is waiting (the live tests add Hermes Lab): order only.
+        let first = waitFor(app.staticTexts.matching(NSPredicate(format: "label BEGINSWITH 'Aurora Notes · #'")).firstMatch)
+        let second = app.staticTexts.matching(NSPredicate(format: "label BEGINSWITH 'Website · #'")).firstMatch
+        app.scroll(to: second)
+        waitFor(second)
+        app.scroll(to: first)
         XCTAssertLessThan(first.frame.minY, second.frame.minY)
         let decision = waitFor(app.needsRow("Resolve conflicts automatically or always ask?"))
         XCTAssertTrue(decision.label.contains("decision"), decision.label)
