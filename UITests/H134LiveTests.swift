@@ -69,7 +69,8 @@ final class H134LiveTests: XCTestCase {
 
     func testLiveDecisionGrants() throws {
         try seed("/grants")
-        let app = try DemoApp.launch()
+        // A granting ruling asks for Face ID first (9a356e0); the simulator has none.
+        let app = try DemoApp.launch(["-ownerAuthStub", "pass"])
         allowSystemAlerts()
         app.tab("Needs you")
         waitFor(app.needsRow("Let DevOps install 0.17.1"), 20).tap()
@@ -99,6 +100,25 @@ final class H134LiveTests: XCTestCase {
         XCTAssertNil(lead.label.range(of: "[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}", options: .regularExpression),
                      "A UUID in the preview: \(lead.label)")
         screenshot("QA-005-live-ruling-preview")
+    }
+
+    /// Face ID refused: nothing is published, and the owner is told why.
+    func testLiveDecisionGrantsRefusedWithoutFaceID() throws {
+        try seed("/grants")
+        let app = try DemoApp.launch(["-ownerAuthStub", "fail"])
+        allowSystemAlerts()
+        app.tab("Needs you")
+        waitFor(app.needsRow("Let DevOps install 0.17.1"), 20).tap()
+        waitFor(app.navigationBars["Decision"])
+        app.buttons.containing(NSPredicate(format: "label CONTAINS 'Grant both'")).firstMatch.tap()
+        let publish = app.buttons["Publish ruling"]
+        app.scroll(to: publish)
+        publish.tap()
+        waitFor(app.staticTexts.containing(NSPredicate(format: "label CONTAINS 'Not published: Face ID wasn’t confirmed.'")).firstMatch, 10)
+        screenshot("QA-005-live-grants-refused")
+        // Still open: the answer form is there after dismissing the message.
+        if app.buttons["OK"].exists { app.buttons["OK"].tap() }
+        XCTAssertTrue(app.buttons["Publish ruling"].waitForExistence(timeout: 5), "The decision settled without Face ID")
     }
 
     // MARK: I2b: the terminal command card (H-108)
