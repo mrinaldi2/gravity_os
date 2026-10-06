@@ -107,7 +107,8 @@ extension XCUIApplication {
         while !(tabBars.buttons[name].exists && tabBars.buttons[name].isHittable), tries < 4 {
             // Only a real back button: the first bar button can be an action (Needs you's Decisions).
             let back = navigationBars.buttons["BackButton"].firstMatch
-            if back.exists { back.tap() } else { swipeDown() }
+            // A sheet (Needs you's Decisions) covers the bar: swipe it away first.
+            if back.exists && back.isHittable { back.tap() } else { swipeDown(velocity: .fast) }
             tries += 1
         }
         tabBars.buttons[name].tap()
@@ -124,6 +125,7 @@ extension XCUIApplication {
     func openProject(_ name: String) {
         tab("Projects")
         let card = projectCard(name)
+        _ = card.waitForExistence(timeout: 10)
         scroll(to: card)
         card.tap()
         _ = navigationBars[name].waitForExistence(timeout: 10)

@@ -20,11 +20,14 @@ final class RoutingTests: XCTestCase {
         let bot = try XCTUnwrap(DemoApp.botId, "No DEMO_BOT_ID: run scripts/ui-tests.sh")
         let app = try DemoApp.launch(["-route", "waiting/\(bot)"])
         allowSystemAlerts()
-        let chat = waitFor(app.pane("Chat"))
-        XCTAssertTrue(chat.isSelected, "The bot opened on another pane")
-        XCTAssertTrue(app.tabBars.buttons["Chat"].isSelected)
-        waitFor(app.staticTexts["iOS Dev"])
-        waitFor(app.textFields["Message iOS Dev"].exists ? app.textFields["Message iOS Dev"] : app.textViews["Message iOS Dev"])
+        waitFor(app.pane("Reports"))
+        sleep(1)
         screenshot("QA-004-route-waiting")
+        // The Chat pane: its composer, not Reports (the Chat tab is selected too, so its
+        // own selection can't tell them apart).
+        XCTAssertFalse(app.pane("Reports").isSelected, "The bot opened on Reports, not its chat")
+        let composer = app.descendants(matching: .any).matching(NSPredicate(format: "label == 'Message iOS Dev' OR placeholderValue == 'Message iOS Dev'")).firstMatch
+        XCTAssertTrue(composer.waitForExistence(timeout: 5), "No chat composer: the bot did not open on its chat")
+        XCTAssertTrue(app.tabBars.buttons["Chat"].isSelected)
     }
 }

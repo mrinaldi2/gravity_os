@@ -50,20 +50,8 @@ final class GlossaryTests: XCTestCase {
         }
 
         look("projects")
-        app.tab("Needs you")
-        waitFor(app.needsRow("Resolve conflicts automatically or always ask?"))
-        look("needs-you")
-        app.openDecisions()
-        waitFor(app.staticTexts["Permission requests"])
-        look("decisions")
-        app.tab("Needs you")
-        waitFor(app.needsRow("Resolve conflicts automatically or always ask?")).tap()
-        waitFor(app.navigationBars["Decision"])
-        app.scroll(to: app.buttons["Put on hold"])
-        XCTAssertTrue(app.buttons["Publish ruling"].exists)
-        XCTAssertTrue(app.buttons["Put on hold"].exists)
-        look("decision-detail")
-
+        app.tab("Projects")
+        waitFor(app.projectCard("Aurora Notes"))
         app.openProject("Aurora Notes")
         look("project-overview")
         app.pane("Team").tap()
@@ -91,6 +79,22 @@ final class GlossaryTests: XCTestCase {
         let service = app.labelled("Hermes service")
         app.scroll(to: service)
         look("computer-service")
+
+        // Needs you and Decisions last: the Decisions sheet is the end of the walk.
+        app.tab("Needs you")
+        waitFor(app.needsRow("Resolve conflicts automatically or always ask?"))
+        look("needs-you")
+        app.openDecisions()
+        waitFor(app.staticTexts["Permission requests"])
+        look("decisions")
+        app.tab("Needs you")
+        waitFor(app.needsRow("Resolve conflicts automatically or always ask?")).tap()
+        waitFor(app.navigationBars["Decision"])
+        app.scroll(to: app.buttons["Put on hold"])
+        XCTAssertTrue(app.buttons["Publish ruling"].exists)
+        XCTAssertTrue(app.buttons["Put on hold"].exists)
+        look("decision-detail")
+
         XCTAssertTrue(seen.contains { $0.contains("Hermes service") }, "\"Hermes service\" not on the computer page")
         XCTAssertTrue(seen.contains("Allow for session"), "No Allow for session answer on a permission card")
         XCTAssertTrue(seen.contains { $0.hasPrefix("Needs you") || $0.contains("need you") || $0.contains("needs you") },
