@@ -20,7 +20,7 @@ final class H134LiveTests: XCTestCase {
         let aurora = waitFor(app.projectCard("Aurora Notes"), 20)
         XCTAssertFalse(aurora.label.contains("Update needed"), "A 0.17 daemon still gets the older-daemon card: \(aurora.label)")
         XCTAssertTrue(aurora.label.contains("bots"), aurora.label)
-        screenshot("QA-004-live-projects")
+        screenshot("QA-005-live-projects")
 
         // Long press → Pin to top (project_pin), then back.
         aurora.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)).press(forDuration: 1.5)
@@ -28,7 +28,7 @@ final class H134LiveTests: XCTestCase {
         XCTAssertTrue(waitForPins(contains: "Aurora Notes"), "The daemon did not record the pin")
         let pinned = app.projectCard("Aurora Notes")
         XCTAssertTrue(pinned.waitForExistence(timeout: 10) && pinned.label.contains("Pinned"), "No pin on the card: \(pinned.label)")
-        screenshot("QA-004-live-pinned")
+        screenshot("QA-005-live-pinned")
         pinned.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)).press(forDuration: 1.5)
         waitFor(app.buttons["Unpin"], 5).tap()
         XCTAssertTrue(waitForPins(contains: nil), "The pin did not come off")
@@ -46,7 +46,7 @@ final class H134LiveTests: XCTestCase {
         let cached = app.projectCard("Aurora Notes")
         XCTAssertTrue(cached.waitForExistence(timeout: 8), "No cached overview while the computer is unreachable")
         XCTAssertFalse(cached.label.contains("Update needed"), "The cached card is the older-daemon one: \(cached.label)")
-        screenshot("QA-004-live-cache-first")
+        screenshot("QA-005-live-cache-first")
     }
 
     // MARK: Needs you: Run card
@@ -57,12 +57,12 @@ final class H134LiveTests: XCTestCase {
         allowSystemAlerts()
         app.tab("Needs you")
         let row = waitFor(app.needsRow("Run: Clear the stale build cache"), 20)
-        screenshot("QA-004-live-run-card-row")
+        screenshot("QA-005-live-run-card-row")
         row.tap()
         // Running it from the phone comes later in the 0.5.0 lane: the row says where.
-        let note = app.staticTexts.matching(NSPredicate(format: "label BEGINSWITH 'Run cards come to the phone'")).firstMatch
+        let note = app.staticTexts.matching(NSPredicate(format: "label BEGINSWITH 'Run cards come to the phone'")).firstMatch  // "… in a later update" since e9d7eef
         waitFor(note, 10)
-        screenshot("QA-004-live-run-card-note")
+        screenshot("QA-005-live-run-card-note")
     }
 
     // MARK: I2b: decision grants (H-118)
@@ -79,7 +79,7 @@ final class H134LiveTests: XCTestCase {
         for part in ["DevOps: install", "Desktop Dev: publish"] {
             XCTAssertTrue(grants.label.contains(part), "\"\(part)\" missing from: \(grants.label)")
         }
-        screenshot("QA-004-live-grants")
+        screenshot("QA-005-live-grants")
         // Publishing the granting option echoes grants_sha; a mismatch would be refused.
         app.buttons.containing(NSPredicate(format: "label CONTAINS 'Grant both'")).firstMatch.tap()
         let publish = app.buttons["Publish ruling"]
@@ -88,7 +88,17 @@ final class H134LiveTests: XCTestCase {
         XCTAssertTrue(publish.waitForNonExistence(timeout: 10), "Publishing a granting option did not settle it")
         XCTAssertFalse(app.staticTexts.containing(NSPredicate(format: "label CONTAINS[c] 'conflict' OR label CONTAINS[c] 'changed'")).firstMatch.exists,
                        "A grants conflict on a fresh decision")
-        screenshot("QA-004-live-grants-published")
+        screenshot("QA-005-live-grants-published")
+
+        // The ruling reaches Team Lead's thread as words, not the bus envelope (c656476).
+        app.tab("Chat")
+        let lead = app.buttons.matching(NSPredicate(format: "label BEGINSWITH 'Team Lead'")).firstMatch
+        waitFor(lead, 15)
+        sleep(2)
+        XCTAssertFalse(lead.label.contains("[decision"), "Bus envelope in the preview: \(lead.label)")
+        XCTAssertNil(lead.label.range(of: "[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}", options: .regularExpression),
+                     "A UUID in the preview: \(lead.label)")
+        screenshot("QA-005-live-ruling-preview")
     }
 
     // MARK: I2b: the terminal command card (H-108)
@@ -98,15 +108,43 @@ final class H134LiveTests: XCTestCase {
         let app = try DemoApp.launch()
         allowSystemAlerts()
         app.tab("Needs you")
-        let title = app.staticTexts["A terminal command wants to act as you"]
-        let shown = title.waitForExistence(timeout: 20)
-        screenshot("QA-004-live-terminal-card")
-        XCTAssertTrue(shown, "No terminal command card on Needs you (the daemon holds one for clients with the terminal_card feature)")
-        if shown {
-            XCTAssertTrue(app.staticTexts.containing(NSPredicate(format: "label CONTAINS 'git push --force origin main'")).firstMatch.exists)
-            XCTAssertFalse(app.buttons["Allow once"].exists && app.buttons["Allow once"].isHittable && title.frame.minY < app.buttons["Allow once"].frame.minY,
-                           "The terminal card offers answers on the phone")
+        // One element for VoiceOver: "Terminal command wants to act as you: <command>. …"
+        let card = app.descendants(matching: .any)
+            .matching(NSPredicate(format: "label CONTAINS 'wants to act as you'")).firstMatch
+        let shown = card.waitForExistence(timeout: 20)
+        sleep(1)
+        screenshot("QA-005-live-terminal-card")
+        XCTAssertTrue(shown, "No terminal command card on Needs you")
+        guard shown else { return }
+        let text = app.descendants(matching: .any).matching(NSPredicate(format: "label CONTAINS 'wants to act as you'"))
+            .allElementsBoundByIndex.map(\.label).joined(separator: " | ")
+        XCTAssertTrue(text.contains("git push --force origin main"), "No command on the card: \(text)")
+        let words = app.visibleWords.joined(separator: " | ")
+        for part in ["Desktop Dev’s workspace, so a bot is probably asking, not you", "Answer this on Demo Mac, in The Hermes app"] {
+            XCTAssertTrue(words.contains(part) || text.contains(part), "\"\(part)\" missing from the card")
         }
+        // Read-only: no answers here, and it sits above the project sections.
+        XCTAssertFalse(app.buttons["Allow once"].exists, "The terminal card offers answers on the phone")
+        let firstSection = app.staticTexts.matching(NSPredicate(format: "label CONTAINS ' · #1'")).firstMatch
+        if firstSection.exists {
+            XCTAssertLessThan(card.frame.minY, firstSection.frame.minY, "The terminal card is not on top of Needs you")
+        }
+        // Tapping it never opens a bot page for "terminal".
+        card.tap()
+        sleep(2)
+        XCTAssertFalse(app.pane("Reports").exists, "The terminal card opened a bot page")
+        screenshot("QA-005-live-terminal-card-tapped")
+    }
+
+    /// The home feed loads at the root (c656476): a cold launch straight into Needs you fills it.
+    func testLiveColdLaunchIntoNeedsYou() throws {
+        try DemoControl.ensurePermissionPrompts()
+        let app = try DemoApp.launch(["-openTab", "needs"])
+        allowSystemAlerts()
+        XCTAssertTrue(app.tabBars.buttons["Needs you"].waitForExistence(timeout: 10) && app.tabBars.buttons["Needs you"].isSelected,
+                      "Did not open on Needs you")
+        waitFor(app.needsRow("Resolve conflicts automatically or always ask?"), 20)
+        screenshot("QA-005-live-cold-needs-you")
     }
 
     // MARK: I2: the binary board
@@ -125,24 +163,24 @@ final class H134LiveTests: XCTestCase {
         // The column chips count the cards: new items land in Inbox.
         let inbox = waitFor(app.buttons.matching(NSPredicate(format: "label BEGINSWITH 'Inbox'")).firstMatch, 20)
         XCTAssertEqual(inbox.label, "Inbox 3", "Inbox chip")
-        screenshot("QA-004-live-board-chips")
+        screenshot("QA-005-live-board-chips")
         inbox.tap()
         sleep(2)
         let item = app.descendants(matching: .any).matching(NSPredicate(format: "label CONTAINS 'Board chips on iPad'")).firstMatch
         let shown = item.waitForExistence(timeout: 10)
-        screenshot("QA-004-live-board")
+        screenshot("QA-005-live-board")
         XCTAssertTrue(shown, "Inbox counts 3 cards but its page shows none")
         guard shown else { return }
         item.tap()
         sleep(2)
-        screenshot("QA-004-live-board-item")
+        screenshot("QA-005-live-board-item")
         let field = app.textViews.firstMatch.exists ? app.textViews.firstMatch : app.textFields.firstMatch
         if field.waitForExistence(timeout: 5) {
             field.tap()
             field.typeText("QA-004 comment from the phone")
             app.buttons["Send"].tap()
             waitFor(app.staticTexts.containing(NSPredicate(format: "label CONTAINS 'QA-004 comment from the phone'")).firstMatch, 10)
-            screenshot("QA-004-live-board-comment")
+            screenshot("QA-005-live-board-comment")
         } else {
             XCTFail("No comment field on the item")
         }
@@ -162,11 +200,18 @@ final class H134LiveTests: XCTestCase {
         waitFor(question, 20)
         XCTAssertTrue(question.label.contains("Question"), "No Question pill: \(question.label)")
         XCTAssertTrue(question.label.contains("unread"), "No unread count: \(question.label)")
+        // Previews are plain text: no Markdown marks, no bus envelope.
+        for row in app.buttons.allElementsBoundByIndex where row.label.contains(" · ") || row.label.contains("You: ") {
+            XCTAssertFalse(row.label.contains("**"), "Markdown in a preview: \(row.label)")
+            XCTAssertFalse(row.label.contains("[decision "), "Bus envelope in a preview: \(row.label)")
+        }
+        let backend = app.buttons.matching(NSPredicate(format: "label CONTAINS 'Backend Dev'")).firstMatch
+        if backend.exists { XCTAssertTrue(backend.label.contains("sync-conflicts.md"), backend.label) }
         let own = app.buttons.matching(NSPredicate(format: "label CONTAINS 'iOS Dev'")).firstMatch
         XCTAssertTrue(own.exists && own.label.contains("You: "), "No \"You: \" on the owner's last message: \(own.label)")
         // Open questions first.
         XCTAssertLessThan(question.frame.minY, own.frame.minY, "The open question is not first")
-        screenshot("QA-004-live-threads")
+        screenshot("QA-005-live-threads")
 
         question.tap()
         waitFor(app.staticTexts.containing(NSPredicate(format: "label CONTAINS 'Should the release notes mention the new board?'")).firstMatch)
@@ -175,7 +220,7 @@ final class H134LiveTests: XCTestCase {
         field.typeText("Yes, mention it.")
         app.buttons["Send"].tap()
         waitFor(app.staticTexts.containing(NSPredicate(format: "label CONTAINS 'Yes, mention it.'")).firstMatch, 10)
-        screenshot("QA-004-live-thread")
+        screenshot("QA-005-live-thread")
 
         // Read: back on the list, no unread count.
         app.tab("Chat")
@@ -195,9 +240,12 @@ final class H134LiveTests: XCTestCase {
         waitFor(app.pane("Reports"))
         XCTAssertFalse(app.staticTexts.matching(NSPredicate(format: "label BEGINSWITH 'Reports come from The Hermes 0.17'")).firstMatch.exists,
                        "A 0.17 daemon still gets the Reports fallback")
-        waitFor(app.staticTexts.containing(NSPredicate(format: "label CONTAINS 'Should the release notes mention the new board?'")).firstMatch, 15)
+        let question = app.staticTexts.containing(NSPredicate(format: "label CONTAINS 'Should the release notes mention the new board?'"))
+        waitFor(question.firstMatch, 15)
+        sleep(1)
+        XCTAssertEqual(question.count, 1, "The question shows \(question.count) times on Reports")
         let answer = waitFor(app.buttons["Answer in Chat"].firstMatch)
-        screenshot("QA-004-live-reports")
+        screenshot("QA-005-live-reports")
         answer.tap()
         let composer = app.descendants(matching: .any).matching(NSPredicate(format: "label == 'Message Desktop Dev' OR placeholderValue == 'Message Desktop Dev'")).firstMatch
         XCTAssertTrue(composer.waitForExistence(timeout: 10) || app.textViews.firstMatch.exists, "Answer in Chat did not open a composer")
@@ -241,14 +289,14 @@ final class H134LivePadTests: XCTestCase {
         waitFor(app.navigationBars["The Hermes"], 20)
         let lab = app.descendants(matching: .any).matching(NSPredicate(format: "label CONTAINS 'Hermes Lab'")).firstMatch
         waitFor(lab, 20)
-        screenshot("QA-004-live-ipad-sidebar")
+        screenshot("QA-005-live-ipad-sidebar")
         lab.tap()
         waitFor(app.buttons["Overview"].firstMatch, 10)
         waitFor(app.buttons["Main chat"]).tap()
         let thread = app.buttons.matching(NSPredicate(format: "label CONTAINS 'Desktop Dev'")).firstMatch
         waitFor(thread, 15)
         XCTAssertTrue(thread.label.contains("Question"), thread.label)
-        screenshot("QA-004-live-ipad-threads-panel")
+        screenshot("QA-005-live-ipad-threads-panel")
     }
 }
 

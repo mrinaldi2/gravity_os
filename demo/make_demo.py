@@ -410,6 +410,17 @@ def serve_control(control_port: int, port: int, home: str, token: str, bots: Dic
             query = parse_qs(url.query)
             try:
                 if url.path == "/permissions":
+                    # A prompt about to expire would vanish mid-test (0.17 holds one for 14 min):
+                    # deny those first and raise them fresh.
+                    now = datetime.now(timezone.utc)
+                    demo_ids = {bots[b]["id"] for b, _, _ in PROMPTS}
+                    for prompt in pending():
+                        expires = prompt.get("expires_at")
+                        if prompt.get("bot_id") in demo_ids and expires and \
+                                datetime.fromisoformat(expires.replace("Z", "+00:00")) - now < timedelta(minutes=4):
+                            owner().request("answer_permission", request_id=prompt["id"], decision="deny",
+                                            reason="UI tests: raised fresh")
+                    time.sleep(0.5)
                     waiting = {(p["bot_id"], p["tool"]) for p in pending()}
                     for bot, tool, tool_input in PROMPTS:
                         if (bots[bot]["id"], tool) not in waiting:
