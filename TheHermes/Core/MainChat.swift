@@ -10,8 +10,8 @@ struct ThreadCard: Identifiable, Equatable {
     let botId: String
     let botName: String
     let projectId: String
-    let last: String
-    let lastFromOwner: Bool
+    var last: String
+    var lastFromOwner: Bool
     let at: Date?
     let unread: Int
     let openQuestion: Bool
@@ -74,6 +74,21 @@ enum OwnerText {
             .split(whereSeparator: \.isNewline).joined(separator: " ")
             .trimmingCharacters(in: .whitespaces)
     }
+}
+
+extension ThreadCard {
+    /// With an open question, the row previews that question, not the newest
+    /// message (UX-031).
+    mutating func preview(question: ThreadEntry?) {
+        guard openQuestion, let question else { return }
+        last = OwnerText.preview(question.text)
+        lastFromOwner = false
+    }
+}
+
+extension Array where Element == ThreadEntry {
+    /// The bot's newest question still waiting for the owner.
+    var openQuestion: ThreadEntry? { last { !$0.fromOwner && $0.asks && $0.open } }
 }
 
 enum ThreadMerge {
