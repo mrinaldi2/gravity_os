@@ -114,7 +114,7 @@ final class H134LiveTests: XCTestCase {
         let publish = app.buttons["Publish ruling"]
         app.scroll(to: publish)
         publish.tap()
-        waitFor(app.staticTexts.containing(NSPredicate(format: "label CONTAINS 'Not published: Face ID wasn’t confirmed.'")).firstMatch, 10)
+        waitFor(app.staticTexts.containing(NSPredicate(format: "label CONTAINS 'Not published. Nothing was sent.'")).firstMatch, 10)
         screenshot("QA-005-live-grants-refused")
         // Still open: the answer form is there after dismissing the message.
         if app.buttons["OK"].exists { app.buttons["OK"].tap() }
