@@ -15,10 +15,13 @@ struct BotDetailView: View {
     /// Says which action `failure` is about.
     @State private var failedAction = SessionAction.restart
 
-    /// Four panes at most: what the bot says, what it does, what it made,
-    /// and everything else (terminal, browser, memory, its settings).
+    /// Four panes at most (UX-024): what the bot reported, its chat and
+    /// terminal on demand, and everything else (work, artifacts, browser,
+    /// memory, its settings).
     enum Pane: String, CaseIterable {
+        case reports = "Reports"
         case chat = "Chat"
+        case terminal = "Terminal"
         case activity = "Activity"
         case messages = "Messages"
         case work = "Work"
@@ -27,6 +30,8 @@ struct BotDetailView: View {
 
         var symbol: String {
             switch self {
+            case .reports: "text.quote"
+            case .terminal: "terminal"
             case .chat: "bubble.left"
             case .activity: "list.bullet.rectangle"
             case .messages: "envelope"
@@ -42,13 +47,15 @@ struct BotDetailView: View {
     /// A daemon that serves chat gets Gravity's chat and the panes after it;
     /// an older one keeps the Gravity Lens activity and the message thread.
     private var panes: [Pane] {
-        guard bot != nil else { return [.more] }
+        guard let bot else { return [.more] }
         guard store.hasChat else { return [.activity, .messages, .more] }
-        return [.chat, .work, .files, .more]
+        return store.hasTerminal(bot) ? [.reports, .chat, .terminal, .more] : [.reports, .chat, .more]
     }
 
     private var pane: Pane {
         if let choice, panes.contains(choice) { return choice }
+        // Work and Artifacts sit under More, but a task notification opens Work.
+        if let choice, store.hasChat, [.work, .files].contains(choice) { return choice }
         return panes[0]
     }
 
@@ -97,6 +104,8 @@ struct BotDetailView: View {
             }
 
             switch pane {
+            case .reports: BotReportsPane(botId: botId) { choice = .chat }
+            case .terminal: TerminalScreen(botId: botId)
             case .chat: BotChatPane(botId: botId, searching: $searching)
             case .work: WorkPane(botId: botId)
             case .files: BotFilesPane(botId: botId)
@@ -289,7 +298,15 @@ private struct BotMorePane: View {
         List {
             if let bot = store.bot(botId) {
                 Section {
-                    if store.hasTerminal(bot) {
+                    if store.hasChat {
+                        NavigationLink { WorkPane(botId: botId).navigationTitle("Work").navigationBarTitleDisplayMode(.inline) } label: {
+                            ItemRow(title: "Work", subtitle: "Tasks, commands and routines") { IconTile(systemImage: "hammer") }
+                        }
+                        NavigationLink { BotFilesPane(botId: botId).navigationTitle("Artifacts").navigationBarTitleDisplayMode(.inline) } label: {
+                            ItemRow(title: "Artifacts", subtitle: "What the bot published") { IconTile(systemImage: "doc") }
+                        }
+                    }
+                    if store.hasTerminal(bot), !store.hasChat {
                         NavigationLink { TerminalScreen(botId: botId).navigationTitle("Terminal").navigationBarTitleDisplayMode(.inline) } label: {
                             ItemRow(title: "Terminal", subtitle: "The bot's live session") { IconTile(systemImage: "terminal") }
                         }

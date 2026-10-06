@@ -1,4 +1,5 @@
 import Foundation
+import SwiftProtobuf
 
 /// A protocol `error` reply, or a locally generated failure with the same shape.
 struct DaemonError: LocalizedError {
@@ -45,6 +46,8 @@ final class DaemonClient {
     /// and answers them, so the daemon holds a prompt for it instead of
     /// leaving it in the bot's terminal.
     static let features = ["permission_cards"]
+    /// The typed surfaces (ADR-001) and the highest version of each this app speaks.
+    static let contracts = ["board": 1, "home": 1]
 
     private(set) var status: ConnectionStatus = .idle {
         didSet { if status != oldValue { onStatus?(status) } }
@@ -58,12 +61,17 @@ final class DaemonClient {
     /// Every frame without a pending request, plus `attached` replies: those
     /// must be seen in wire order with the `term` pushes that follow them.
     var onPush: ((String, JSONDict) -> Void)?
+    /// Binary pushes (`req_id` 0): typed `hermes.wire.v1.Envelope`s, e.g. `board_push`.
+    var onEnvelopePush: ((Hermes_Wire_V1_Envelope) -> Void)?
 
     private let session: URLSession
     private var task: URLSessionWebSocketTask?
     private var endpoint: Endpoint?
     private var pending: [String: CheckedContinuation<JSONDict, Error>] = [:]
     private var nextRequestId = 1
+    /// Typed requests in binary frames (ADR-001), by their numeric `req_id`.
+    private var pendingEnvelopes: [UInt64: CheckedContinuation<Hermes_Wire_V1_Envelope, Error>] = [:]
+    private var nextEnvelopeId: UInt64 = 1
     /// Bumped on every open/stop so a stale socket's callbacks are ignored.
     private var generation = 0
     private var wantConnected = false
@@ -171,6 +179,31 @@ final class DaemonClient {
         }
     }
 
+    /// A typed request in a binary frame (ADR-001): one `Envelope` out, the
+    /// one under the same `req_id` back. An `Error` body throws.
+    func request(_ body: Hermes_Wire_V1_Envelope.OneOf_Body, name: String) async throws -> Hermes_Wire_V1_Envelope {
+        guard status == .connected, let task else {
+            throw DaemonError(code: "not_connected", message: "Not connected to the Hermes service.")
+        }
+        let id = nextEnvelopeId
+        nextEnvelopeId += 1
+        var envelope = Hermes_Wire_V1_Envelope()
+        envelope.reqID = id
+        envelope.body = body
+        let data: Data = try envelope.serializedData()
+        return try await withCheckedThrowingContinuation { continuation in
+            pendingEnvelopes[id] = continuation
+            task.send(.data(data)) { [weak self] error in
+                guard let error else { return }
+                Task { @MainActor in self?.failEnvelope(id, error) }
+            }
+            Task { @MainActor [weak self] in
+                try? await Task.sleep(for: .seconds(30))
+                self?.failEnvelope(id, DaemonError(code: "timeout", message: "The Hermes service did not answer \(name)."))
+            }
+        }
+    }
+
     /// Fire-and-forget frames (`input`, `resize`): the daemon sends no reply.
     func send(_ type: String, _ fields: JSONDict) {
         guard status == .connected, let task else { return }
@@ -227,6 +260,7 @@ final class DaemonClient {
                 "protocol_version": Self.protocolVersion,
                 "token": token, "client": Self.clientId,
                 "features": Self.features,
+                "contracts": Self.contracts,
             ]
             try await socket.send(.string(JSONText.encode(hello) ?? "{}"))
             let first = try await receive(socket)
@@ -241,10 +275,17 @@ final class DaemonClient {
             status = .connected
             startPing(socket, generation: current)
             while true {
-                let frame = try await receive(socket)
+                let frame = try await socket.receive()
                 guard current == generation else { return }
                 lastHeard = .now
-                handle(frame)
+                switch frame {
+                case .string(let text):
+                    if let json = JSONText.decode(text) { handle(json) }
+                case .data(let data):
+                    handle(data)
+                @unknown default:
+                    continue
+                }
             }
         } catch {
             guard current == generation else { return }
@@ -290,6 +331,20 @@ final class DaemonClient {
         continuation.resume(returning: frame)
     }
 
+    /// A binary frame: a reply to a typed request, or a push (`req_id` 0).
+    private func handle(_ data: Data) {
+        guard let envelope = try? Hermes_Wire_V1_Envelope(serializedBytes: data) else { return }
+        guard envelope.reqID != 0, let continuation = pendingEnvelopes.removeValue(forKey: envelope.reqID) else {
+            onEnvelopePush?(envelope)
+            return
+        }
+        if case .error(let error)? = envelope.body {
+            continuation.resume(throwing: DaemonError(code: error.code, message: error.message))
+        } else {
+            continuation.resume(returning: envelope)
+        }
+    }
+
     private func startPing(_ socket: URLSessionWebSocketTask, generation current: Int) {
         pingTask = Task { [weak self] in
             while !Task.isCancelled {
@@ -297,7 +352,7 @@ final class DaemonClient {
                 guard let self, current == self.generation else { return }
                 // A dead link never fails a ping, it only never answers one:
                 // silence is the signal.
-                let limit = self.pending.isEmpty ? Self.silenceLimit : Self.busySilenceLimit
+                let limit = self.pending.isEmpty && self.pendingEnvelopes.isEmpty ? Self.silenceLimit : Self.busySilenceLimit
                 if ContinuousClock.now - self.lastHeard > limit {
                     self.restart()
                     return
@@ -377,5 +432,12 @@ final class DaemonClient {
         let waiting = pending
         pending.removeAll()
         for continuation in waiting.values { continuation.resume(throwing: error) }
+        let typed = pendingEnvelopes
+        pendingEnvelopes.removeAll()
+        for continuation in typed.values { continuation.resume(throwing: error) }
+    }
+
+    private func failEnvelope(_ id: UInt64, _ error: Error) {
+        pendingEnvelopes.removeValue(forKey: id)?.resume(throwing: error)
     }
 }

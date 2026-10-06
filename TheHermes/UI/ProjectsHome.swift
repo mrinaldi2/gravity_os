@@ -14,6 +14,8 @@ struct HomeProjectLink: Hashable {
 enum NeedsDestination: Hashable {
     case decision(computerId: String, decisionId: String)
     case bot(computerId: String, botId: String, chat: Bool)
+    case item(computerId: String, itemId: String)
+    case release(computerId: String, releaseId: String)
     case note(title: String, text: String)
 }
 
@@ -43,6 +45,7 @@ enum ReleaseStatusWords {}
 struct ProjectsHomeView: View {
     @Environment(Fleet.self) private var fleet
     @State private var path = NavigationPath()
+    @State private var debugOpened = false
     /// Set from outside (a notification, Needs you): opens that project.
     var openProject: Binding<HomeProjectLink?> = .constant(nil)
 
@@ -88,11 +91,20 @@ struct ProjectsHomeView: View {
                 #endif
                 await feed.refreshAll(fleet.computers)
             }
+            #if DEBUG
+            .onChange(of: cards.map(\.row.projectID), initial: true) {
+                guard !debugOpened, let name = UserDefaults.standard.string(forKey: "openProject"),
+                      let card = cards.first(where: { $0.row.name.lowercased().hasPrefix(name.lowercased()) }) else { return }
+                debugOpened = true
+                path = NavigationPath([HomeProjectLink(computerId: card.computerId, projectId: card.row.projectID)])
+            }
+            #endif
             .navigationDestination(for: HomeProjectLink.self) { link in
                 if let computer = fleet.computers.first(where: { $0.id == link.computerId }) {
-                    ProjectView(projectId: link.projectId).computerEnvironment(computer)
+                    ProjectScreen(projectId: link.projectId).computerEnvironment(computer)
                 }
             }
+            .needsDestinations()
             .onChange(of: openProject.wrappedValue, initial: true) { _, link in
                 guard let link else { return }
                 path = NavigationPath([link])
@@ -214,13 +226,13 @@ struct NeedsYouView: View {
                                 .font(.subheadline).foregroundStyle(Color.secondaryText)
                         }
                         ForEach(rows, id: \.id) { row in
-                            NavigationLink(value: destination(row, card: card)) { NeedsRow(row: row) }
+                            NavigationLink(value: fleet.needsDestination(row, answeredBy: card.computerId)) { NeedsRow(row: row) }
                         }
                     } header: {
                         SectionTitle(card.rank.map { "\(card.row.name) · #\($0)" } ?? card.row.name)
                     }
                     .task(id: "\(card.id)/\(card.row.attention.count)/\(card.row.attention.score)") {
-                        if let computer = computer(card.computerId) { await feed.loadAttention(card, on: computer) }
+                        if let computer = fleet.computer(id: card.computerId) { await feed.loadAttention(card, on: computer) }
                     }
                 }
             }
@@ -234,20 +246,7 @@ struct NeedsYouView: View {
             }
             .sheet(isPresented: $showingDecisions) { DecisionsView(openDecision: .constant(nil)) }
             .refreshable { await feed.refreshAll(fleet.computers, force: true) }
-            .navigationDestination(for: NeedsDestination.self) { destination in
-                switch destination {
-                case .decision(let computerId, let decisionId):
-                    if let computer = computer(computerId) {
-                        DecisionDetailView(decisionId: decisionId).computerEnvironment(computer)
-                    }
-                case .bot(let computerId, let botId, let chat):
-                    if let computer = computer(computerId) {
-                        BotDetailView(botId: botId, initialPane: chat ? .chat : nil).computerEnvironment(computer)
-                    }
-                case .note(let title, let text):
-                    NeedsNote(title: title, text: text)
-                }
-            }
+            .needsDestinations()
             .onChange(of: openDecision.wrappedValue, initial: true) { _, destination in
                 guard let destination else { return }
                 path = NavigationPath([destination])
@@ -256,15 +255,20 @@ struct NeedsYouView: View {
         }
     }
 
-    private func computer(_ id: String) -> Computer? { fleet.computers.first { $0.id == id } }
+}
 
-    /// The computer that acts on a row, by its daemon id; else the one that answered.
-    private func actor(_ daemonId: String, card: HomeCard) -> Computer? {
-        fleet.computers.first { $0.store.daemonId == daemonId && !daemonId.isEmpty } ?? computer(card.computerId)
+extension Fleet {
+    func computer(id: String) -> Computer? { computers.first { $0.id == id } }
+
+    /// The computer with that daemon id, if the phone talks to it.
+    func computer(daemonId: String) -> Computer? {
+        daemonId.isEmpty ? nil : computers.first { $0.store.daemonId == daemonId }
     }
 
-    private func destination(_ row: HomeAttentionRow, card: HomeCard) -> NeedsDestination {
-        let on = actor(row.daemonID, card: card)
+    /// Where a Needs-you row opens: on the computer that acts on it (its
+    /// `daemon_id`), else the one that answered for the project.
+    func needsDestination(_ row: HomeAttentionRow, answeredBy computerId: String) -> NeedsDestination {
+        let on = computer(daemonId: row.daemonID) ?? computer(id: computerId)
         let place = on?.name ?? "that computer"
         switch row.target {
         case .decisionID(let id)?:
@@ -275,15 +279,15 @@ struct NeedsYouView: View {
             }
             return .note(title: row.title, text: "Answer it on \(place), in The Hermes app.")
         case .bot(let ref)?:
-            if let botComputer = fleet.computers.first(where: { $0.store.daemonId == ref.daemonID }) ?? on {
+            if let botComputer = computer(daemonId: ref.daemonID) ?? on {
                 return .bot(computerId: botComputer.id, botId: ref.botID, chat: true)
             }
-        case .releaseID?:
-            return .note(title: row.title, text: "The release review comes to the phone in the next build. Review it on the desktop for now.")
+        case .releaseID(let id)?:
+            if let on { return .release(computerId: on.id, releaseId: id) }
         case .actionID?:
             return .note(title: row.title, text: "Run cards come to the phone in this release. For now, run or reject it on \(place), in The Hermes app.")
         case .itemID(let id)?:
-            return .note(title: row.title, text: "Open \(id) on the desktop board to answer it.")
+            if let on { return .item(computerId: on.id, itemId: id) }
         case nil:
             break
         }
@@ -296,6 +300,40 @@ struct NeedsYouView: View {
             return .note(title: row.title, text: "Open it on \(place).")
         }
     }
+}
+
+/// The screens a Needs-you row or a project's Overview opens, in any stack.
+struct NeedsDestinations: ViewModifier {
+    @Environment(Fleet.self) private var fleet
+
+    func body(content: Content) -> some View {
+        content.navigationDestination(for: NeedsDestination.self) { destination in
+            switch destination {
+            case .decision(let computerId, let decisionId):
+                if let computer = fleet.computer(id: computerId) {
+                    DecisionDetailView(decisionId: decisionId).computerEnvironment(computer)
+                }
+            case .bot(let computerId, let botId, let chat):
+                if let computer = fleet.computer(id: computerId) {
+                    BotDetailView(botId: botId, initialPane: chat ? .chat : nil).computerEnvironment(computer)
+                }
+            case .item(let computerId, let itemId):
+                if let computer = fleet.computer(id: computerId) {
+                    ItemView(itemId: itemId).computerEnvironment(computer)
+                }
+            case .release(let computerId, let releaseId):
+                if let computer = fleet.computer(id: computerId) {
+                    ReleaseView(releaseId: releaseId).computerEnvironment(computer)
+                }
+            case .note(let title, let text):
+                NeedsNote(title: title, text: text)
+            }
+        }
+    }
+}
+
+extension View {
+    func needsDestinations() -> some View { modifier(NeedsDestinations()) }
 }
 
 /// One thing waiting: what it is and how long it has waited.

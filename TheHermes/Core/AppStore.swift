@@ -35,6 +35,8 @@ final class AppStore {
     var grants: Set<String> = []
     /// What the daemon serves, from `hello_ok`.
     var capabilities: Set<String> = []
+    /// Binary encodings it takes (`["proto"]`): typed requests in binary frames.
+    var encodings: Set<String> = []
     var serverVersion = ""
     var deviceId: String?
     /// The daemon's stable id, as its peers know it (newer daemons).
@@ -209,6 +211,7 @@ final class AppStore {
     private func helloReceived(_ hello: JSONDict) {
         grants = Set(hello.strings("grants"))
         capabilities = Set(hello.strings("capabilities"))
+        encodings = Set(hello.strings("encodings"))
         serverVersion = hello.str("server_version")
         deviceId = hello.optStr("device_id")
         daemonId = hello.optStr("daemon_id")
