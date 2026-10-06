@@ -11,8 +11,11 @@ struct NotificationExplainer: View {
     /// True when iOS has not asked yet and the explainer has not been shown.
     static func shouldExplain() async -> Bool {
         #if DEBUG
-        // Settings screenshots (-openSettings YES) show the row as not set up.
-        if UserDefaults.standard.bool(forKey: "openSettings") { return false }
+        // Settings screenshots (-openSettings YES) show the row as not set up;
+        // -noNotificationPrompt YES keeps the system prompt off other screenshots.
+        if UserDefaults.standard.bool(forKey: "openSettings") || UserDefaults.standard.bool(forKey: "noNotificationPrompt") {
+            return false
+        }
         // Demo and UI-test launches (-gravHost …) keep asking directly, as
         // before, unless -notificationExplainer YES asks for the explainer.
         if UserDefaults.standard.string(forKey: "gravHost") != nil,

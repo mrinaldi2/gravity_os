@@ -121,6 +121,9 @@ struct HomeCard: Identifiable {
     let staleNames: [String]
     /// The oldest `as_of` among them, for "imac away · as of 10:42".
     let staleSince: Date?
+    /// "#1, #2…" across every computer, after the merge; nil when nothing
+    /// needs you here. (`row.rank` is one computer's own order.)
+    var rank: Int?
     var id: String { "\(computerId):\(row.projectID)" }
 }
 
@@ -204,10 +207,16 @@ final class HomeFeed {
                 inputs += computer.store.legacyRows().map { (computer.id, computer.store.daemonId, $0) }
             }
         }
+        var next = 1
         return HomeMerge.ranked(HomeMerge.merge(inputs)).map { item in
             let stale = (sources[item.computerId] ?? []).filter { item.row.staleSources.contains($0.daemonID) }
             let since = stale.compactMap { $0.hasAsOf ? $0.asOf.date : nil }.min()
-            return HomeCard(row: item.row, computerId: item.computerId, staleNames: stale.map(\.name), staleSince: since)
+            var card = HomeCard(row: item.row, computerId: item.computerId, staleNames: stale.map(\.name), staleSince: since)
+            if item.row.attention.count > 0 {
+                card.rank = next
+                next += 1
+            }
+            return card
         }
     }
 
@@ -229,6 +238,21 @@ final class HomeFeed {
         }
     }
 
+    #if DEBUG
+    /// Screenshots without a 0.17 daemon: `-homeFixture <path to overview.json>`
+    /// stands in for the first computer's answer.
+    func loadFixture(_ computers: [Computer]) {
+        guard let path = UserDefaults.standard.string(forKey: "homeFixture"), let first = computers.first,
+              let data = FileManager.default.contents(atPath: path),
+              let json = try? JSONSerialization.jsonObject(with: data),
+              let overview = try? HomeJSON.decode(HomeOverview.self, json) else { return }
+        overviews[first.id] = overview
+        fixtureComputer = first.id
+    }
+
+    @ObservationIgnored private var fixtureComputer: String?
+    #endif
+
     func refreshAll(_ computers: [Computer], force: Bool = false) async {
         await withTaskGroup(of: Void.self) { group in
             for computer in computers { group.addTask { await self.refresh(computer, force: force) } }
@@ -238,6 +262,9 @@ final class HomeFeed {
     /// One computer's overview, unless it was fetched a moment ago.
     func refresh(_ computer: Computer, force: Bool = false) async {
         let store = computer.store
+        #if DEBUG
+        if fixtureComputer == computer.id { return }
+        #endif
         guard store.status == .connected else { return }
         guard store.hasHome else {
             // An older daemon: its cards come from the store; drop a stale cache.

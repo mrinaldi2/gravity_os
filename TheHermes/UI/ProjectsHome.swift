@@ -5,7 +5,7 @@ import SwiftUI
 // computer and show the last answer at once.
 
 /// A project to open from the home, on the computer that answered for it.
-struct ProjectLink: Hashable {
+struct HomeProjectLink: Hashable {
     let computerId: String
     let projectId: String
 }
@@ -44,7 +44,7 @@ struct ProjectsHomeView: View {
     @Environment(Fleet.self) private var fleet
     @State private var path = NavigationPath()
     /// Set from outside (a notification, Needs you): opens that project.
-    var openProject: Binding<ProjectLink?> = .constant(nil)
+    var openProject: Binding<HomeProjectLink?> = .constant(nil)
 
     private var feed: HomeFeed { fleet.home }
     private var cards: [HomeCard] { feed.cards(fleet.computers) }
@@ -58,12 +58,22 @@ struct ProjectsHomeView: View {
                     EmptyNote(text: fleet.computers.contains { $0.store.status == .connected }
                               ? "No projects yet" : "Connecting…", systemImage: "folder")
                 }
-                ForEach(Array(cards.enumerated()), id: \.element.id) { index, card in
+                ForEach(cards) { card in
                     Section {
-                        NavigationLink(value: ProjectLink(computerId: card.computerId, projectId: card.row.projectID)) {
-                            ProjectCard(card: card, first: index == 0 && card.row.attention.count > 0)
+                        NavigationLink(value: HomeProjectLink(computerId: card.computerId, projectId: card.row.projectID)) {
+                            ProjectCard(card: card)
                         }
                         .contextMenu { pinButton(card) }
+                        // The project that needs you most is outlined (UX-024).
+                        .listRowBackground(
+                            RoundedRectangle(cornerRadius: 10, style: .continuous)
+                                .fill(Color(.secondarySystemGroupedBackground))
+                                .overlay {
+                                    if card.rank == 1 {
+                                        RoundedRectangle(cornerRadius: 10, style: .continuous).strokeBorder(Color.orange, lineWidth: 2)
+                                    }
+                                }
+                        )
                     }
                 }
             }
@@ -73,9 +83,12 @@ struct ProjectsHomeView: View {
             .refreshable { await feed.refreshAll(fleet.computers, force: true) }
             .task(id: connections) {
                 feed.loadCache(fleet.computers)
+                #if DEBUG
+                feed.loadFixture(fleet.computers)
+                #endif
                 await feed.refreshAll(fleet.computers)
             }
-            .navigationDestination(for: ProjectLink.self) { link in
+            .navigationDestination(for: HomeProjectLink.self) { link in
                 if let computer = fleet.computers.first(where: { $0.id == link.computerId }) {
                     ProjectView(projectId: link.projectId).computerEnvironment(computer)
                 }
@@ -104,7 +117,6 @@ struct ProjectsHomeView: View {
 /// lead's latest word.
 struct ProjectCard: View {
     let card: HomeCard
-    var first = false
 
     private var row: HomeRow { card.row }
     private var waiting: Bool { row.attention.count > 0 }
@@ -112,7 +124,7 @@ struct ProjectCard: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
             HStack(spacing: 6) {
-                RankBadge(rank: waiting ? Int(row.rank) + 1 : nil)
+                RankBadge(rank: card.rank)
                 Text(row.name).font(.headline).lineLimit(1)
                 if row.pinned {
                     Image(systemName: "pin.fill").font(.caption).foregroundStyle(Color.secondaryText)
@@ -138,12 +150,6 @@ struct ProjectCard: View {
             }
         }
         .padding(.vertical, 4)
-        .overlay {
-            if first {
-                RoundedRectangle(cornerRadius: 12).stroke(Color.orange, lineWidth: 2).padding(-10)
-                    .accessibilityHidden(true)
-            }
-        }
         .accessibilityElement(children: .combine)
     }
 
@@ -187,6 +193,7 @@ struct RankBadge: View {
 struct NeedsYouView: View {
     @Environment(Fleet.self) private var fleet
     @State private var path = NavigationPath()
+    @State private var showingDecisions = false
     /// Set from outside, e.g. a notification: opens that decision.
     var openDecision: Binding<NeedsDestination?> = .constant(nil)
 
@@ -210,7 +217,7 @@ struct NeedsYouView: View {
                             NavigationLink(value: destination(row, card: card)) { NeedsRow(row: row) }
                         }
                     } header: {
-                        SectionTitle("\(card.row.name) · #\(card.row.rank + 1)")
+                        SectionTitle(card.rank.map { "\(card.row.name) · #\($0)" } ?? card.row.name)
                     }
                     .task(id: "\(card.id)/\(card.row.attention.count)/\(card.row.attention.score)") {
                         if let computer = computer(card.computerId) { await feed.loadAttention(card, on: computer) }
@@ -219,6 +226,13 @@ struct NeedsYouView: View {
             }
             .listStyle(.insetGrouped)
             .navigationTitle("Needs you")
+            .toolbar {
+                // Every decision, settled ones too (UX-024: Needs you → Decisions).
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button("Decisions") { showingDecisions = true }
+                }
+            }
+            .sheet(isPresented: $showingDecisions) { DecisionsView(openDecision: .constant(nil)) }
             .refreshable { await feed.refreshAll(fleet.computers, force: true) }
             .navigationDestination(for: NeedsDestination.self) { destination in
                 switch destination {

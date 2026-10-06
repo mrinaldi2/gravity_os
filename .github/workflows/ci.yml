@@ -42,6 +42,10 @@ jobs:
     runs-on: macos-15
     steps:
       - uses: actions/checkout@v4
+      - name: Wire contract is current
+        # Vendored protos match their checksums in contract/SOURCE, and the
+        # committed Swift matches the protos (ADR-001).
+        run: scripts/contract/generate-swift.sh --check
       - name: Build for the simulator
         run: |
           xcodebuild -project TheHermes.xcodeproj -scheme TheHermes \

@@ -1,44 +1,39 @@
 import SwiftUI
 
+/// The app's tabs (UX-024): Projects · Needs you · Chat · Settings.
 struct RootView: View {
     @Environment(Fleet.self) private var fleet
     @Environment(Computer.self) private var computer
     @Environment(AppStore.self) private var store
     @Environment(LensStore.self) private var lens
-    @State private var tab = Tab.activity
-    @State private var openDecision: String?
-    @State private var focusPermission: String?
+    @State private var tab = Tab.projects
+    @State private var openNeeds: NeedsDestination?
     @State private var openBot: BotLink?
     @State private var explaining = false
     private var router: NotificationRouter { .shared }
 
-    enum Tab { case activity, bots, decisions, reports, computers }
+    enum Tab { case projects, needs, chat, settings }
 
     var body: some View {
         TabView(selection: $tab) {
-            FeedView { computer in
-                fleet.select(computer)
-                tab = .decisions
-            }
-                .tabItem { Label("Home", systemImage: "house") }
-                .tag(Tab.activity)
+            ProjectsHomeView()
+                .tabItem { Label("Projects", systemImage: "square.grid.2x2") }
+                .tag(Tab.projects)
+            NeedsYouView(openDecision: $openNeeds)
+                .tabItem { Label("Needs you", systemImage: "exclamationmark.bubble") }
+                .badge(fleet.home.total(fleet.computers))
+                .tag(Tab.needs)
+            // Until the main chat (H-134 I3): the bots of the computer on screen.
             BotsView(openBot: $openBot)
-                .tabItem { Label("Bots", systemImage: "person.2") }
-                .tag(Tab.bots)
-            DecisionsView(openDecision: $openDecision, focusPermission: $focusPermission)
-                .tabItem { Label("Decisions", systemImage: "checklist") }
-                .badge(store.decisionsBadge)
-                .tag(Tab.decisions)
-            ReportsView()
-                .tabItem { Label("Files", systemImage: "doc.on.doc") }
-                .tag(Tab.reports)
-            ComputersView()
-                .tabItem { Label("Computers", systemImage: "desktopcomputer") }
+                // Another computer: fresh navigation, since ids belong to one daemon.
+                .id(computer.id)
+                .tabItem { Label("Chat", systemImage: "bubble.left.and.bubble.right") }
+                .tag(Tab.chat)
+            SettingsView(inTab: true)
+                .tabItem { Label("Settings", systemImage: "gearshape") }
                 .badge(fleet.computers.filter { $0.store.status != .connected && $0.store.status != .connecting }.count)
-                .tag(Tab.computers)
+                .tag(Tab.settings)
         }
-        // Another computer: fresh navigation, since ids belong to one daemon.
-        .id(computer.id)
         .overlay(alignment: .top) { noticeBanner }
         .animation(.snappy, value: fleet.notice?.1)
         // Asked after pairing, with a word on why, before the system prompt.
@@ -54,6 +49,15 @@ struct RootView: View {
             router.target = NotificationTarget(userInfo: ["computer": computer.id, "kind": parts[0], "id": parts[1],
                                                           "bot": parts.count > 2 ? parts[2] : ""])
         }
+        // Screenshots of a tab: -openTab needs|chat|settings.
+        .task {
+            switch UserDefaults.standard.string(forKey: "openTab") {
+            case "needs": tab = .needs
+            case "chat": tab = .chat
+            case "settings": tab = .settings
+            default: break
+            }
+        }
         #endif
         // A tapped notification: its computer, then what it is about.
         .onChange(of: router.target, initial: true) { _, target in
@@ -62,20 +66,22 @@ struct RootView: View {
             guard let source = fleet.computers.first(where: { $0.id == target.computerId }),
                   let destination = target.destination else { return }
             fleet.select(source)
-            open(destination)
+            open(destination, on: source)
         }
     }
 
-    private func open(_ destination: NotificationTarget.Destination) {
+    private func open(_ destination: NotificationTarget.Destination, on source: Computer) {
         switch destination {
         case .decision(let id):
-            tab = .decisions
-            openDecision = id
+            tab = .needs
+            openNeeds = .decision(computerId: source.id, decisionId: id)
         case .permissionCard(let id):
-            tab = .decisions
-            focusPermission = id
+            tab = .needs
+            if let bot = source.store.permissions.first(where: { $0.id == id })?.botId {
+                openNeeds = .bot(computerId: source.id, botId: bot, chat: false)
+            }
         case .bot(let id, let pane):
-            tab = .bots
+            tab = .chat
             openBot = BotLink(botId: id, pane: pane)
         }
     }
@@ -84,9 +90,8 @@ struct RootView: View {
         if case let (source, notice)? = fleet.notice {
             Button {
                 if let id = notice.decisionId {
-                    fleet.select(source)
-                    tab = .decisions
-                    openDecision = id
+                    tab = .needs
+                    openNeeds = .decision(computerId: source.id, decisionId: id)
                 }
                 source.store.notice = nil
             } label: {

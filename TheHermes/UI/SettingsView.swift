@@ -1,19 +1,41 @@
 import SwiftUI
 import UserNotifications
 
-/// The app's own settings. Everything that belongs to one computer (its
-/// addresses, token, screen sharing, daemon and Lens) is on its page in the
-/// Computers tab.
+/// The app's own settings, and the computers. Everything that belongs to one
+/// computer (its addresses, token, screen sharing, daemon and Lens) is on
+/// its page under Computers.
 struct SettingsView: View {
+    /// The Settings tab (UX-024), rather than a sheet with Done.
+    var inTab = false
     @AppStorage("terminalFontSize") private var fontSize = 11.0
     @Environment(\.dismiss) private var dismiss
     @Environment(\.scenePhase) private var scenePhase
     @Environment(\.openURL) private var openURL
     @State private var notifications: UNAuthorizationStatus?
+    @State private var showing: Sheet?
+
+    private enum Sheet: Identifiable {
+        case computers, files
+        var id: Self { self }
+    }
 
     var body: some View {
         NavigationStack {
             Form {
+                if inTab {
+                    Section {
+                        Button { showing = .computers } label: {
+                            Label("Computers", systemImage: "desktopcomputer")
+                        }
+                        Button { showing = .files } label: {
+                            Label("Files", systemImage: "doc.on.doc")
+                        }
+                    } footer: {
+                        Text("Computers, their screens and tokens. Each project's artifacts move into the project in the next build.")
+                            .foregroundStyle(Color.secondaryText)
+                    }
+                }
+
                 Section {
                     Stepper("Font size \(Int(fontSize)) pt", value: $fontSize, in: 8...18, step: 1)
                 } header: {
@@ -45,12 +67,6 @@ struct SettingsView: View {
                 }
 
                 Section {
-                    Label("Computers, their screens and tokens are in the Computers tab.", systemImage: "desktopcomputer")
-                        .font(.footnote)
-                        .foregroundStyle(Color.secondaryText)
-                }
-
-                Section {
                     LabeledContent("Version", value: AppInfo.label)
                         .textSelection(.enabled)
                     if let commit = AppInfo.commit {
@@ -72,7 +88,15 @@ struct SettingsView: View {
                 if phase == .active { Task { await refreshNotifications() } }
             }
             .toolbar {
-                ToolbarItem(placement: .confirmationAction) { Button("Done") { dismiss() } }
+                if !inTab {
+                    ToolbarItem(placement: .confirmationAction) { Button("Done") { dismiss() } }
+                }
+            }
+            .sheet(item: $showing) { sheet in
+                switch sheet {
+                case .computers: ComputersView()
+                case .files: ReportsView()
+                }
             }
         }
     }
