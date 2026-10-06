@@ -33,11 +33,14 @@ enum DemoApp {
                                "-lensPort", environment["LENS_PORT"] ?? "49788", "-gravToken", token] + extra
         // A freshly erased simulator can ignore the first appearance change, which
         // once let "dark" checks measure light mode: the screen must show it.
+        // Light is the erased simulator's own state; only a dark request is checked
+        // (an iPad's split view can read as dark to this rough measure).
         for _ in 0..<3 {
             XCUIDevice.shared.appearance = dark ? .dark : .light
             app.launch()
+            if !dark { return app }
             sleep(2)
-            if isDark(app) == dark { return app }
+            if isDark(app) { return app }
             app.terminate()
             sleep(1)
         }
@@ -102,14 +105,66 @@ extension XCUIApplication {
     func tab(_ name: String) {
         var tries = 0
         while !(tabBars.buttons[name].exists && tabBars.buttons[name].isHittable), tries < 4 {
-            let back = navigationBars.buttons.element(boundBy: 0)
+            // Only a real back button: the first bar button can be an action (Needs you's Decisions).
+            let back = navigationBars.buttons["BackButton"].firstMatch
             if back.exists { back.tap() } else { swipeDown() }
             tries += 1
         }
         tabBars.buttons[name].tap()
     }
 
-    /// A bot's row in Bots, scrolled into view.
+    // MARK: H-134 navigation: Projects · Needs you · Chat · Settings
+
+    /// A card on Projects: "Rank 1, Aurora Notes, …" or "Nothing needs you, calm, …".
+    func projectCard(_ name: String) -> XCUIElement {
+        buttons.matching(NSPredicate(format: "label CONTAINS %@", ", \(name), ")).firstMatch
+    }
+
+    /// The project's screen, from its card on Projects.
+    func openProject(_ name: String) {
+        tab("Projects")
+        let card = projectCard(name)
+        scroll(to: card)
+        card.tap()
+        _ = navigationBars[name].waitForExistence(timeout: 10)
+    }
+
+    /// A button by its exact label that is on the screen itself, not in the tab bar
+    /// (a bot's Chat pane and the Chat tab share the word).
+    func pane(_ name: String) -> XCUIElement {
+        // The tab bar can be hidden on a pushed screen and still be in the tree.
+        let tab = tabBars.buttons[name]
+        let tabFrame = tab.exists ? tab.frame : nil
+        let matches = buttons.matching(NSPredicate(format: "label == %@", name))
+        return matches.allElementsBoundByIndex.first { $0.frame != tabFrame } ?? matches.firstMatch
+    }
+
+    /// A bot's page, through its project's Team.
+    func openBot(_ name: String, in project: String = "Aurora Notes") {
+        openProject(project)
+        pane("Team").tap()
+        let row = botRow(name)
+        _ = row.waitForExistence(timeout: 10)
+        row.tap()
+        _ = pane("Reports").waitForExistence(timeout: 10)
+    }
+
+    /// Needs you → Decisions: decisions and the permission cards.
+    func openDecisions() {
+        tab("Needs you")
+        let decisions = navigationBars.buttons["Decisions"]
+        _ = decisions.waitForExistence(timeout: 10)
+        decisions.tap()
+    }
+
+    /// A row on Needs you, by the start of its title.
+    func needsRow(_ title: String) -> XCUIElement {
+        let row = buttons.matching(NSPredicate(format: "label BEGINSWITH %@", title)).firstMatch
+        scroll(to: row)
+        return row
+    }
+
+    /// A bot's row in a project's Team (or any bot list), scrolled into view.
     func botRow(_ name: String) -> XCUIElement {
         let row = buttons.matching(NSPredicate(format: "label BEGINSWITH %@ OR label BEGINSWITH %@", "\(name), ", "Unread, \(name), ")).firstMatch
         scroll(to: row)

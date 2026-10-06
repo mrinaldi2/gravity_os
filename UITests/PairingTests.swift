@@ -56,33 +56,33 @@ final class PairingTests: XCTestCase {
         XCTAssertTrue(app.secureTextFields["Token"].exists, "The token field is not shown with the error")
         assertOnceBelow(app, "Token rejected", field: app.secureTextFields["Token"])
         XCTAssertFalse(app.tabBars.firstMatch.exists, "A rejected computer opened the app")
-        screenshot("QA-002-pairing-bad-token")
+        screenshot("QA-004-pairing-bad-token")
 
         // Not a link: a warning, nothing tried.
         app = launchWithLink("hello there")
         waitFor(app.staticTexts.containing(NSPredicate(format: "label BEGINSWITH 'That isn’t a pairing link'")).firstMatch)
-        screenshot("QA-002-pairing-not-a-link")
+        screenshot("QA-004-pairing-not-a-link")
 
         // A service that never answers: Connecting… for the whole wait, then the address error.
         app = launchWithLink(link(host: "10.255.255.1", port: "49777", token: token))
         waitFor(app.descendants(matching: .any).matching(NSPredicate(format: "label CONTAINS 'Connecting to Demo Mac'")).firstMatch, 5)
-        screenshot("QA-002-pairing-connecting")
+        screenshot("QA-004-pairing-connecting")
         waitFor(app.staticTexts.containing(NSPredicate(format: "label BEGINSWITH 'Couldn’t reach 10.255.255.1:49777'")).firstMatch, 25)
         XCTAssertFalse(app.tabBars.firstMatch.exists, "An unreachable computer opened the app")
         assertOnceBelow(app, "Couldn’t reach", field: app.textFields["Address"])
-        screenshot("QA-002-pairing-unreachable")
+        screenshot("QA-004-pairing-unreachable")
 
         // The right link: connected, saved, and the app opens on Home.
         app = launchWithLink(link(token: token))
-        waitFor(app.tabBars.buttons["Home"], 20)
+        waitFor(app.tabBars.buttons["Projects"], 20)
         // After pairing, a word on notifications before iOS asks.
         let explainer = app.staticTexts["Get told when a bot needs you"]
         if explainer.waitForExistence(timeout: 5) {
-            screenshot("QA-002-pairing-explainer")
+            screenshot("QA-004-pairing-explainer")
             app.buttons["Not now"].tap()
         }
-        waitFor(app.buttons["Computer: Demo Mac"])
-        screenshot("QA-002-pairing-success")
+        waitFor(app.projectCard("Aurora Notes"), 20) // the paired computer's projects
+        screenshot("QA-004-pairing-success")
     }
 
     func testOpenedLinkFillsConnectWithoutAdding() throws {
@@ -94,7 +94,7 @@ final class PairingTests: XCTestCase {
         XCTAssertEqual(app.textFields["Address"].value as? String, "127.0.0.1")
         XCTAssertEqual(app.textFields["Port"].value as? String, DemoApp.environment["GRAV_PORT"] ?? "49790")
         XCTAssertEqual(app.textFields["Name"].value as? String, "Demo Mac")
-        screenshot("QA-002-deeplink-prefilled")
+        screenshot("QA-004-deeplink-prefilled")
         // It waits for Connect: nothing is tried or added on its own.
         sleep(4)
         XCTAssertFalse(app.descendants(matching: .any).matching(NSPredicate(format: "label CONTAINS 'Connecting to'")).firstMatch.exists, "The link started connecting on its own")
@@ -102,20 +102,20 @@ final class PairingTests: XCTestCase {
         let connect = app.buttons["Connect"]
         app.scroll(to: connect)
         connect.tap()
-        waitFor(app.tabBars.buttons["Home"], 20)
+        waitFor(app.tabBars.buttons["Projects"], 20)
     }
 
     func testOpenedLinkWithAComputerOpensAddSheet() throws {
         let token = try XCTUnwrap(DemoApp.token)
         let app = try DemoApp.launch()
         allowSystemAlerts()
-        waitFor(app.tabBars.buttons["Home"])
+        waitFor(app.tabBars.buttons["Projects"])
         open(link(token: token).replacingOccurrences(of: "Demo%20Mac", with: "Second%20Mac"), in: app)
         waitFor(app.navigationBars["Add a computer"])
         waitFor(app.staticTexts["Opened from a pairing link. Check the computer and its address, then tap Connect."])
         sleep(3)
         XCTAssertFalse(app.descendants(matching: .any).matching(NSPredicate(format: "label CONTAINS 'Connecting to'")).firstMatch.exists, "The link started connecting on its own")
-        screenshot("QA-002-deeplink-add-sheet")
+        screenshot("QA-004-deeplink-add-sheet")
         app.buttons["Cancel"].tap()
         XCTAssertFalse(app.buttons["Computer: Second Mac"].exists)
     }

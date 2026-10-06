@@ -12,19 +12,19 @@ final class RoutingTests: XCTestCase {
         allowSystemAlerts()
         waitFor(app.navigationBars["Decision"])
         waitFor(app.staticTexts["Which accent colour for the App Store screenshots?"])
-        XCTAssertTrue(app.tabBars.buttons["Decisions"].isSelected)
-        screenshot("QA-002-route-decision")
+        XCTAssertTrue(app.tabBars.buttons["Needs you"].isSelected)
+        screenshot("QA-004-route-decision")
     }
 
     func testWaitingNotificationOpensChat() throws {
         let bot = try XCTUnwrap(DemoApp.botId, "No DEMO_BOT_ID: run scripts/ui-tests.sh")
         let app = try DemoApp.launch(["-route", "waiting/\(bot)"])
         allowSystemAlerts()
-        let chat = waitFor(app.buttons["Chat"])
+        let chat = waitFor(app.pane("Chat"))
         XCTAssertTrue(chat.isSelected, "The bot opened on another pane")
-        XCTAssertTrue(app.tabBars.buttons["Bots"].isSelected)
+        XCTAssertTrue(app.tabBars.buttons["Chat"].isSelected)
         waitFor(app.staticTexts["iOS Dev"])
         waitFor(app.textFields["Message iOS Dev"].exists ? app.textFields["Message iOS Dev"] : app.textViews["Message iOS Dev"])
-        screenshot("QA-002-route-waiting")
+        screenshot("QA-004-route-waiting")
     }
 }

@@ -13,38 +13,40 @@ final class RC041Tests: XCTestCase {
     func testApprovalNeedsApprovalWithoutToolNeverDetail() throws {
         let app = try DemoApp.launch()
         allowSystemAlerts()
-        waitFor(app.tabBars.buttons["Home"])
+        waitFor(app.tabBars.buttons["Projects"])
         try DemoControl.approval(bot: "Architect")
 
-        // Home: what needs you (below the demo's permission cards).
-        let needs = app.staticTexts["Needs approval"]
+        // Needs you: a row for the waiting bot, never the engine's words.
+        app.tab("Needs you")
+        let needs = app.buttons.matching(NSPredicate(format: "label BEGINSWITH 'Architect'")).firstMatch
         sleep(2)
         app.scroll(to: needs)
         waitFor(needs)
-        screenshot("QA-003-approval-home")
-        assertNoDetail(app, "Home")
+        screenshot("QA-004-approval-needs-you")
+        assertNoDetail(app, "Needs you")
 
-        // Bots list: the line under the bot's name.
-        app.tab("Bots")
+        // The project's Team: the line under the bot's name.
+        app.openProject("Aurora Notes")
+        app.pane("Team").tap()
         let row = waitFor(app.botRow("Architect"))
-        XCTAssertTrue(row.label.contains("Needs approval"), "Bots row: \(row.label)")
-        assertNoDetail(app, "Bots")
-        screenshot("QA-003-approval-bots")
+        XCTAssertTrue(row.label.contains("Needs approval"), "Team row: \(row.label)")
+        assertNoDetail(app, "Team")
+        screenshot("QA-004-approval-team")
 
         // The bot's approval banner.
         row.tap()
-        waitFor(app.buttons["Chat"])
+        waitFor(app.pane("Reports"))
         XCTAssertTrue(app.staticTexts.containing(NSPredicate(format: "label CONTAINS 'Needs approval' OR label CONTAINS 'needs approval'")).firstMatch.waitForExistence(timeout: 5),
                       "No approval banner on the bot")
         assertNoDetail(app, "bot")
-        screenshot("QA-003-approval-banner")
+        screenshot("QA-004-approval-banner")
     }
 
     /// The notification, with the app in the background: "<bot> needs approval", no body.
     func testApprovalNotificationNeedsApproval() throws {
         let app = try DemoApp.launch()
         allowSystemAlerts()
-        waitFor(app.tabBars.buttons["Home"])
+        waitFor(app.tabBars.buttons["Projects"])
         XCUIDevice.shared.press(.home)
         sleep(1)
         try DemoControl.approval(bot: "Designer")
@@ -52,7 +54,7 @@ final class RC041Tests: XCTestCase {
         let banner = springboard.descendants(matching: .any)
             .matching(NSPredicate(format: "label CONTAINS 'Designer needs approval'")).firstMatch
         let shown = banner.waitForExistence(timeout: 15)
-        screenshot("QA-003-approval-notification")
+        screenshot("QA-004-approval-notification")
         XCTAssertTrue(shown, "No \"Designer needs approval\" notification while the app is in the background")
         if shown {
             XCTAssertFalse(banner.label.contains(Self.detail), "The notification shows the engine's detail: \(banner.label)")
@@ -70,10 +72,10 @@ final class RC041Tests: XCTestCase {
     func testFirstChatRowBelowSearchButton() throws {
         let app = try DemoApp.launch()
         allowSystemAlerts()
-        app.tab("Bots")
         // Architect: no permission card above its transcript.
-        waitFor(app.botRow("Architect")).tap()
-        let chat = waitFor(app.buttons["Chat"])
+        app.openBot("Architect")
+        let chat = waitFor(app.pane("Chat"))
+        chat.tap()
         let search = waitFor(app.buttons["Search this chat"])
         // To the top of the transcript: drag down on it until nothing moves.
         var last: CGFloat = .nan
@@ -85,7 +87,7 @@ final class RC041Tests: XCTestCase {
             last = top
         }
         sleep(1)
-        screenshot("QA-003-chat-top")
+        screenshot("QA-004-chat-top")
         let first = try XCTUnwrap(topRow(app, below: chat), "No transcript row")
         XCTAssertGreaterThanOrEqual(first.frame.minY, search.frame.maxY,
                                     "The first row \"\(first.label)\" (\(first.frame)) starts under the search button (\(search.frame))")
@@ -135,8 +137,8 @@ final class NotificationSettingsTests: XCTestCase {
     }
 
     func testNotSetUpThenOff() throws {
-        // -openSettings YES: Settings opens at launch and iOS is not asked.
-        let app = try DemoApp.launch(["-openSettings", "YES"])
+        // Settings is a tab (H-134); -noNotificationPrompt YES keeps iOS from being asked.
+        let app = try DemoApp.launch(["-noNotificationPrompt", "YES", "-openTab", "settings"])
         scrollToRow(app)
         var found: String?
         for _ in 0..<20 where found == nil { found = state(app); if found == nil { usleep(300_000) } }
@@ -145,7 +147,7 @@ final class NotificationSettingsTests: XCTestCase {
         }
         XCTAssertTrue(app.buttons["Turn on notifications"].exists)
         XCTAssertFalse(app.buttons["Change in iOS Settings"].exists)
-        screenshot("QA-003-settings-notifications-not-set-up")
+        screenshot("QA-004-settings-notifications-not-set-up")
 
         app.buttons["Turn on notifications"].tap()
         let springboard = XCUIApplication(bundleIdentifier: "com.apple.springboard")
@@ -153,17 +155,17 @@ final class NotificationSettingsTests: XCTestCase {
         waitForState(app, "Off")
         XCTAssertTrue(app.buttons["Change in iOS Settings"].exists)
         XCTAssertFalse(app.buttons["Turn on notifications"].exists)
-        screenshot("QA-003-settings-notifications-off")
+        screenshot("QA-004-settings-notifications-off")
     }
 
     func testOn() throws {
         let app = try DemoApp.launch()
         allowSystemAlerts()
-        waitFor(app.buttons["Settings"]).tap()
+        app.tab("Settings")
         scrollToRow(app)
         waitForState(app, "On")
         XCTAssertTrue(app.buttons["Change in iOS Settings"].exists)
         XCTAssertFalse(app.buttons["Turn on notifications"].exists)
-        screenshot("QA-003-settings-notifications-on")
+        screenshot("QA-004-settings-notifications-on")
     }
 }

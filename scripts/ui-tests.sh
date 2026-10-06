@@ -11,6 +11,8 @@
 #   SIMULATOR       name of an existing simulator that is yours alone (default
 #                   Gravity-iOSQA); it is addressed by UDID and ERASED before each run
 #   SCREENSHOT_DIR  where the tests also write their screenshots as PNG
+#   DEMO_DAEMON     the daemon binary the demo runs (default ~/.thehermes/bin/hermesd
+#                   when present, else make_demo.py looks for gravityd)
 #   DEMO_OUT        the demo's folder, wiped on each run (default build/ui-tests-demo)
 #   DEMO_PORT, DEMO_LENS_PORT, DEMO_PEER_PORT, DEMO_CONTROL_PORT
 #                   the demo's ports (default 41300, 41301, 41302, 41303); on the
@@ -32,6 +34,8 @@ lens_port=${DEMO_LENS_PORT:-41301}
 peer_port=${DEMO_PEER_PORT:-41302}
 control_port=${DEMO_CONTROL_PORT:-41303}
 log="$out.log"
+daemon_bin=${DEMO_DAEMON:-}
+if [ -z "$daemon_bin" ] && [ -x "$HOME/.thehermes/bin/hermesd" ]; then daemon_bin=$HOME/.thehermes/bin/hermesd; fi
 project=$(dirname "$(ls -d *.xcodeproj/project.pbxproj | head -1)")
 
 device=$(xcrun simctl list devices available | grep -F "    $simulator (" | head -1 | sed -E 's/.*\(([0-9A-F-]{36})\).*/\1/')
@@ -67,7 +71,8 @@ trap finish EXIT INT TERM
 # The demo first, on a quiet machine; a second try when its daemon trips while starting.
 for attempt in 1 2; do
     python3 -u demo/make_demo.py --serve --out "$out" --port "$port" --lens-port "$lens_port" \
-        --peer-port "$peer_port" --control-port "$control_port" >"$log" 2>&1 &
+        --peer-port "$peer_port" --control-port "$control_port" \
+        ${daemon_bin:+--gravityd "$daemon_bin"} >"$log" 2>&1 &
     demo=$!
     tries=0
     until grep -q '^Serving' "$log"; do
@@ -113,7 +118,7 @@ run_tests() { # <result bundle> <xcodebuild args…>
     TEST_RUNNER_GRAV_TOKEN=$(cat "$out/gravity/secrets/client.token") \
     TEST_RUNNER_GRAV_PORT=$port TEST_RUNNER_LENS_PORT=$lens_port \
     TEST_RUNNER_DEMO_DECISION_ID=${ids% *} TEST_RUNNER_DEMO_BOT_ID=${ids#* } \
-    TEST_RUNNER_DEMO_CONTROL_PORT=$control_port TEST_RUNNER_SCREENSHOT_DIR=${SCREENSHOT_DIR:-} \
+    TEST_RUNNER_DEMO_CONTROL_PORT=$control_port TEST_RUNNER_FIXTURES=$PWD/contract/fixtures TEST_RUNNER_SCREENSHOT_DIR=${SCREENSHOT_DIR:-} \
     xcodebuild -project "$project" -scheme UITests -destination "id=$device" \
         -derivedDataPath build/ui-tests -resultBundlePath "$bundle" test "$@"
 }
