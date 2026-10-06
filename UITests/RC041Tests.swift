@@ -22,11 +22,8 @@ final class RC041Tests: XCTestCase {
         sleep(2)
         app.scroll(to: needs)
         screenshot("QA-004-approval-needs-you")
-        // QA-004 finding: on a daemon without attention_rows (0.16.x) Needs you lists no
-        // row for a bot waiting on its terminal; 0.4.1's Home did ("Needs approval").
-        XCTExpectFailure("QA-004: an approval in the bot's terminal is not on Needs you on an older daemon", strict: false) {
-            XCTAssertTrue(needs.waitForExistence(timeout: 5), "No Needs you row for Architect's approval")
-        }
+        // On an older daemon too (QA-004 finding, fixed at 78b32bb as a bot_waiting row).
+        XCTAssertTrue(needs.waitForExistence(timeout: 5), "No Needs you row for Architect's approval")
         assertNoDetail(app, "Needs you")
 
         // The project's Team: the line under the bot's name.
