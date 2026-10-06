@@ -53,8 +53,6 @@ struct ProjectsHomeView: View {
 
     private var feed: HomeFeed { fleet.home }
     private var cards: [HomeCard] { feed.cards(fleet.computers) }
-    /// Changes whenever a computer connects or drops, to refetch.
-    private var connections: String { fleet.computers.map { "\($0.id)=\($0.store.status == .connected)" }.joined(separator: ",") }
 
     var body: some View {
         NavigationStack(path: $path) {
@@ -92,13 +90,6 @@ struct ProjectsHomeView: View {
             .listSectionSpacing(10)
             .navigationTitle("Projects")
             .refreshable { await feed.refreshAll(fleet.computers, force: true) }
-            .task(id: connections) {
-                feed.loadCache(fleet.computers)
-                #if DEBUG
-                feed.loadFixture(fleet.computers)
-                #endif
-                await feed.refreshAll(fleet.computers)
-            }
             #if DEBUG
             .onChange(of: cards.map(\.row.projectID), initial: true) {
                 guard !debugOpened, let name = UserDefaults.standard.string(forKey: "openProject"),
@@ -309,7 +300,8 @@ extension Fleet {
         case .decisionID(let id)?:
             if let on { return .decision(computerId: on.id, decisionId: id) }
         case .requestID(let id)?:
-            if let on, let bot = on.store.permissions.first(where: { $0.id == id })?.botId {
+            // A terminal command is answered only on its own computer (H-108).
+            if let on, let bot = on.store.permissions.first(where: { $0.id == id })?.botId, bot != "terminal" {
                 return .bot(computerId: on.id, botId: bot, chat: false)
             }
             return .note(title: row.title, text: "Answer it on \(place), in The Hermes app.")

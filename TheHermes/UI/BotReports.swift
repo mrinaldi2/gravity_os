@@ -14,14 +14,17 @@ struct BotReportsPane: View {
 
     private var bot: Bot? { store.bot(botId) }
     private var reports: [ThreadEntry] { (entries ?? []).filter { !$0.fromOwner }.reversed() }
-    private var questions: [ThreadEntry] { reports.filter { $0.asks && $0.open } }
+    /// Each of the bot's messages shows once (QA-004): open questions under
+    /// Sent to you, the newest other one as the latest report, the rest earlier.
+    private var sections: ReportSections { ReportSections(reports) }
+    private var questions: [ThreadEntry] { sections.questions }
 
     var body: some View {
         List {
             if store.hasOwnerThreads {
-                if let latest = reports.first {
+                if let latest = sections.latest {
                     Section {
-                        Text(latest.text).font(.callout).textSelection(.enabled)
+                        Text(OwnerText.rich(latest.text)).font(.callout).textSelection(.enabled)
                     } header: {
                         SectionTitle(latest.at.map { "Latest report · \($0.relative)" } ?? "Latest report")
                     }
@@ -30,7 +33,7 @@ struct BotReportsPane: View {
                     Section {
                         ForEach(questions) { question in
                             VStack(alignment: .leading, spacing: 6) {
-                                Text(question.text).font(.callout).lineLimit(4)
+                                Text(OwnerText.rich(question.text)).font(.callout).lineLimit(4)
                                 Button("Answer in Chat", action: openChat).font(.subheadline.weight(.semibold))
                             }
                             .padding(.vertical, 2)
@@ -49,11 +52,11 @@ struct BotReportsPane: View {
             } header: {
                 SectionTitle("Doing now")
             }
-            if store.hasOwnerThreads, reports.count > 1 {
+            if store.hasOwnerThreads, !sections.earlier.isEmpty {
                 Section {
-                    ForEach(reports.dropFirst().prefix(10)) { entry in
+                    ForEach(sections.earlier.prefix(10)) { entry in
                         VStack(alignment: .leading, spacing: 3) {
-                            Text(entry.text).font(.callout).lineLimit(5)
+                            Text(OwnerText.rich(entry.text)).font(.callout).lineLimit(5)
                             if let at = entry.at { Text(at.relative).font(.caption2).foregroundStyle(Color.secondaryText) }
                         }
                     }
@@ -77,12 +80,19 @@ struct BotReportsPane: View {
         .task { await load() }
     }
 
-    /// The bot's current step, else its latest word.
+    /// The bot's current step, else its latest word; never a message already
+    /// shown above.
     private var doingNow: String? {
-        if let turn = lens.latest[botId], turn.open, !turn.current.isEmpty { return turn.current }
-        if let activity = store.activity[botId], !activity.text.isEmpty { return activity.text }
-        if let outcome = lens.latest[botId]?.outcome, outcome.kind != "none", !outcome.text.isEmpty { return outcome.text }
-        return nil
+        var line: String?
+        if let turn = lens.latest[botId], turn.open, !turn.current.isEmpty {
+            line = turn.current
+        } else if let activity = store.activity[botId], !activity.text.isEmpty {
+            line = activity.text
+        } else if let outcome = lens.latest[botId]?.outcome, outcome.kind != "none", !outcome.text.isEmpty {
+            line = outcome.text
+        }
+        guard let line, !sections.shows(line) else { return nil }
+        return line
     }
 
     private func load() async {
@@ -93,5 +103,34 @@ struct BotReportsPane: View {
         } catch {
             failure = "Couldn’t load the reports. \(error.localizedDescription)"
         }
+    }
+}
+
+/// A bot's messages to the owner, newest first, split so none repeats.
+struct ReportSections {
+    let latest: ThreadEntry?
+    let questions: [ThreadEntry]
+    let earlier: [ThreadEntry]
+
+    init(_ reports: [ThreadEntry]) {
+        questions = reports.filter { $0.asks && $0.open }
+        let others = reports.filter { !($0.asks && $0.open) }
+        latest = others.first
+        earlier = Array(others.dropFirst())
+    }
+
+    /// Whether `text` repeats a message already on screen (the bot's activity
+    /// line is often its last message, maybe cut).
+    func shows(_ text: String) -> Bool {
+        let line = Self.key(text)
+        guard !line.isEmpty else { return false }
+        return ([latest].compactMap { $0 } + questions).contains { entry in
+            let shown = Self.key(entry.text)
+            return shown == line || shown.hasPrefix(line) || line.hasPrefix(shown)
+        }
+    }
+
+    private static func key(_ text: String) -> String {
+        OwnerText.preview(text).trimmingCharacters(in: CharacterSet(charactersIn: "…. ")).lowercased()
     }
 }

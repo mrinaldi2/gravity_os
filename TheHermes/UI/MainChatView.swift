@@ -258,7 +258,7 @@ private struct ThreadBubble: View {
             if entry.fromOwner { Spacer(minLength: 40) }
             VStack(alignment: entry.fromOwner ? .trailing : .leading, spacing: 4) {
                 if entry.asks && entry.open { Pill(text: "Question for you", tone: .needsYou) }
-                Text(entry.text)
+                Text(OwnerText.rich(entry.text))
                     .font(.callout)
                     .textSelection(.enabled)
                     .padding(10)
