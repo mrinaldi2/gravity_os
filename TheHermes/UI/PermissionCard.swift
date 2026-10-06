@@ -1,7 +1,7 @@
 import SwiftUI
 
 /// A bot's tool waiting on the owner: what it wants to run, when it is denied
-/// if nobody answers, its input on demand, and the three answers.
+/// if you don't answer, its input on demand, and the three answers.
 struct PermissionCard: View {
     @Environment(AppStore.self) private var store
     let request: PermissionRequest
@@ -161,7 +161,7 @@ struct TerminalCommandCard: View {
             }
             Text(action).font(.footnote.weight(.semibold))
             if let expires = request.expiresAt {
-                Text("Denied automatically at \(expires.formatted(date: .omitted, time: .shortened)) if nobody answers.")
+                Text("Denied automatically at \(expires.formatted(date: .omitted, time: .shortened)) if you don’t answer.")
                     .font(.caption)
                     .foregroundStyle(Color.secondaryText)
             }

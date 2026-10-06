@@ -29,9 +29,12 @@ final class OwnerAuthTests: XCTestCase {
     func testTheFaceIDReasonNamesWhatIsGranted() throws {
         let store = store(ruling: nil)
         let decision = try XCTUnwrap(store.decisions.first)
-        XCTAssertEqual(store.grantsReason(decision, option: "grant"), "Grants DevOps: install. Publish this ruling?")
-        XCTAssertNil(store.grantsReason(decision, option: "wait"), "an option without grants asks nothing")
-        XCTAssertNil(store.grantsReason(decision, option: nil), "nothing picked or drafted")
+        XCTAssertEqual(store.grantsReason(decision, option: "grant", action: .publish),
+                       "Publish this ruling? It grants DevOps: install.")
+        XCTAssertEqual(store.grantsReason(decision, option: "grant", action: .confirm),
+                       "Confirm this ruling? It grants DevOps: install.", "the verb follows the action (UX-032)")
+        XCTAssertNil(store.grantsReason(decision, option: "wait", action: .publish), "an option without grants asks nothing")
+        XCTAssertNil(store.grantsReason(decision, option: nil, action: .publish), "nothing picked or drafted")
     }
 
     func testARefusedFaceIDPublishesNothing() async {
@@ -41,26 +44,35 @@ final class OwnerAuthTests: XCTestCase {
             try await store.publish("d1")
             XCTFail("publishing a granting ruling must ask first")
         } catch {
-            XCTAssertEqual(error as? OwnerAuth.Failure, .cancelled)
+            XCTAssertEqual(error as? OwnerAuth.Failure, .cancelled(.publish))
+            XCTAssertEqual(error.localizedDescription, "Not published. Nothing was sent.")
         }
         do {
             try await store.answerAndPublish("d1", option: "grant", text: "Grant", reason: nil)
             XCTFail("answering with a granting option must ask before it sends the draft")
         } catch {
-            XCTAssertEqual(error as? OwnerAuth.Failure, .cancelled)
+            XCTAssertEqual(error as? OwnerAuth.Failure, .cancelled(.publish))
         }
         do {
             try await store.confirmRuling(store.decisions[0])
             XCTFail("confirming a relayed granting ruling must ask first")
         } catch {
-            XCTAssertEqual(error as? OwnerAuth.Failure, .cancelled)
+            XCTAssertEqual(error as? OwnerAuth.Failure, .cancelled(.confirm))
+            XCTAssertEqual(error.localizedDescription, "Not confirmed. Nothing was sent.")
         }
     }
 
     func testANonGrantingRulingNeverAsks() async throws {
         UserDefaults.standard.set("fail", forKey: "ownerAuthStub")
         let store = store(ruling: "wait")
-        try await store.confirmGrants(store.decisions[0], option: nil)
-        try await store.confirmGrants(store.decisions[0], option: "wait")
+        try await store.confirmGrants(store.decisions[0], option: nil, action: .publish)
+        try await store.confirmGrants(store.decisions[0], option: "wait", action: .confirm)
+    }
+
+    func testUnavailableNamesWhereToRule() {
+        XCTAssertEqual(OwnerAuth.Failure.unavailable(computer: "Studio Mac").localizedDescription,
+                       "Set up Face ID or a passcode on this device to rule on access, or do it on Studio Mac, in The Hermes app.")
+        XCTAssertEqual(OwnerAuth.Failure.unavailable(computer: "").localizedDescription,
+                       "Set up Face ID or a passcode on this device to rule on access, or do it on your computer, in The Hermes app.")
     }
 }

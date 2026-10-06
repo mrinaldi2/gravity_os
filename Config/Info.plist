@@ -28,7 +28,7 @@
 		</dict>
 	</array>
 	<key>NSFaceIDUsageDescription</key>
-	<string>The Hermes asks for Face ID before it publishes a ruling that gives a bot more permissions.</string>
+	<string>The Hermes asks for Face ID before it publishes or confirms a ruling that gives a bot more permissions.</string>
 	<key>NSCameraUsageDescription</key>
 	<string>The Hermes scans the pairing code your computer shows, to connect to it.</string>
 	<key>NSLocalNetworkUsageDescription</key>
