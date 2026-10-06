@@ -1,0 +1,9 @@
+# Swift for the vendored protos (ADR-001): Apple's swift-protobuf, pinned to
+# the runtime version in the Xcode project. Run scripts/contract/generate-swift.sh.
+version: v2
+plugins:
+  - remote: buf.build/apple/swift:v1.38.1
+    out: ../TheHermes/Core/Generated
+    opt:
+      - Visibility=Internal
+      - FileNaming=PathToUnderscores

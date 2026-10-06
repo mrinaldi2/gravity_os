@@ -9,6 +9,7 @@
 /* Begin PBXBuildFile section */
 		6A0000000000000000000001 /* SwiftTerm in Frameworks */ = {isa = PBXBuildFile; productRef = 6A0000000000000000000002 /* SwiftTerm */; };
 		6A0000000000000000000004 /* MarkdownUI in Frameworks */ = {isa = PBXBuildFile; productRef = 6A0000000000000000000005 /* MarkdownUI */; };
+		6A0000000000000000000007 /* SwiftProtobuf in Frameworks */ = {isa = PBXBuildFile; productRef = 6A0000000000000000000008 /* SwiftProtobuf */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -48,6 +49,7 @@
 			files = (
 				6A0000000000000000000001 /* SwiftTerm in Frameworks */,
 				6A0000000000000000000004 /* MarkdownUI in Frameworks */,
+				6A0000000000000000000007 /* SwiftProtobuf in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -103,6 +105,7 @@
 			packageProductDependencies = (
 				6A0000000000000000000002 /* SwiftTerm */,
 				6A0000000000000000000005 /* MarkdownUI */,
+				6A0000000000000000000008 /* SwiftProtobuf */,
 			);
 			productName = TheHermes;
 			productReference = 6A0000000000000000000010 /* TheHermes.app */;
@@ -160,6 +163,7 @@
 			packageReferences = (
 				6A0000000000000000000003 /* XCRemoteSwiftPackageReference "SwiftTerm" */,
 				6A0000000000000000000006 /* XCRemoteSwiftPackageReference "swift-markdown-ui" */,
+				6A0000000000000000000009 /* XCRemoteSwiftPackageReference "swift-protobuf" */,
 			);
 			preferredProjectObjectVersion = 77;
 			productRefGroup = 6A0000000000000000000041 /* Products */;
@@ -393,6 +397,14 @@
 				version = 2.4.1;
 			};
 		};
+		6A0000000000000000000009 /* XCRemoteSwiftPackageReference "swift-protobuf" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/apple/swift-protobuf";
+			requirement = {
+				kind = exactVersion;
+				version = 1.38.1;
+			};
+		};
 /* End XCRemoteSwiftPackageReference section */
 
 /* Begin XCSwiftPackageProductDependency section */
@@ -405,6 +417,11 @@
 			isa = XCSwiftPackageProductDependency;
 			package = 6A0000000000000000000006 /* XCRemoteSwiftPackageReference "swift-markdown-ui" */;
 			productName = MarkdownUI;
+		};
+		6A0000000000000000000008 /* SwiftProtobuf */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 6A0000000000000000000009 /* XCRemoteSwiftPackageReference "swift-protobuf" */;
+			productName = SwiftProtobuf;
 		};
 /* End XCSwiftPackageProductDependency section */
 	};

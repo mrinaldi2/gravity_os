@@ -162,6 +162,8 @@ final class Computer: Identifiable {
 @Observable
 final class Fleet {
     private(set) var computers: [Computer] = []
+    /// The projects home and Needs you, across every computer.
+    let home = HomeFeed()
     private(set) var selectedId: String?
     /// Launched with test arguments: nothing is saved.
     @ObservationIgnored private var ephemeral = false
@@ -224,6 +226,7 @@ final class Fleet {
 
     func remove(_ computer: Computer) {
         computer.forget()
+        home.forget(computer.id)
         computers.removeAll { $0.id == computer.id }
         if selectedId == computer.id { selectedId = computers.first?.id }
         save()
@@ -310,6 +313,9 @@ final class Fleet {
 
     private func attach(_ computer: Computer) {
         computer.store.onCountsChanged = { [weak self] in self?.updateBadge() }
+        computer.store.onHomeChanged = { [weak self, weak computer] in
+            if let computer { self?.home.changed(computer) }
+        }
         computers.append(computer)
         retag()
     }
