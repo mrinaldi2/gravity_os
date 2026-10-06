@@ -41,6 +41,9 @@ extension Color {
     static let warningText = Color(light: 0xC93400, dark: 0xFF9F0A)
     static let successText = Color(light: 0x1E7B34, dark: 0x30D158)
     static let errorText = Color(light: 0xD70015, dark: 0xFF6961)
+    /// Under a permission card's answer buttons: the same in a sheet or on a
+    /// screen, whatever the elevation (QA-004).
+    static let answerBase = Color(light: 0xFFFFFF, dark: 0x1C1C1E)
     static let workerText = Color(light: 0x007A8F, dark: 0x40CBE0)
     /// Secondary words: captions, footers, placeholders, quiet badges. The
     /// system's secondary and placeholder greys are 3.4:1 and 1.7:1 on white;

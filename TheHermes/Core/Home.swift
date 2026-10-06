@@ -57,6 +57,7 @@ extension AppStore {
             let ids = Set(bots.map(\.id))
             let decisions = self.decisions.filter { $0.projectId == project.id && $0.state == "open" }.count
             let prompts = permissions.filter { ids.contains($0.botId) }.count
+            let waiting = approvals.keys.filter(ids.contains).count
             var row = HomeRow()
             row.projectID = project.id
             row.name = project.name
@@ -68,17 +69,19 @@ extension AppStore {
             row.bots = UInt32(bots.count)
             row.botsWorking = UInt32(bots.filter { $0.state == .working || $0.state == .starting }.count)
             row.botsWaiting = UInt32(bots.filter(\.state.needsOwner).count)
-            row.attention.count = UInt32(decisions + prompts)
-            row.attention.score = UInt32(decisions + prompts)
+            row.attention.count = UInt32(decisions + prompts + waiting)
+            row.attention.score = UInt32(decisions + prompts + waiting)
             if decisions > 0 { row.attention.byKind["decision"] = UInt32(decisions) }
             if prompts > 0 { row.attention.byKind["permission_prompt"] = UInt32(prompts) }
+            if waiting > 0 { row.attention.byKind["bot_waiting"] = UInt32(waiting) }
             row.legacy = true
             return row
         }
     }
 
-    /// The Needs-you rows an older daemon can give: its open decisions and
-    /// waiting permission prompts, for one project.
+    /// The Needs-you rows an older daemon can give: its open decisions, waiting
+    /// permission prompts and bots waiting on their own terminal's approval
+    /// (`approval_pending`, listed on 0.4.x Home; QA-004), for one project.
     func legacyAttention(projectId: String) -> [HomeAttentionRow] {
         let daemon = daemonId ?? ""
         let ids = Set(bots.filter { $0.projectId == projectId }.map(\.id))
@@ -106,6 +109,23 @@ extension AppStore {
             row.requestID = request.id
             row.weight = 3
             if let created = request.createdAt { row.createdAt = Google_Protobuf_Timestamp(date: created) }
+            rows.append(row)
+        }
+        for (botId, line) in approvals where ids.contains(botId) {
+            var row = HomeAttentionRow()
+            row.id = "bot_waiting:\(daemon):\(botId)"
+            row.kind = .botWaiting
+            row.daemonID = daemon
+            row.projectID = projectId
+            // "Backend Dev wants to run Bash", never the engine's detail.
+            let name = bot(botId)?.name ?? "A bot"
+            row.title = line.hasPrefix("Wants") ? "\(name) w\(line.dropFirst())" : "\(name) needs approval"
+            var ref = Hermes_Home_V1_BotRef()
+            ref.daemonID = daemon
+            ref.botID = botId
+            ref.name = name
+            row.bot = ref
+            row.weight = 2
             rows.append(row)
         }
         return rows.sorted { ($0.weight, $1.createdAt.date) > ($1.weight, $0.createdAt.date) }

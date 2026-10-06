@@ -57,6 +57,20 @@ final class ContrastTests: XCTestCase {
         }
     }
 
+    /// The permission card's answers (Allow once, Allow for session, Deny) hold
+    /// AA in a sheet too: their base is fixed, not the elevated card (QA-004).
+    func testAnswerButtonsMeetAAInASheet() {
+        let answers: [Tone] = [.ready, .working, .failed]
+        for traits in [light, dark] {
+            let base = rgb(UIColor(Color.answerBase), traits)
+            for tone in answers {
+                let background = over(rgb(UIColor(tone.color), traits), base, 0.12)
+                let value = ratio(rgb(UIColor(tone.text), traits), background)
+                XCTAssertGreaterThanOrEqual(value, 4.5, "\(tone) answer in \(traits.userInterfaceStyle == .dark ? "dark" : "light") mode: \(value)")
+            }
+        }
+    }
+
     /// Captions, footers, headers and placeholders (Text.placeholder) use one
     /// secondary colour.
     /// It must hold on lists, cards, fills and the orange permission card.
