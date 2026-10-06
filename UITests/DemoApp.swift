@@ -108,8 +108,14 @@ extension XCUIApplication {
         while !(tabBars.buttons[name].exists && tabBars.buttons[name].isHittable), tries < 4 {
             // Only a real back button: the first bar button can be an action (Needs you's Decisions).
             let back = navigationBars.buttons["BackButton"].firstMatch
-            // A sheet (Needs you's Decisions) covers the bar: swipe it away first.
-            if back.exists && back.isHittable { back.tap() } else { swipeDown(velocity: .fast) }
+            if back.exists && back.isHittable {
+                // The edge swipe goes back too, and can't fail on a button that just went away.
+                coordinate(withNormalizedOffset: CGVector(dx: 0.01, dy: 0.5))
+                    .press(forDuration: 0.05, thenDragTo: coordinate(withNormalizedOffset: CGVector(dx: 0.85, dy: 0.5)))
+            } else {
+                // A sheet (Needs you's Decisions) covers the bar: swipe it away first.
+                swipeDown(velocity: .fast)
+            }
             tries += 1
         }
         tabBars.buttons[name].tap()
