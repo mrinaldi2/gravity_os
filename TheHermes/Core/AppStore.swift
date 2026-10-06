@@ -89,6 +89,8 @@ final class AppStore {
     @ObservationIgnored var onCountsChanged: (() -> Void)?
     /// A project's row on the projects home changed (`projects_overview_changed`).
     @ObservationIgnored var onHomeChanged: (() -> Void)?
+    /// Bumped by `owner_thread_updated`: the main chat rereads its threads.
+    var ownerThreadsVersion = 0
     /// Turns of a bot's chat that are new or changed (`chat_turns`).
     @ObservationIgnored var onChatTurns: ((String, [JSONDict]) -> Void)?
 
@@ -341,6 +343,8 @@ final class AppStore {
             if let comment = frame.dict("comment").map(DecisionComment.init) { append(comment) }
         case "projects_overview_changed":
             onHomeChanged?()
+        case "owner_thread_updated":
+            ownerThreadsVersion += 1
         default:
             break
         }

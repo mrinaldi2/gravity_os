@@ -159,6 +159,8 @@ struct ThreadEntry: Identifiable {
     let at: Date?
     let asks: Bool
     let open: Bool
+    /// Its place in the thread, for `owner_thread_read`.
+    var num: Int64 = 0
 }
 
 extension AppStore {
@@ -220,7 +222,7 @@ extension AppStore {
         let page = try HomeJSON.decode(Hermes_Home_V1_OwnerThreadPage.self, reply["owner_thread"])
         return page.messages.map {
             ThreadEntry(id: $0.id.isEmpty ? String($0.num) : $0.id, fromOwner: $0.fromOwner, text: $0.text,
-                        at: $0.hasAt ? $0.at.date : nil, asks: $0.asks, open: $0.open)
+                        at: $0.hasAt ? $0.at.date : nil, asks: $0.asks, open: $0.open, num: $0.num)
         }
     }
 }

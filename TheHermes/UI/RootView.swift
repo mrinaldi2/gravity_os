@@ -6,6 +6,7 @@ struct RootView: View {
     @Environment(Computer.self) private var computer
     @Environment(AppStore.self) private var store
     @Environment(LensStore.self) private var lens
+    @Environment(\.horizontalSizeClass) private var sizeClass
     @State private var tab = Tab.projects
     @State private var openNeeds: NeedsDestination?
     @State private var openBot: BotLink?
@@ -15,24 +16,13 @@ struct RootView: View {
     enum Tab { case projects, needs, chat, settings }
 
     var body: some View {
-        TabView(selection: $tab) {
-            ProjectsHomeView()
-                .tabItem { Label("Projects", systemImage: "square.grid.2x2") }
-                .tag(Tab.projects)
-            NeedsYouView(openDecision: $openNeeds)
-                .tabItem { Label("Needs you", systemImage: "exclamationmark.bubble") }
-                .badge(fleet.home.total(fleet.computers))
-                .tag(Tab.needs)
-            // Until the main chat (H-134 I3): the bots of the computer on screen.
-            BotsView(openBot: $openBot)
-                // Another computer: fresh navigation, since ids belong to one daemon.
-                .id(computer.id)
-                .tabItem { Label("Chat", systemImage: "bubble.left.and.bubble.right") }
-                .tag(Tab.chat)
-            SettingsView(inTab: true)
-                .tabItem { Label("Settings", systemImage: "gearshape") }
-                .badge(fleet.computers.filter { $0.store.status != .connected && $0.store.status != .connecting }.count)
-                .tag(Tab.settings)
+        Group {
+            if sizeClass == .regular {
+                // iPad (UX-024): the sidebar holds Needs you, Chat and the ranked projects.
+                PadRootView(tab: $tab, openNeeds: $openNeeds, openBot: $openBot)
+            } else {
+                tabs
+            }
         }
         .overlay(alignment: .top) { noticeBanner }
         .animation(.snappy, value: fleet.notice?.1)
@@ -67,6 +57,25 @@ struct RootView: View {
                   let destination = target.destination else { return }
             fleet.select(source)
             open(destination, on: source)
+        }
+    }
+
+    private var tabs: some View {
+        TabView(selection: $tab) {
+            ProjectsHomeView()
+                .tabItem { Label("Projects", systemImage: "square.grid.2x2") }
+                .tag(Tab.projects)
+            NeedsYouView(openDecision: $openNeeds)
+                .tabItem { Label("Needs you", systemImage: "exclamationmark.bubble") }
+                .badge(fleet.home.total(fleet.computers))
+                .tag(Tab.needs)
+            MainChatView(openBot: $openBot)
+                .tabItem { Label("Chat", systemImage: "bubble.left.and.bubble.right") }
+                .tag(Tab.chat)
+            SettingsView(inTab: true)
+                .tabItem { Label("Settings", systemImage: "gearshape") }
+                .badge(fleet.computers.filter { $0.store.status != .connected && $0.store.status != .connecting }.count)
+                .tag(Tab.settings)
         }
     }
 

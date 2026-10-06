@@ -48,6 +48,8 @@ struct ProjectsHomeView: View {
     @State private var debugOpened = false
     /// Set from outside (a notification, Needs you): opens that project.
     var openProject: Binding<HomeProjectLink?> = .constant(nil)
+    /// On iPad the sidebar shows the project: a card selects it there instead of pushing.
+    var open: ((HomeProjectLink) -> Void)?
 
     private var feed: HomeFeed { fleet.home }
     private var cards: [HomeCard] { feed.cards(fleet.computers) }
@@ -63,8 +65,14 @@ struct ProjectsHomeView: View {
                 }
                 ForEach(cards) { card in
                     Section {
-                        NavigationLink(value: HomeProjectLink(computerId: card.computerId, projectId: card.row.projectID)) {
-                            ProjectCard(card: card)
+                        let link = HomeProjectLink(computerId: card.computerId, projectId: card.row.projectID)
+                        Group {
+                            if let open {
+                                Button { open(link) } label: { ProjectCard(card: card).contentShape(Rectangle()) }
+                                    .buttonStyle(.plain)
+                            } else {
+                                NavigationLink(value: link) { ProjectCard(card: card) }
+                            }
                         }
                         .contextMenu { pinButton(card) }
                         // The project that needs you most is outlined (UX-024).
@@ -96,7 +104,8 @@ struct ProjectsHomeView: View {
                 guard !debugOpened, let name = UserDefaults.standard.string(forKey: "openProject"),
                       let card = cards.first(where: { $0.row.name.lowercased().hasPrefix(name.lowercased()) }) else { return }
                 debugOpened = true
-                path = NavigationPath([HomeProjectLink(computerId: card.computerId, projectId: card.row.projectID)])
+                let link = HomeProjectLink(computerId: card.computerId, projectId: card.row.projectID)
+                if let open { open(link) } else { path = NavigationPath([link]) }
             }
             #endif
             .navigationDestination(for: HomeProjectLink.self) { link in
