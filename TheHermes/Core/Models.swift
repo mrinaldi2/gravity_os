@@ -277,12 +277,40 @@ struct DecisionOption: Identifiable, Equatable {
     let key: String
     let label: String
     let description: String
+    /// Permission extras picking this option gives bots (H-117).
+    let grants: [OptionGrant]
+    /// Pins the grants shown: a ruling on this option sends it back (ARCH-R51 M2).
+    let grantsSha: String?
     var id: String { key }
 
     init(_ d: JSONDict) {
         key = d.str("key")
         label = d.str("label")
         description = d.str("description")
+        grants = d.list("grants").map(OptionGrant.init)
+        grantsSha = d.optStr("grants_sha")
+    }
+}
+
+/// One extra an option grants one bot; `bot` is the bot's id.
+struct OptionGrant: Equatable {
+    let bot: String
+    let extra: String
+
+    init(_ d: JSONDict) {
+        bot = d.str("bot")
+        extra = d.str("extra")
+    }
+
+    /// "Grants DevOps: install, daemon restart · Tester: install", as the desktop words it.
+    static func words(_ grants: [OptionGrant], name: (String) -> String) -> String {
+        var order: [String] = []
+        var extras: [String: [String]] = [:]
+        for grant in grants {
+            if extras[grant.bot] == nil { order.append(grant.bot) }
+            extras[grant.bot, default: []].append(grant.extra.replacingOccurrences(of: "_", with: " "))
+        }
+        return "Grants " + order.map { "\(name($0)): \(extras[$0]!.joined(separator: ", "))" }.joined(separator: " · ")
     }
 }
 
@@ -341,6 +369,12 @@ struct Decision: Identifiable, Equatable {
     let createdAt: Date?
 
     var urgent: Bool { priority == "urgent" }
+    /// The grants sha to send with a ruling on `option` (else the drafted
+    /// ruling's), when that option grants extras.
+    func grantsSha(for option: String?) -> String? {
+        guard let key = option ?? ruling?.option else { return nil }
+        return options.first { $0.key.caseInsensitiveCompare(key) == .orderedSame && !$0.grants.isEmpty }?.grantsSha
+    }
     /// Only these count toward the pending badge.
     var pending: Bool { state == "open" || state == "answered" }
 

@@ -413,6 +413,41 @@ struct WorkerListing: Equatable {
 
 /// A bot's tool waiting on the owner's answer (`list_permissions`,
 /// `permission_request`). Unanswered by `expiresAt`, it is denied.
+/// The separate fields of a terminal command's card; any of them but the
+/// command may be missing.
+struct TerminalOrigin: Equatable {
+    let command: String
+    let pid: Int?
+    let process: String?
+    let launchedFrom: String?
+    let cwd: String?
+    /// The bot whose workspace holds `cwd`: a bot is probably asking.
+    let bot: String?
+
+    init(_ d: JSONDict) {
+        command = d.str("command")
+        pid = d.optInt("pid")
+        process = d.optStr("process")
+        launchedFrom = d.optStr("launched_from")
+        cwd = d.optStr("cwd")
+        bot = d.optStr("bot")
+    }
+
+    /// "From claude in iTerm2 · in ~/x · process 4121", leaving out what is missing.
+    var line: String? {
+        var parts: [String] = []
+        switch (process, launchedFrom) {
+        case let (p?, l?): parts.append("From \(p) in \(l)")
+        case let (p?, nil): parts.append("From \(p)")
+        case let (nil, l?): parts.append("From \(l)")
+        default: break
+        }
+        if let cwd { parts.append("in \(cwd)") }
+        if let pid { parts.append("process \(pid)") }
+        return parts.isEmpty ? nil : parts.joined(separator: " · ")
+    }
+}
+
 struct PermissionRequest: Identifiable, Equatable {
     let id: String
     let botId: String
@@ -423,6 +458,9 @@ struct PermissionRequest: Identifiable, Equatable {
     let input: String
     let createdAt: Date?
     let expiresAt: Date?
+    /// Where a terminal command comes from (T4, UX-014); nil for a bot's tool
+    /// or a daemon that sends only `summary`.
+    let origin: TerminalOrigin?
 
     init(_ d: JSONDict) {
         id = d.str("id")
@@ -432,7 +470,12 @@ struct PermissionRequest: Identifiable, Equatable {
         input = d.str("input")
         createdAt = d.date("created_at")
         expiresAt = d.date("expires_at")
+        origin = d.dict("origin").map(TerminalOrigin.init).flatMap { $0.command.isEmpty ? nil : $0 }
     }
+
+    /// A terminal command asking to act as the owner (T4). The phone never
+    /// answers one: it can't see that terminal (H-108, UX-014 must-fix 4).
+    var isTerminal: Bool { botId == "terminal" }
 
     /// The tool as people read it, never the `mcp__` form: "Bash",
     /// "Send message" for the bus's `mcp__hermes-bus__send_message`, and
@@ -478,8 +521,15 @@ struct PermissionRequest: Identifiable, Equatable {
 
     /// Waiting prompts, oldest first, one per id: a list merged with a new prompt.
     static func adding(_ request: PermissionRequest, to list: [PermissionRequest]) -> [PermissionRequest] {
-        (list.filter { $0.id != request.id } + [request])
-            .sorted { ($0.createdAt ?? .distantPast) < ($1.createdAt ?? .distantPast) }
+        ordered(list.filter { $0.id != request.id } + [request])
+    }
+
+    /// Terminal commands first, above bot cards (H-108); then oldest first.
+    static func ordered(_ list: [PermissionRequest]) -> [PermissionRequest] {
+        list.sorted {
+            if $0.isTerminal != $1.isTerminal { return $0.isTerminal }
+            return ($0.createdAt ?? .distantPast) < ($1.createdAt ?? .distantPast)
+        }
     }
 }
 

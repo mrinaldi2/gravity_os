@@ -211,11 +211,22 @@ struct NeedsYouView: View {
 
     private var feed: HomeFeed { fleet.home }
     private var waiting: [HomeCard] { feed.cards(fleet.computers).filter { $0.row.attention.count > 0 } }
+    private var hasTerminal: Bool { fleet.computers.contains { $0.store.permissions.contains(where: \.isTerminal) } }
 
     var body: some View {
         NavigationStack(path: $path) {
             List {
-                if waiting.isEmpty {
+                // Terminal commands acting as the owner sit above everything, read-only (H-108).
+                ForEach(fleet.computers) { computer in
+                    let terminal = computer.store.permissions.filter(\.isTerminal)
+                    if !terminal.isEmpty {
+                        Section {
+                            ForEach(terminal) { TerminalCommandCard(request: $0) }
+                        }
+                        .computerEnvironment(computer)
+                    }
+                }
+                if waiting.isEmpty, !hasTerminal {
                     EmptyNote(text: "Nothing is waiting on you.", systemImage: "checkmark.circle")
                 }
                 ForEach(waiting) { card in

@@ -97,6 +97,11 @@ struct DecisionDetailView: View {
                                 if !item.description.isEmpty {
                                     Text(item.description).font(.footnote).foregroundStyle(Color.secondaryText)
                                 }
+                                if !item.grants.isEmpty {
+                                    Label(OptionGrant.words(item.grants) { store.bot($0)?.name ?? $0 }, systemImage: "key")
+                                        .font(.footnote.weight(.medium))
+                                        .foregroundStyle(Color.warningText)
+                                }
                             }
                         }
                         .frame(maxWidth: .infinity, alignment: .leading)
@@ -158,7 +163,9 @@ struct DecisionDetailView: View {
             case "settled" where decision.ruling?.answeredBy.hasPrefix("owner-via-bot") == true:
                 Section {
                     Button("Confirm this ruling") {
-                        act { try await store.decide("confirm_decision", ["decision_id": decision.id]) }
+                        var fields: JSONDict = ["decision_id": decision.id]
+                        if let sha = decision.grantsSha(for: nil) { fields["grants_sha"] = sha }
+                        act { try await store.decide("confirm_decision", fields) }
                     }
                 }
             default:
@@ -207,6 +214,7 @@ struct DecisionDetailView: View {
         var fields: JSONDict = ["decision_id": decision.id, "ruling_text": ruling(decision)]
         if let option { fields["ruling_option"] = option }
         if !reason.isEmpty { fields["ruling_reason"] = reason }
+        if let sha = decision.grantsSha(for: option) { fields["grants_sha"] = sha }
         return fields
     }
 

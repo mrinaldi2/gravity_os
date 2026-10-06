@@ -44,8 +44,9 @@ final class DaemonClient {
     static let clientId = "gravitios/\(AppInfo.version)"
     /// What this app can do for the daemon: it shows bots' permission prompts
     /// and answers them, so the daemon holds a prompt for it instead of
-    /// leaving it in the bot's terminal.
-    static let features = ["permission_cards"]
+    /// leaving it in the bot's terminal. It shows what a decision option
+    /// grants, so it may rule on one (H-118).
+    static let features = ["permission_cards", "decision_grants"]
     /// The typed surfaces (ADR-001) and the highest version of each this app speaks.
     static let contracts = ["board": 1, "home": 1]
 

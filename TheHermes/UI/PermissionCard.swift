@@ -17,6 +17,14 @@ struct PermissionCard: View {
     private var canAnswer: Bool { store.canControl && store.status == .connected && busy == nil }
 
     var body: some View {
+        if request.isTerminal {
+            TerminalCommandCard(request: request)
+        } else {
+            botCard
+        }
+    }
+
+    private var botCard: some View {
         VStack(alignment: .leading, spacing: 10) {
             HStack(spacing: 8) {
                 Image(systemName: "hand.raised.fill").foregroundStyle(.orange)
@@ -115,6 +123,62 @@ struct PermissionCard: View {
             }
             busy = nil
         }
+    }
+}
+
+/// A terminal command asking to act as the owner (H-108). Read-only on
+/// every device but its own computer: the owner can't see that terminal
+/// from here, and allowing it from the phone is the reflex a bot would
+/// exploit (UX-014). No buttons, no swipe actions.
+struct TerminalCommandCard: View {
+    @Environment(AppStore.self) private var store
+    let request: PermissionRequest
+
+    static let title = "A terminal command wants to act as you"
+
+    /// The command verbatim; an older daemon sends only its summary.
+    private var command: String { request.origin?.command ?? request.summary }
+    private var warning: String? {
+        request.origin?.bot.map { "It was started inside \($0)’s workspace, so a bot is probably asking, not you." }
+    }
+    private var action: String { "Answer this on \(store.computerName), in The Hermes app." }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Label(Self.title, systemImage: "lock.fill")
+                .font(.subheadline.weight(.semibold))
+            Text(command)
+                .font(.callout.monospaced())
+                .fixedSize(horizontal: false, vertical: true)
+                .textSelection(.enabled)
+            if let line = request.origin?.line {
+                Text(line).font(.footnote).foregroundStyle(Color.secondaryText)
+            }
+            if let warning {
+                Label(warning, systemImage: "exclamationmark.triangle.fill")
+                    .font(.footnote.weight(.semibold))
+                    .foregroundStyle(Color.errorText)
+            }
+            Text(action).font(.footnote.weight(.semibold))
+            if let expires = request.expiresAt {
+                Text("Denied automatically at \(expires.formatted(date: .omitted, time: .shortened)) if nobody answers.")
+                    .font(.caption)
+                    .foregroundStyle(Color.secondaryText)
+            }
+        }
+        .padding(12)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .overlay(RoundedRectangle(cornerRadius: 14, style: .continuous).strokeBorder(Color.accentColor, lineWidth: 2))
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(accessibilityText)
+    }
+
+    private var accessibilityText: String {
+        var parts = ["Terminal command wants to act as you: \(command)."]
+        if let line = request.origin?.line { parts.append("\(line).") }
+        if let warning { parts.append(warning) }
+        parts.append(action)
+        return parts.joined(separator: " ")
     }
 }
 

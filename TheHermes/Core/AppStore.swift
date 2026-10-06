@@ -245,7 +245,7 @@ final class AppStore {
     /// Every prompt still waiting: on connecting, so none is missed while away.
     func refreshPermissions() async {
         guard hasPermissions, let reply = try? await client.request("list_permissions") else { return }
-        permissions = reply.list("permissions").map(PermissionRequest.init)
+        permissions = PermissionRequest.ordered(reply.list("permissions").map(PermissionRequest.init))
             .sorted { ($0.createdAt ?? .distantPast) < ($1.createdAt ?? .distantPast) }
         onCountsChanged?()
     }
@@ -365,6 +365,13 @@ final class AppStore {
         onCountsChanged?()
         // Its bot is on screen: the card is already in front of the owner.
         guard inBackground || botOnScreen != request.botId else { return }
+        if request.isTerminal {
+            // Answered only on its own computer: no actions, and tapping opens Needs you.
+            let command = request.origin?.command ?? request.summary
+            notify(TerminalCommandCard.title, "\(command) · answer it on \(computerName).",
+                   id: "permission-\(request.id)", about: (.permission, request.id, nil), always: true)
+            return
+        }
         notify("\(bot(request.botId)?.name ?? "A bot") wants to run \(request.toolName)", request.summary,
                id: "permission-\(request.id)", about: (.permission, request.id, request.botId), always: true)
     }
@@ -788,12 +795,17 @@ final class AppStore {
         var fields: JSONDict = ["decision_id": id, "ruling_text": text]
         if let option { fields["ruling_option"] = option }
         if let reason, !reason.isEmpty { fields["ruling_reason"] = reason }
+        let sha = decisions.first { $0.id == id }?.grantsSha(for: option)
+        if let sha { fields["grants_sha"] = sha }
         try await decide("answer_decision", fields)
-        try await publish(id)
+        try await publish(id, grantsSha: sha)
     }
 
-    func publish(_ id: String) async throws {
-        _ = try await client.request("publish_decisions", ["items": [["decision_id": id]]])
+    /// `grantsSha` echoes the granting option's sha the owner was shown.
+    func publish(_ id: String, grantsSha: String? = nil) async throws {
+        var item: JSONDict = ["decision_id": id]
+        if let sha = grantsSha ?? decisions.first(where: { $0.id == id })?.grantsSha(for: nil) { item["grants_sha"] = sha }
+        _ = try await client.request("publish_decisions", ["items": [item]])
         await loadDecision(id)
         await refreshCounts()
     }
