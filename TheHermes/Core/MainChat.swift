@@ -25,12 +25,54 @@ struct ThreadCard: Identifiable, Equatable {
         botId = thread.bot.botID
         botName = thread.bot.name
         projectId = thread.projectID
-        last = thread.last.text
+        last = OwnerText.preview(thread.last.text)
         lastFromOwner = thread.last.fromOwner
         at = thread.last.hasAt ? thread.last.at.date : nil
         unread = Int(thread.unread)
         openQuestion = thread.openQuestion
         origin = thread.bot.daemonID.isEmpty ? "\(computerId)/\(thread.bot.botID)" : "\(thread.bot.daemonID)/\(thread.bot.botID)"
+    }
+}
+
+/// What a thread message says, as people read it (QA-004): no Markdown marks,
+/// and no bus envelope ("[decision 37bce901-… from USER · settled · re "…"]").
+enum OwnerText {
+    private static let envelopeKinds: Set<String> = ["decision", "msg", "task", "note", "reply", "done", "release"]
+
+    /// The text without a leading bus envelope. When the daemon cut the text
+    /// inside the envelope, what it is about ("Ruling on “Ship 0.17?”").
+    static func stripEnvelope(_ text: String) -> String {
+        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard trimmed.hasPrefix("[") else { return text }
+        let words = trimmed.dropFirst().split(separator: " ", maxSplits: 2, omittingEmptySubsequences: true)
+        guard words.count >= 2, envelopeKinds.contains(String(words[0])),
+              words[1].allSatisfy({ $0.isHexDigit || $0 == "-" || $0 == "…" }) else { return text }
+        let close = trimmed.firstIndex(of: "]")
+        let header = close.map { String(trimmed[..<$0]) } ?? trimmed
+        let body = close.map { String(trimmed[trimmed.index(after: $0)...]) }?
+            .trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        if !body.isEmpty { return body }
+        let about = header.range(of: "re \"").map { range -> String in
+            let rest = header[range.upperBound...]
+            return String(rest.prefix { $0 != "\"" })
+        }
+        let kind = String(words[0])
+        guard let about, !about.isEmpty else { return kind == "decision" ? "A ruling" : kind.capitalizedFirst }
+        return kind == "decision" ? "Ruling on “\(about)”" : "\(kind.capitalizedFirst): \(about)"
+    }
+
+    /// Inline Markdown rendered (bold, italics, code, links); the envelope stripped.
+    static func rich(_ text: String) -> AttributedString {
+        let clean = stripEnvelope(text)
+        let options = AttributedString.MarkdownParsingOptions(interpretedSyntax: .inlineOnlyPreservingWhitespace)
+        return (try? AttributedString(markdown: clean, options: options)) ?? AttributedString(clean)
+    }
+
+    /// One line of plain text, for a thread row.
+    static func preview(_ text: String) -> String {
+        String(rich(text).characters)
+            .split(whereSeparator: \.isNewline).joined(separator: " ")
+            .trimmingCharacters(in: .whitespaces)
     }
 }
 

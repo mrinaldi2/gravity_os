@@ -15,6 +15,9 @@ struct RootView: View {
 
     enum Tab { case projects, needs, chat, settings }
 
+    /// Changes whenever a computer connects or drops, to refetch the home.
+    private var connections: String { fleet.computers.map { "\($0.id)=\($0.store.status == .connected)" }.joined(separator: ",") }
+
     var body: some View {
         Group {
             if sizeClass == .regular {
@@ -25,6 +28,15 @@ struct RootView: View {
             }
         }
         .overlay(alignment: .top) { noticeBanner }
+        // The home feed loads whichever screen opens first: a notification may
+        // open Needs you before Projects ever shows (QA-004).
+        .task(id: connections) {
+            fleet.home.loadCache(fleet.computers)
+            #if DEBUG
+            fleet.home.loadFixture(fleet.computers)
+            #endif
+            await fleet.home.refreshAll(fleet.computers)
+        }
         // "See all in Needs you" on a project's Overview.
         .onChange(of: fleet.home.needsFocus) { _, id in if id != nil { tab = .needs } }
         .animation(.snappy, value: fleet.notice?.1)
@@ -88,7 +100,8 @@ struct RootView: View {
             openNeeds = .decision(computerId: source.id, decisionId: id)
         case .permissionCard(let id):
             tab = .needs
-            if let bot = source.store.permissions.first(where: { $0.id == id })?.botId {
+            // A terminal command's card sits atop Needs you, read-only (H-108).
+            if let bot = source.store.permissions.first(where: { $0.id == id })?.botId, bot != "terminal" {
                 openNeeds = .bot(computerId: source.id, botId: bot, chat: false)
             }
         case .bot(let id, let pane):
