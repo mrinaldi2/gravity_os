@@ -163,9 +163,7 @@ struct DecisionDetailView: View {
             case "settled" where decision.ruling?.answeredBy.hasPrefix("owner-via-bot") == true:
                 Section {
                     Button("Confirm this ruling") {
-                        var fields: JSONDict = ["decision_id": decision.id]
-                        if let sha = decision.grantsSha(for: nil) { fields["grants_sha"] = sha }
-                        act { try await store.decide("confirm_decision", fields) }
+                        act { try await store.confirmRuling(decision) }
                     }
                 }
             default:
