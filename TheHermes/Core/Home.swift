@@ -182,6 +182,8 @@ final class HomeFeed {
     /// Needs-you rows by card id.
     private(set) var attention: [String: [HomeAttentionRow]] = [:]
     private(set) var failures: [String: String] = [:]
+    /// A card id the Needs you tab should show: set by "See all in Needs you".
+    var needsFocus: String?
     @ObservationIgnored private var lastFetch: [String: Date] = [:]
     @ObservationIgnored private var pending: [String: Task<Void, Never>] = [:]
     @ObservationIgnored private let cacheDirectory: URL?

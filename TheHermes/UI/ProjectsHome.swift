@@ -186,25 +186,30 @@ struct ProjectCard: View {
         return parts.joined(separator: " · ")
     }
 
-    /// "imac away · as of 10:42".
+    /// "imac is offline · last seen 10:42", as on desktop (UX-029).
     private var staleLine: String {
         let names = ListFormatter.localizedString(byJoining: card.staleNames)
-        guard let since = card.staleSince else { return "\(names) away" }
-        return "\(names) away · as of \(since.formatted(date: .omitted, time: .shortened))"
+        let offline = "\(names) \(card.staleNames.count > 1 ? "are" : "is") offline"
+        guard let since = card.staleSince else { return offline }
+        return "\(offline) · last seen \(since.formatted(date: .omitted, time: .shortened))"
     }
 }
 
 /// "#1": the project's place by how much it needs you; a dash when nothing does.
 struct RankBadge: View {
     let rank: Int?
+    /// On a selected (accent-filled) sidebar row: white on a white outline (UX-029).
+    var selected = false
 
     var body: some View {
         Text(rank.map { "#\($0)" } ?? "—")
             .font(.caption2.weight(.bold))
             .padding(.horizontal, 6)
             .padding(.vertical, 1)
-            .foregroundStyle(rank == nil ? Color.secondaryText : Color.warningText)
-            .background((rank == nil ? Tone.quiet : Tone.needsYou).color.opacity(0.12), in: RoundedRectangle(cornerRadius: 6))
+            .foregroundStyle(selected ? Color.white : rank == nil ? Color.secondaryText : Color.warningText)
+            .background(selected ? Color.white.opacity(0.2) : (rank == nil ? Tone.quiet : Tone.needsYou).color.opacity(0.12),
+                        in: RoundedRectangle(cornerRadius: 6))
+            .overlay { if selected { RoundedRectangle(cornerRadius: 6).strokeBorder(Color.white, lineWidth: 1) } }
             .accessibilityLabel(rank.map { "Rank \($0)" } ?? "Nothing needs you")
     }
 }
@@ -224,6 +229,7 @@ struct NeedsYouView: View {
 
     var body: some View {
         NavigationStack(path: $path) {
+            ScrollViewReader { proxy in
             List {
                 // Terminal commands acting as the owner sit above everything, read-only (H-108).
                 ForEach(fleet.computers) { computer in
@@ -251,10 +257,19 @@ struct NeedsYouView: View {
                     } header: {
                         SectionTitle(card.rank.map { "\(card.row.name) · #\($0)" } ?? card.row.name)
                     }
+                    .id(card.id)
                     .task(id: "\(card.id)/\(card.row.attention.count)/\(card.row.attention.score)") {
                         if let computer = fleet.computer(id: card.computerId) { await feed.loadAttention(card, on: computer) }
                     }
                 }
+            }
+            // "See all in Needs you" on a project's Overview: scroll to that project.
+            .onChange(of: feed.needsFocus, initial: true) { _, id in
+                guard let id else { return }
+                path = NavigationPath()
+                withAnimation { proxy.scrollTo(id, anchor: .top) }
+                feed.needsFocus = nil
+            }
             }
             .listStyle(.insetGrouped)
             .navigationTitle("Needs you")

@@ -7,6 +7,7 @@ import SwiftUI
 struct ProjectScreen: View {
     @Environment(Fleet.self) private var fleet
     @Environment(AppStore.self) private var store
+    @Environment(\.horizontalSizeClass) private var sizeClass
     let projectId: String
     @State private var segment = Segment.overview
     @State private var showingArtifacts = false
@@ -16,6 +17,29 @@ struct ProjectScreen: View {
     }
 
     private var project: Project? { store.projects.first { $0.id == projectId } }
+    private var name: String { project?.name ?? card?.row.name ?? "Project" }
+
+    /// "▲ 4 need you" and the release pill under the name, as on desktop (U2).
+    @ViewBuilder private var header: some View {
+        let waiting = Int(card?.row.attention.count ?? 0)
+        let release = card?.row.hasCurrentRelease == true ? card?.row.currentRelease : nil
+        if sizeClass == .regular || waiting > 0 || release != nil {
+            VStack(alignment: .leading, spacing: 6) {
+                if sizeClass == .regular {
+                    Text(name).font(.largeTitle.bold()).accessibilityAddTraits(.isHeader)
+                }
+                HStack(spacing: 6) {
+                    if waiting > 0 { Pill(text: "▲ \(waiting) need you", tone: .needsYou) }
+                    if let release {
+                        let (text, tone) = ReleaseStatusWords.pill(release)
+                        Pill(text: text, tone: tone)
+                    }
+                }
+            }
+            .padding(.horizontal, 16)
+            .padding(.bottom, 10)
+        }
+    }
 
     /// This project's card on the home, for its members and board home.
     private var card: HomeCard? {
@@ -35,7 +59,8 @@ struct ProjectScreen: View {
     }
 
     var body: some View {
-        VStack(spacing: 0) {
+        VStack(alignment: .leading, spacing: 0) {
+            header
             Picker("Section", selection: $segment) {
                 ForEach(Segment.allCases, id: \.self) { Text($0.rawValue).tag($0) }
             }
@@ -54,8 +79,9 @@ struct ProjectScreen: View {
             .frame(maxHeight: .infinity)
         }
         .background(Color(.systemGroupedBackground))
-        .navigationTitle(project?.name ?? card?.row.name ?? "Project")
-        .navigationBarTitleDisplayMode(.large)
+        .navigationTitle(sizeClass == .regular ? "" : name)
+        // iPad's detail column draws no large title, so the header carries the name (UX-029).
+        .navigationBarTitleDisplayMode(sizeClass == .regular ? .inline : .large)
         .toolbar {
             ToolbarItem(placement: .topBarTrailing) {
                 Menu {
@@ -94,7 +120,14 @@ struct OverviewPane: View {
     @State private var dashboard: Dashboard?
     @State private var failure: String?
 
-    private var needs: [HomeAttentionRow] { card.map { fleet.home.attention[$0.id] ?? [] } ?? [] }
+    /// An older service's rows are read live from its store, which fills in after connect.
+    private var needs: [HomeAttentionRow] {
+        guard let card else { return [] }
+        if let computer = fleet.computer(id: card.computerId), card.row.legacy || !computer.store.hasHome {
+            return computer.store.legacyAttention(projectId: card.row.projectID)
+        }
+        return fleet.home.attention[card.id] ?? []
+    }
 
     var body: some View {
         List {
@@ -103,8 +136,14 @@ struct OverviewPane: View {
                     if needs.isEmpty {
                         Text(AttentionWords.summary(card.row.attention, limit: 5)).foregroundStyle(Color.secondaryText)
                     }
-                    ForEach(needs, id: \.id) { row in
+                    // Up to 5 here; the rest wait in Needs you (UX-029).
+                    ForEach(needs.prefix(5), id: \.id) { row in
                         NavigationLink(value: fleet.needsDestination(row, answeredBy: card.computerId)) { NeedsRow(row: row) }
+                    }
+                    let total = max(Int(card.row.attention.count), needs.count)
+                    if total > 5 {
+                        Button("See all \(total) in Needs you ›") { fleet.home.needsFocus = card.id }
+                            .font(.subheadline.weight(.semibold))
                     }
                 } header: {
                     SectionTitle("Needs you", count: Int(card.row.attention.count))
