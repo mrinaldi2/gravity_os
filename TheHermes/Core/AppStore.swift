@@ -799,19 +799,49 @@ final class AppStore {
         var fields: JSONDict = ["decision_id": id, "ruling_text": text]
         if let option { fields["ruling_option"] = option }
         if let reason, !reason.isEmpty { fields["ruling_reason"] = reason }
-        let sha = decisions.first { $0.id == id }?.grantsSha(for: option)
+        let decision = decisions.first { $0.id == id }
+        let sha = decision?.grantsSha(for: option)
         if let sha { fields["grants_sha"] = sha }
+        // Before anything is sent, so a refused Face ID leaves no draft behind.
+        if let decision { try await confirmGrants(decision, option: option) }
         try await decide("answer_decision", fields)
-        try await publish(id, grantsSha: sha)
+        try await publish(id, grantsSha: sha, confirmed: true)
     }
 
     /// `grantsSha` echoes the granting option's sha the owner was shown.
-    func publish(_ id: String, grantsSha: String? = nil) async throws {
+    /// Publishing one that grants extras asks for Face ID first, unless the
+    /// caller just did.
+    func publish(_ id: String, grantsSha: String? = nil, confirmed: Bool = false) async throws {
+        let decision = decisions.first { $0.id == id }
+        if !confirmed, let decision { try await confirmGrants(decision, option: nil) }
         var item: JSONDict = ["decision_id": id]
-        if let sha = grantsSha ?? decisions.first(where: { $0.id == id })?.grantsSha(for: nil) { item["grants_sha"] = sha }
+        if let sha = grantsSha ?? decision?.grantsSha(for: nil) { item["grants_sha"] = sha }
         _ = try await client.request("publish_decisions", ["items": [item]])
         await loadDecision(id)
         await refreshCounts()
+    }
+
+    /// Confirms a ruling a bot relayed; one whose option grants extras asks for Face ID.
+    func confirmRuling(_ decision: Decision) async throws {
+        try await confirmGrants(decision, option: nil)
+        var fields: JSONDict = ["decision_id": decision.id]
+        if let sha = decision.grantsSha(for: nil) { fields["grants_sha"] = sha }
+        try await decide("confirm_decision", fields)
+    }
+
+    /// Face ID when ruling `option` (else the drafted one) grants extras (H-118, UX-023 decision 2).
+    func confirmGrants(_ decision: Decision, option: String?) async throws {
+        guard let reason = grantsReason(decision, option: option) else { return }
+        try await OwnerAuth.confirm(reason)
+    }
+
+    /// "Grants DevOps: install. Publish this ruling?" for a granting option, else nil.
+    func grantsReason(_ decision: Decision, option: String?) -> String? {
+        guard let key = option ?? decision.ruling?.option,
+              let picked = decision.options.first(where: { $0.key.caseInsensitiveCompare(key) == .orderedSame }),
+              !picked.grants.isEmpty else { return nil }
+        let words = OptionGrant.words(picked.grants) { self.bot($0)?.name ?? $0 }
+        return "\(words). Publish this ruling?"
     }
 
     func comment(_ id: String, body: String) async throws {
