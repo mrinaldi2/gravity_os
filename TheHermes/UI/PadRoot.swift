@@ -30,17 +30,20 @@ struct PadRootView: View {
                     Label("All projects", systemImage: "square.grid.2x2")
                         .tag(Item.projects)
                     ForEach(cards) { card in
+                        let link = HomeProjectLink(computerId: card.computerId, projectId: card.row.projectID)
+                        let selected = selection == .project(link)
                         HStack(spacing: 8) {
-                            if let rank = card.rank {
-                                Text("#\(rank)").font(.caption.weight(.bold))
-                            }
+                            if card.rank != nil { RankBadge(rank: card.rank, selected: selected) }
                             Text(card.row.name).lineLimit(1)
                             Spacer(minLength: 4)
                             if card.row.attention.count > 0 {
-                                Text("\(card.row.attention.count)").font(.caption).foregroundStyle(Color.secondaryText)
+                                Text("\(card.row.attention.count)")
+                                    .font(.caption)
+                                    .foregroundStyle(selected ? Color.white : Color.secondaryText)
+                                    .accessibilityLabel("\(card.row.attention.count) need you")
                             }
                         }
-                        .tag(Item.project(HomeProjectLink(computerId: card.computerId, projectId: card.row.projectID)))
+                        .tag(Item.project(link))
                         .accessibilityElement(children: .combine)
                     }
                 }
@@ -61,7 +64,7 @@ struct PadRootView: View {
                     }
                 }
                 .inspector(isPresented: $chatPanel) {
-                    MainChatView()
+                    MainChatView(title: "Chat")
                         .inspectorColumnWidth(min: 320, ideal: 380, max: 480)
                 }
         }

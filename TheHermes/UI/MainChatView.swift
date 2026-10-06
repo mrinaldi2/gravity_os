@@ -12,6 +12,8 @@ struct MainChatView: View {
     @Environment(Fleet.self) private var fleet
     /// Set from outside (a notification): opens that bot's chat on the computer on screen.
     var openBot: Binding<BotLink?> = .constant(nil)
+    /// Set in the iPad inspector, which shows the title inline (UX-029).
+    var title: String?
     @State private var path = NavigationPath()
     @State private var threads: [ThreadCard] = []
     @State private var loaded = false
@@ -59,7 +61,8 @@ struct MainChatView: View {
                 }
             }
             .listStyle(.insetGrouped)
-            .navigationTitle("Chat")
+            .navigationTitle(title ?? "Chat")
+            .navigationBarTitleDisplayMode(title == nil ? .automatic : .inline)
             .toolbar {
                 ToolbarItem(placement: .topBarTrailing) {
                     Button { picking = true } label: { Image(systemName: "square.and.pencil") }

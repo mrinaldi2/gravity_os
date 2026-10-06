@@ -25,6 +25,8 @@ struct RootView: View {
             }
         }
         .overlay(alignment: .top) { noticeBanner }
+        // "See all in Needs you" on a project's Overview.
+        .onChange(of: fleet.home.needsFocus) { _, id in if id != nil { tab = .needs } }
         .animation(.snappy, value: fleet.notice?.1)
         // Asked after pairing, with a word on why, before the system prompt.
         .task { explaining = await NotificationExplainer.shouldExplain() }

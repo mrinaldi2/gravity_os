@@ -183,7 +183,8 @@ struct TerminalCommandCard: View {
 }
 
 /// A bordered button, 44pt tall, whose words keep 4.5:1 on the orange card: its tone's
-/// text colour on a light wash of the tint, laid over the plain card colour.
+/// text colour on a light wash of the tint, laid over a fixed base. Not the card
+/// colour, which is lighter in a dark-mode sheet and drops below AA (QA-004).
 private struct AnswerButtonStyle: ButtonStyle {
     let tone: Tone
     @Environment(\.isEnabled) private var isEnabled
@@ -195,7 +196,7 @@ private struct AnswerButtonStyle: ButtonStyle {
             .padding(.horizontal, 6)
             .frame(minHeight: 44)
             .background(tone.color.opacity(0.12), in: Capsule())
-            .background(Color(.secondarySystemGroupedBackground), in: Capsule())
+            .background(Color.answerBase, in: Capsule())
             .opacity(configuration.isPressed ? 0.6 : isEnabled ? 1 : 0.4)
     }
 }
