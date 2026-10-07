@@ -85,6 +85,15 @@ struct ProjectScreen: View {
             .frame(maxHeight: .infinity)
         }
         .background(Color(.systemGroupedBackground))
+        // iPad keyboard (UX-023 §2.7): ⌘1–5 pick a segment.
+        .background {
+            ForEach(Array(Segment.allCases.enumerated()), id: \.offset) { index, choice in
+                Button(choice.rawValue) { segment = choice }
+                    .keyboardShortcut(KeyEquivalent(Character("\(index + 1)")), modifiers: .command)
+                    .opacity(0)
+                    .accessibilityHidden(true)
+            }
+        }
         .navigationTitle(sizeClass == .regular ? "" : name)
         // iPad's detail column draws no large title, so the header carries the name (UX-029).
         .navigationBarTitleDisplayMode(sizeClass == .regular ? .inline : .large)
@@ -401,8 +410,7 @@ struct ItemView: View {
                     if let place = facts.placeLine { Text(place).font(.subheadline) }
                     if let flags = facts.flagsLine { Text(flags).font(.subheadline).foregroundStyle(Color.warningText) }
                     if !item.description_p.isEmpty {
-                        Text(fleet.linkedText(item.description_p)).font(.callout)
-                            .cardMenu(for: item.description_p)
+                        LinkedText(markdown: item.description_p)
                     }
                 } header: {
                     // The id is the navigation title; the header says what kind of card it is.
@@ -452,7 +460,7 @@ struct ItemView: View {
             }
             Group {
                 if let body = row.body {
-                    Text(fleet.linkedText(body)).cardMenu(for: body)
+                    LinkedText(markdown: body)
                 } else {
                     Text("A comment. Its text shows once the Hermes service on \(store.computerName.isEmpty ? "your computer" : store.computerName) is updated.")
                         .foregroundStyle(Color.secondaryText)
@@ -670,8 +678,7 @@ struct ReleaseView: View {
                     let (words, tone) = release.statusWords
                     Pill(text: words, tone: tone)
                     if let changelog = release.changelog, !changelog.isEmpty {
-                        Text(fleet.linkedText(changelog)).font(.callout)
-                            .cardMenu(for: changelog)
+                        LinkedText(markdown: changelog)
                     }
                     Text(release.canRule
                          ? "Ruling on a release from the phone comes with the release review. Approve, hold or reject it on the desktop for now."
@@ -697,6 +704,8 @@ struct ReleaseView: View {
                         }
                         .padding(.vertical, 2)
                         .accessibilityElement(children: .combine)
+                        .contentShape(Rectangle())
+                        .hoverEffect(.highlight)
                         }
                         .cardMenu(id: item.itemId)
                     }
@@ -749,8 +758,7 @@ struct MeetingsPane: View {
                             IconTile(systemImage: "person.3", tone: meeting.collecting ? .working : nil)
                         }
                         if let summary = meeting.lastSummary {
-                            Text(fleet.linkedText(summary)).font(.callout)
-                                .cardMenu(for: summary)
+                            LinkedText(markdown: summary)
                         }
                     }
                 }

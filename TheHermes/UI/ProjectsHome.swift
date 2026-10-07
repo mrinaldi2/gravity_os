@@ -72,6 +72,8 @@ struct ProjectsHomeView: View {
                                 NavigationLink(value: link) { ProjectCard(card: card) }
                             }
                         }
+                        // iPad pointer (UX-023 §2.7).
+                        .hoverEffect(.highlight)
                         .contextMenu { pinButton(card) }
                         // The project that needs you most is outlined (UX-024).
                         .listRowBackground(

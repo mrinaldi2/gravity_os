@@ -174,6 +174,8 @@ private struct ThreadRow: View {
             }
         }
         .padding(.vertical, 2)
+        .contentShape(Rectangle())
+        .hoverEffect(.highlight)
     }
 }
 
@@ -284,13 +286,12 @@ private struct ThreadBubble: View {
                         .font(.caption.weight(.semibold))
                         .foregroundStyle(entry.open ? Color.warningText : Color.secondaryText)
                 }
-                Text(fleet.linkedText(OwnerText.stripEnvelope(entry.text)))
-                    .font(.callout)
-                    .textSelection(.enabled)
+                // Each card id its own link: tap, long-press, hover, VoiceOver (H-207).
+                LinkedText(markdown: OwnerText.stripEnvelope(entry.text))
+                    .fixedSize(horizontal: false, vertical: true)
                     .padding(10)
                     .background(entry.fromOwner ? Color.accentColor.opacity(0.15) : Color(.secondarySystemGroupedBackground),
                                 in: RoundedRectangle(cornerRadius: 14, style: .continuous))
-                    .cardMenu(for: entry.text)
                 if let at = entry.at, !(entry.asks && !entry.fromOwner) {
                     Text(at.relative).font(.caption2).foregroundStyle(Color.secondaryText)
                 }

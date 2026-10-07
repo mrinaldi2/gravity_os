@@ -48,8 +48,7 @@ struct DecisionDetailView: View {
                 }
                 Text(decision.title).font(.title3.weight(.semibold))
                 if !decision.body.isEmpty {
-                    Text(markdown(decision.body)).font(.callout).textSelection(.enabled)
-                        .cardMenu(for: decision.body)
+                    LinkedText(markdown: decision.body)
                 }
                 if let deadline = decision.deadlineAt {
                     Label("Due \(deadline.formatted(date: .abbreviated, time: .shortened))", systemImage: "clock")
@@ -184,8 +183,7 @@ struct DecisionDetailView: View {
                             Text(at.relative).font(.caption).foregroundStyle(Color.secondaryText)
                         }
                     }
-                    Text(markdown(entry.body)).font(.callout).textSelection(.enabled)
-                        .cardMenu(for: entry.body)
+                    LinkedText(markdown: entry.body)
                 }
             }
             if store.canControl {

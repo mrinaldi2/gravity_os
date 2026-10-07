@@ -34,6 +34,13 @@ struct RootView: View {
             }
         }
         .overlay(alignment: .top) { noticeBanner }
+        // iPad keyboard (UX-023 §2.7): ⌘⇧N opens Needs you.
+        .background {
+            Button("Needs you") { tab = .needs }
+                .keyboardShortcut("n", modifiers: [.command, .shift])
+                .opacity(0)
+                .accessibilityHidden(true)
+        }
         // The home feed loads whichever screen opens first: a notification may
         // open Needs you before Projects ever shows (QA-004).
         .task(id: connections) {

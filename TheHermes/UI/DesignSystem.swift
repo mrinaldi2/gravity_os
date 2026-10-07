@@ -189,6 +189,9 @@ struct ItemRow<Leading: View, Trailing: View>: View {
         }
         .padding(.vertical, 5)
         .frame(minHeight: 44)
+        .contentShape(Rectangle())
+        // iPad pointer: rows light up under it (UX-023 §2.7).
+        .hoverEffect(.highlight)
     }
 }
 

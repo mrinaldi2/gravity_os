@@ -16,12 +16,18 @@ struct MarkdownText: View {
     }
 
     var body: some View {
-        // Card ids become links (H-204); a long-press previews them.
-        Markdown(CardLinker.linked(text, prefixes: fleet.cards.prefixes))
-            .markdownTheme(.gravity)
-            .markdownImageProvider(MarkdownImages(report: report.map { ReportRef(project: $0.project, name: $0.name) }))
-            .textSelection(.enabled)
-            .cardMenu(for: text)
+        // Running text: each card id its own link (H-207). Block Markdown
+        // (lists, tables, code, images) keeps MarkdownUI, with the block's
+        // long-press menu of its cards (H-204).
+        if LinkedTextModel.isRunningText(text) {
+            LinkedText(markdown: text, font: .preferredFont(forTextStyle: .body))
+        } else {
+            Markdown(CardLinker.linked(text, prefixes: fleet.cards.prefixes))
+                .markdownTheme(.gravity)
+                .markdownImageProvider(MarkdownImages(report: report.map { ReportRef(project: $0.project, name: $0.name) }))
+                .textSelection(.enabled)
+                .cardMenu(for: text)
+        }
     }
 }
 
