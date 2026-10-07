@@ -10,6 +10,9 @@ struct PadRootView: View {
     @Binding var openBot: BotLink?
     @State private var selection: Item? = .projects
     @State private var chatPanel = false
+    /// ✎ on iPad: who to message, then their thread in the slide-over chat.
+    @State private var picking = false
+    @State private var openThread: ThreadLink?
     /// The project column's stack, so card links push there (H-204).
     @State private var projectPath = NavigationPath()
     /// A card to show once its project is selected.
@@ -29,6 +32,7 @@ struct PadRootView: View {
                     .badge(fleet.home.total(fleet.computers))
                     .tag(Item.needs)
                 Label("Chat", systemImage: "bubble.left.and.bubble.right")
+                    .badge(fleet.home.questions(fleet.computers))
                     .tag(Item.chat)
                 Section("Projects") {
                     Label("All projects", systemImage: "square.grid.2x2")
@@ -59,17 +63,28 @@ struct PadRootView: View {
         } detail: {
             detail
                 .toolbar {
+                    // One order everywhere (UX-029): ✉ Chat · ✎ Message a bot · ⋯ More (the screen's own).
                     if selection != .chat {
-                        ToolbarItem(placement: .topBarTrailing) {
+                        ToolbarItemGroup(placement: .topBarTrailing) {
                             Button { chatPanel.toggle() } label: { Image(systemName: "envelope") }
                                 .accessibilityLabel("Main chat")
                                 .keyboardShortcut("j", modifiers: .command)
+                            Button { picking = true } label: { Image(systemName: "square.and.pencil") }
+                                .accessibilityLabel("Message a bot")
+                                .keyboardShortcut("n", modifiers: .command)
                         }
                     }
                 }
                 .inspector(isPresented: $chatPanel) {
-                    MainChatView(title: "Chat")
+                    MainChatView(title: "Chat", openThread: $openThread)
                         .inspectorColumnWidth(min: 320, ideal: 380, max: 480)
+                }
+                .sheet(isPresented: $picking) {
+                    BotPicker { link in
+                        picking = false
+                        openThread = link
+                        chatPanel = true
+                    }
                 }
         }
         #if DEBUG

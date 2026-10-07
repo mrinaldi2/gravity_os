@@ -33,13 +33,23 @@ final class MainChatTests: XCTestCase {
         XCTAssertEqual(cards.map(\.computerId), ["mac"])
     }
 
-    func testQuestionsThenUnreadThenNewest() {
+    func testOnlyConversationsNewestFirst() {
+        // UX-031: bots you've never messaged aren't listed; ✎ reaches them.
+        var never = Hermes_Home_V1_OwnerThread()
+        never.bot.botID = "e"
+        never.bot.name = "E"
         let cards = ThreadMerge.merge([("mac", "d-mac", [
             thread("a", daemon: "d-mac", name: "A", text: "old read", at: 1),
             thread("b", daemon: "d-mac", name: "B", text: "new read", at: 50),
             thread("c", daemon: "d-mac", name: "C", text: "unread", at: 5, unread: 1),
             thread("d", daemon: "d-mac", name: "D", text: "asks", at: 2, question: true),
+            never,
         ])])
-        XCTAssertEqual(cards.map(\.botName), ["D", "C", "B", "A"])
+        XCTAssertEqual(cards.map(\.botName), ["B", "C", "D", "A"])
+    }
+
+    func testAQuestionIsLabelledAsksYou() {
+        XCTAssertEqual(ThreadWords.asks(nil), "Asks you")
+        XCTAssertTrue(ThreadWords.asks(Date()).hasPrefix("Asks you · "))
     }
 }

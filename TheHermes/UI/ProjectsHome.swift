@@ -180,7 +180,7 @@ struct ProjectCard: View {
         var bots = "\(row.bots) bot\(row.bots == 1 ? "" : "s")"
         if row.botsWorking > 0 { bots += ", \(row.botsWorking) working" }
         if row.botsWaiting > 0 { bots += ", \(row.botsWaiting) waiting for you" }
-        if row.bots > 0, row.botsWorking == 0, row.botsWaiting == 0 { bots += ", idle" }
+        if row.bots > 0, row.botsWorking == 0, row.botsWaiting == 0 { bots += ", all idle" }
         parts.append(bots)
         return parts.joined(separator: " · ")
     }

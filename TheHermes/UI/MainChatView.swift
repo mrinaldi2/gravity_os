@@ -14,6 +14,8 @@ struct MainChatView: View {
     var openBot: Binding<BotLink?> = .constant(nil)
     /// Set in the iPad inspector, which shows the title inline (UX-029).
     var title: String?
+    /// Set from outside (the iPad's ✎): opens that bot's thread.
+    var openThread: Binding<ThreadLink?> = .constant(nil)
     @State private var path = NavigationPath()
     @State private var threads: [ThreadCard] = []
     @State private var loaded = false
@@ -64,11 +66,19 @@ struct MainChatView: View {
             .navigationTitle(title ?? "Chat")
             .navigationBarTitleDisplayMode(title == nil ? .automatic : .inline)
             .toolbar {
-                ToolbarItem(placement: .topBarTrailing) {
-                    Button { picking = true } label: { Image(systemName: "square.and.pencil") }
-                        .accessibilityLabel("New message")
-                        .keyboardShortcut("n", modifiers: .command)
+                // In the iPad inspector the window's toolbar holds ✎ (UX-029: ✉ · ✎ · ⋯).
+                if title == nil {
+                    ToolbarItem(placement: .topBarTrailing) {
+                        Button { picking = true } label: { Image(systemName: "square.and.pencil") }
+                            .accessibilityLabel("Message a bot")
+                            .keyboardShortcut("n", modifiers: .command)
+                    }
                 }
+            }
+            .onChange(of: openThread.wrappedValue, initial: true) { _, link in
+                guard let link else { return }
+                path = NavigationPath([link])
+                openThread.wrappedValue = nil
             }
             .refreshable { await load() }
             .task(id: versions) { await load() }
@@ -268,7 +278,12 @@ private struct ThreadBubble: View {
         HStack {
             if entry.fromOwner { Spacer(minLength: 40) }
             VStack(alignment: entry.fromOwner ? .trailing : .leading, spacing: 4) {
-                if entry.asks && entry.open { Pill(text: "Question for you", tone: .needsYou) }
+                // A bot's question, labelled as on desktop (UX-031).
+                if entry.asks && !entry.fromOwner {
+                    Text(ThreadWords.asks(entry.at))
+                        .font(.caption.weight(.semibold))
+                        .foregroundStyle(entry.open ? Color.warningText : Color.secondaryText)
+                }
                 Text(fleet.linkedText(OwnerText.stripEnvelope(entry.text)))
                     .font(.callout)
                     .textSelection(.enabled)
@@ -276,7 +291,9 @@ private struct ThreadBubble: View {
                     .background(entry.fromOwner ? Color.accentColor.opacity(0.15) : Color(.secondarySystemGroupedBackground),
                                 in: RoundedRectangle(cornerRadius: 14, style: .continuous))
                     .cardMenu(for: entry.text)
-                if let at = entry.at { Text(at.relative).font(.caption2).foregroundStyle(Color.secondaryText) }
+                if let at = entry.at, !(entry.asks && !entry.fromOwner) {
+                    Text(at.relative).font(.caption2).foregroundStyle(Color.secondaryText)
+                }
             }
             if !entry.fromOwner { Spacer(minLength: 40) }
         }

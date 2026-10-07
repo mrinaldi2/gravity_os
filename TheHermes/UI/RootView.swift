@@ -104,6 +104,7 @@ struct RootView: View {
                 .tag(Tab.needs)
             MainChatView(openBot: $openBot)
                 .tabItem { Label("Chat", systemImage: "bubble.left.and.bubble.right") }
+                .badge(fleet.home.questions(fleet.computers))
                 .tag(Tab.chat)
             SettingsView(inTab: true)
                 .tabItem { Label("Settings", systemImage: "gearshape") }

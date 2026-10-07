@@ -91,14 +91,19 @@ extension Array where Element == ThreadEntry {
     var openQuestion: ThreadEntry? { last { !$0.fromOwner && $0.asks && $0.open } }
 }
 
+enum ThreadWords {
+    /// "Asks you · 2m ago" above a bot's question in its thread.
+    static func asks(_ at: Date?) -> String { at.map { "Asks you · \($0.relative)" } ?? "Asks you" }
+}
+
 enum ThreadMerge {
-    /// One card per bot. A linked bot's thread is listed by every computer
-    /// that shows it; the one read on the bot's own computer wins (BotRef).
-    /// Open questions first, then unread, then newest.
+    /// One card per bot with a conversation (UX-031: ✎ reaches the rest). A
+    /// linked bot's thread is listed by every computer that shows it; the one
+    /// read on the bot's own computer wins (BotRef). Newest first.
     static func merge(_ lists: [(computerId: String, daemonId: String?, threads: [Hermes_Home_V1_OwnerThread])]) -> [ThreadCard] {
         var byOrigin: [String: (card: ThreadCard, own: Bool)] = [:]
         for list in lists {
-            for thread in list.threads {
+            for thread in list.threads where thread.hasLast && (thread.last.num > 0 || !thread.last.text.isEmpty) {
                 let card = ThreadCard(thread, computerId: list.computerId)
                 let own = list.daemonId != nil && list.daemonId == thread.bot.daemonID
                 if let kept = byOrigin[card.origin], kept.own || !own { continue }
@@ -106,8 +111,6 @@ enum ThreadMerge {
             }
         }
         return byOrigin.values.map(\.card).sorted { a, b in
-            if a.openQuestion != b.openQuestion { return a.openQuestion }
-            if (a.unread > 0) != (b.unread > 0) { return a.unread > 0 }
             if a.at != b.at { return (a.at ?? .distantPast) > (b.at ?? .distantPast) }
             return a.botName.localizedCaseInsensitiveCompare(b.botName) == .orderedAscending
         }

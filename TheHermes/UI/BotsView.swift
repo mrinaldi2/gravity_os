@@ -155,10 +155,26 @@ struct ProjectPageLink: Hashable {
     let id: String
 }
 
+/// The unread dot in words (UX-029): visible "1 new", spoken "New message from <bot>".
+enum UnreadWords {
+    static func visible(unread: Int?, seenNewer: Bool) -> String? {
+        if let unread, unread > 0 { return "\(unread) new" }
+        if let unread, unread == 0 { return nil }
+        return seenNewer ? "New" : nil
+    }
+
+    static func spoken(_ bot: String) -> String { "New message from \(bot)" }
+}
+
 struct BotRow: View {
     @Environment(AppStore.self) private var store
     @Environment(LensStore.self) private var lens
     let bot: Bot
+    /// Unread messages to you, from the owner thread; nil where not known.
+    var unread: Int? = nil
+
+    /// "1 new", or "New" when only the activity says so (UX-029).
+    private var newWords: String? { UnreadWords.visible(unread: unread, seenNewer: store.isUnread(bot)) }
 
     /// The one line about what the bot is doing: its step, its question, its
     /// last word, or what it is for.
@@ -176,6 +192,7 @@ struct BotRow: View {
 
     private var detail: String {
         var parts: [String] = []
+        if let newWords { parts.append(newWords) }
         if let machine = bot.peerName { parts.append("on \(machine)") }
         if bot.engine == .codex { parts.append("Codex") }
         if bot.temporary { parts.append("Worker") }
@@ -187,11 +204,11 @@ struct BotRow: View {
                 detail: detail, subtitleLines: 2) {
             AvatarView(avatar: bot.avatar, name: bot.name, size: 40)
                 .overlay(alignment: .topTrailing) {
-                    if store.isUnread(bot) {
+                    if newWords != nil {
                         Circle().fill(.tint).frame(width: 10, height: 10)
                             .overlay(Circle().stroke(Color(.secondarySystemGroupedBackground), lineWidth: 2))
                             .offset(x: 3, y: -3)
-                            .accessibilityLabel("Unread")
+                            .accessibilityLabel(UnreadWords.spoken(bot.name))
                     }
                 }
         } trailing: {

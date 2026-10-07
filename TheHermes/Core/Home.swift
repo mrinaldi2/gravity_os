@@ -242,6 +242,11 @@ final class HomeFeed {
         }
     }
 
+    /// Bots' questions waiting for you, across projects: the Chat badge (UX-029).
+    func questions(_ computers: [Computer]) -> Int {
+        cards(computers).reduce(0) { $0 + Int($1.row.attention.byKind["owner_question"] ?? 0) }
+    }
+
     /// Everything waiting, across projects: the app badge.
     func total(_ computers: [Computer]) -> Int {
         cards(computers).reduce(0) { $0 + Int($1.row.attention.count) }

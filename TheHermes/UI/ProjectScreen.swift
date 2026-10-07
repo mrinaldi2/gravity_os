@@ -13,11 +13,17 @@ struct ProjectScreen: View {
     @State private var showingArtifacts = false
 
     enum Segment: String, CaseIterable {
-        case overview = "Overview", board = "Board", team = "Team", releases = "Releases", meetings = "Meet."
+        case overview = "Overview", board = "Board", team = "Team", releases = "Releases", meetings = "Meetings"
     }
 
     private var project: Project? { store.projects.first { $0.id == projectId } }
     private var name: String { project?.name ?? card?.row.name ?? "Project" }
+
+    /// The computer that keeps the board (UX-029): the board home's member name.
+    private var boardHomeName: String? {
+        guard let card else { return nil }
+        return card.row.members.first { $0.daemonID == card.row.boardHome }?.computerName.nilIfEmpty
+    }
 
     /// "▲ 4 need you" and the release pill under the name, as on desktop (U2).
     @ViewBuilder private var header: some View {
@@ -70,7 +76,7 @@ struct ProjectScreen: View {
             Group {
                 switch segment {
                 case .overview: OverviewPane(projectId: projectId, card: card, home: home)
-                case .board: BoardPane(home: home)
+                case .board: BoardPane(home: home, homeName: boardHomeName)
                 case .team: TeamPane(projectId: projectId)
                 case .releases: ReleasesPane(home: home)
                 case .meetings: MeetingsPane(home: home)
@@ -108,6 +114,24 @@ struct ProjectScreen: View {
         }
         #endif
     }
+}
+
+/// Words for a board kept on another computer (UX-029).
+enum BoardWords {
+    static func elsewhere(_ home: String?) -> String {
+        "This project's board is kept on \(home ?? "another computer"). Open it there, or link this computer to see it here."
+    }
+
+    /// The service's "not the board's home here" answers.
+    static func isElsewhere(_ error: Error) -> Bool {
+        if let error = error as? DaemonError, ["no_board", "not_home", "elsewhere"].contains(error.code) { return true }
+        let text = error.localizedDescription.lowercased()
+        return text.contains("linked with another computer") || text.contains("open it there")
+    }
+}
+
+extension String {
+    var nilIfEmpty: String? { isEmpty ? nil : self }
 }
 
 // MARK: Overview
@@ -243,9 +267,13 @@ struct OverviewPane: View {
 
 struct BoardPane: View {
     let home: (computer: Computer, projectId: String)?
+    /// The computer that keeps this project's board, for when this one can't show it.
+    var homeName: String?
     @State private var board: BoardSnapshot?
     @State private var failure: String?
     @State private var column = ""
+    /// The service answered that this computer doesn't keep the board.
+    @State private var elsewhere = false
 
     private var columns: [Hermes_Board_V1_BoardColumn] { board?.columns.filter(\.visible) ?? [] }
 
@@ -283,6 +311,10 @@ struct BoardPane: View {
                     }
                     .tabViewStyle(.page(indexDisplayMode: .never))
                 }
+            } else if elsewhere {
+                // UX-029: where the board lives, not the service's instruction.
+                ContentUnavailableView("Board on another computer", systemImage: "rectangle.split.3x1",
+                                       description: Text(BoardWords.elsewhere(homeName)))
             } else if let failure {
                 ContentUnavailableView("Couldn’t load the board", systemImage: "exclamationmark.triangle", description: Text(failure))
             } else if board != nil {
@@ -305,6 +337,7 @@ struct BoardPane: View {
             }
             failure = nil
         } catch {
+            elsewhere = BoardWords.isElsewhere(error)
             failure = error.localizedDescription
         }
     }
@@ -555,12 +588,22 @@ struct TeamPane: View {
             if bots.isEmpty { EmptyNote(text: "No bots yet", systemImage: "person") }
             ForEach(bots) { bot in
                 NavigationLink(value: NeedsDestination.bot(computerId: fleet.computers.first { $0.store === store }?.id ?? "", botId: bot.id, chat: false)) {
-                    BotRow(bot: bot)
+                    // With owner threads, the thread is the truth: no thread, nothing unread.
+                    BotRow(bot: bot, unread: store.hasOwnerThreads ? (threadsLoaded ? (unread[bot.id] ?? 0) : 0) : nil)
                 }
             }
         }
         .listStyle(.insetGrouped)
+        // How many of each bot's messages to you are unread (owner threads).
+        .task(id: store.ownerThreadsVersion) {
+            guard store.hasOwnerThreads, let threads = try? await store.ownerThreads() else { return }
+            unread = Dictionary(threads.map { ($0.bot.botID, Int($0.unread)) }, uniquingKeysWith: max)
+            threadsLoaded = true
+        }
     }
+
+    @State private var unread: [String: Int] = [:]
+    @State private var threadsLoaded = false
 }
 
 // MARK: Releases
