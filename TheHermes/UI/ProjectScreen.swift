@@ -673,9 +673,11 @@ struct ReleaseView: View {
     @State private var leavingOut: String?
     @State private var holding = false
     @State private var rejecting = false
-    /// After Face ID, approving waits 5 s for Undo (UX-023 screen 2).
-    @State private var pendingApproval: Task<Void, Never>?
     @State private var busy = false
+    /// Approvals wait out their Undo app-wide (UX-040): this screen shows the bar too.
+    private var pending: RulingQueue.Pending? {
+        fleet.rulings.pending.flatMap { $0.releaseId == releaseId ? $0 : nil }
+    }
 
     /// The computer this release was read from.
     private var computerId: String { fleet.computers.first { $0.store === store }?.id ?? "" }
@@ -724,6 +726,9 @@ struct ReleaseView: View {
                     }
                 }
                 if reviewing { actions(release) }
+                if let failure {
+                    Text(failure).font(.footnote).foregroundStyle(Color.errorText)
+                }
             } else if let failure {
                 Text(failure).foregroundStyle(Color.errorText)
             } else {
@@ -734,6 +739,12 @@ struct ReleaseView: View {
         .navigationTitle(release?.version ?? "Release")
         .navigationBarTitleDisplayMode(.inline)
         .task { await load() }
+        // An approval for this package ended (here or elsewhere): show it as it is now.
+        .task(id: fleet.rulings.outcome?.id) {
+            guard let outcome = fleet.rulings.outcome, outcome.releaseId == releaseId else { return }
+            await load()
+            if outcome.ok || outcome.changed { leftOut = [:] }
+        }
         .sheet(item: Binding(get: { leavingOut.map(ItemRef.init) }, set: { leavingOut = $0?.id })) { ref in
             LeaveOutSheet(itemId: ref.id, title: release?.plan.first { $0.itemId == ref.id }?.title ?? "") { out in
                 leftOut[ref.id] = out
@@ -799,11 +810,11 @@ struct ReleaseView: View {
 
     @ViewBuilder private func actions(_ release: Release) -> some View {
         Section {
-            if pendingApproval != nil {
+            if let pending {
                 HStack {
-                    Text(ReleaseReview.approving(release, leftOut: leftOut.count)).font(.subheadline)
+                    Text(pending.label).font(.subheadline)
                     Spacer()
-                    Button("Undo") { pendingApproval?.cancel(); pendingApproval = nil }.fontWeight(.semibold)
+                    Button("Undo") { fleet.rulings.undo() }.fontWeight(.semibold)
                 }
             } else {
                 Button {
@@ -822,21 +833,16 @@ struct ReleaseView: View {
         }
     }
 
-    /// Face ID, then 5 s to Undo, then `release_rule`.
+    /// Face ID, then 5 s to Undo (app-wide), then `release_rule`.
     private func approve(_ release: Release) {
         let verdicts = ReleaseReview.approval(release, leftOut: leftOut)
+        let count = leftOut.count
+        let store = store
         act {
-            try await OwnerAuth.confirm(ReleaseReview.approveQuestion(release, leftOut: leftOut.count),
+            try await OwnerAuth.confirm(ReleaseReview.approveQuestion(release, leftOut: count),
                                         action: .approve, computer: store.computerName)
-            pendingApproval = Task {
-                try? await Task.sleep(for: .seconds(5))
-                guard !Task.isCancelled else { return }
-                pendingApproval = nil
-                act {
-                    self.release = try await store.ruleRelease(release, verdicts: verdicts)
-                    leftOut = [:]
-                    UINotificationFeedbackGenerator().notificationOccurred(.success)
-                }
+            fleet.rulings.approve(release, leftOut: count) {
+                try await store.ruleRelease(release, verdicts: verdicts)
             }
         }
     }
@@ -848,7 +854,14 @@ struct ReleaseView: View {
                 try await work()
                 failure = nil
             } catch {
-                failure = error.localizedDescription
+                // CE: the package changed under the owner: reload it and say so.
+                if let release, RulingWords.isConflict(error) {
+                    await load()
+                    leftOut = [:]
+                    failure = RulingWords.changed(release)
+                } else {
+                    failure = error.localizedDescription
+                }
                 UINotificationFeedbackGenerator().notificationOccurred(.error)
             }
             busy = false

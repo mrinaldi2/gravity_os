@@ -168,6 +168,8 @@ final class Fleet {
     let cards = CardDirectory()
     /// A card to open, from a link that came from outside the app.
     var openCard: String?
+    /// A release approval waiting out its Undo, and how it ended (H-160 AC4).
+    let rulings = RulingQueue()
     private(set) var selectedId: String?
     /// Launched with test arguments: nothing is saved.
     @ObservationIgnored private var ephemeral = false

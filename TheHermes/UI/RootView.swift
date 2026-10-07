@@ -34,6 +34,8 @@ struct RootView: View {
             }
         }
         .overlay(alignment: .top) { noticeBanner }
+        // A release approval's Undo and outcome, wherever the owner is (UX-040).
+        .overlay(alignment: .bottom) { RulingBar().padding(.bottom, 64) }
         // iPad keyboard (UX-023 §2.7): ⌘⇧N opens Needs you.
         .background {
             Button("Needs you") { tab = .needs }
@@ -168,5 +170,46 @@ struct RootView: View {
                 if source.store.notice?.id == notice.id { source.store.notice = nil }
             }
         }
+    }
+}
+
+/// "Approving 2 of 3 items of 0.17.0 · Undo" for the rest of the 5 s, then
+/// what happened: approved, undone, refused, or changed under you.
+struct RulingBar: View {
+    @Environment(Fleet.self) private var fleet
+
+    var body: some View {
+        Group {
+            if let pending = fleet.rulings.pending {
+                bar {
+                    Text(pending.label).font(.subheadline)
+                    Spacer(minLength: 8)
+                    Button("Undo") { fleet.rulings.undo() }.fontWeight(.semibold)
+                }
+            } else if let outcome = fleet.rulings.outcome {
+                bar {
+                    Label(outcome.text, systemImage: outcome.ok ? "checkmark.circle.fill" : "exclamationmark.triangle.fill")
+                        .font(.subheadline)
+                        .foregroundStyle(outcome.ok ? Color.primary : Color.errorText)
+                    Spacer(minLength: 8)
+                    Button("OK") { fleet.rulings.dismissOutcome() }
+                }
+                .task(id: outcome.id) {
+                    try? await Task.sleep(for: .seconds(6))
+                    if fleet.rulings.outcome?.id == outcome.id { fleet.rulings.dismissOutcome() }
+                }
+            }
+        }
+        .animation(.snappy, value: fleet.rulings.pending)
+        .animation(.snappy, value: fleet.rulings.outcome)
+    }
+
+    private func bar(@ViewBuilder _ content: () -> some View) -> some View {
+        HStack { content() }
+            .padding(12)
+            .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+            .padding(.horizontal, 12)
+            .transition(.move(edge: .bottom).combined(with: .opacity))
+            .accessibilityElement(children: .contain)
     }
 }

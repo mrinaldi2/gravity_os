@@ -76,7 +76,7 @@ enum ReleaseReview {
     static func cannotRule(_ release: Release, canApprove: Bool) -> String? {
         if !canApprove { return "This device can't rule on releases: it doesn't have approve access." }
         guard !release.canRule else { return nil }
-        return "You can approve, hold or reject this package only from a device connected directly to \(release.ruleOn ?? "the board's home computer")."
+        return "You can approve, hold or reject this package only from a device connected directly to \(release.ruleOn ?? "the computer that keeps this board")."
     }
 
     /// Hold reminders, as on desktop.
@@ -109,5 +109,96 @@ extension AppStore {
         if let remindAt { fields["remind_at"] = ISO8601DateFormatter().string(from: remindAt) }
         let reply = try await client.request("release_hold", fields)
         return Release(reply.dict("release") ?? [:])
+    }
+}
+
+/// An approval waiting out its Undo, app-wide (UX-040, CE): the bar and the
+/// outcome follow the owner to whatever screen they are on.
+@MainActor @Observable
+final class RulingQueue {
+    struct Pending: Equatable {
+        let id: UUID
+        let releaseId: String
+        /// "Approving 2 of 3 items of 0.17.0"
+        let label: String
+    }
+
+    struct Outcome: Equatable {
+        let id: UUID
+        let releaseId: String
+        let text: String
+        let ok: Bool
+        /// The package changed under the owner: reload it before ruling again.
+        let changed: Bool
+    }
+
+    static let undoWindow: Duration = .seconds(5)
+
+    private(set) var pending: Pending?
+    private(set) var outcome: Outcome?
+    @ObservationIgnored private var task: Task<Void, Never>?
+
+    /// Waits `wait`, unless undone, then sends. `send` returns the ruled package.
+    func approve(_ release: Release, leftOut: Int, wait: Duration = undoWindow,
+                 send: @escaping () async throws -> Release) {
+        task?.cancel()
+        let pending = Pending(id: UUID(), releaseId: release.id, label: ReleaseReview.approving(release, leftOut: leftOut))
+        self.pending = pending
+        outcome = nil
+        task = Task {
+            try? await Task.sleep(for: wait)
+            guard !Task.isCancelled, self.pending?.id == pending.id else { return }
+            self.pending = nil
+            do {
+                _ = try await send()
+                self.finish(release, RulingWords.approved(release, leftOut: leftOut), ok: true, changed: false)
+            } catch {
+                let changed = RulingWords.isConflict(error)
+                self.finish(release, changed ? RulingWords.changed(release) : RulingWords.notApproved(error), ok: false, changed: changed)
+            }
+        }
+    }
+
+    func undo() {
+        guard let pending else { return }
+        task?.cancel()
+        self.pending = nil
+        outcome = Outcome(id: UUID(), releaseId: pending.releaseId, text: RulingWords.undone, ok: true, changed: false)
+    }
+
+    func dismissOutcome() { outcome = nil }
+
+    /// What a reject or hold came to, shown the same way.
+    func report(_ release: Release, error: Error) {
+        let changed = RulingWords.isConflict(error)
+        finish(release, changed ? RulingWords.changed(release) : error.localizedDescription, ok: false, changed: changed)
+    }
+
+    private func finish(_ release: Release, _ text: String, ok: Bool, changed: Bool) {
+        outcome = Outcome(id: UUID(), releaseId: release.id, text: text, ok: ok, changed: changed)
+    }
+}
+
+enum RulingWords {
+    /// "0.17.0 approved." or "2 of 3 items of 0.17.0 approved."
+    static func approved(_ release: Release, leftOut: Int) -> String {
+        leftOut > 0 ? "\(release.items.count - leftOut) of \(release.items.count) items of \(release.version) approved."
+                    : "\(release.version) approved."
+    }
+
+    static let undone = "Not approved. Nothing was sent."
+
+    static func notApproved(_ error: Error) -> String { "Not approved: \(error.localizedDescription)" }
+
+    /// CE: a version conflict reloads the package and says so.
+    static func changed(_ release: Release) -> String {
+        "\(release.version) changed while you were looking at it, so nothing was sent. Check it again, then rule."
+    }
+
+    /// `release_rule` refuses a stale `expected_version` (or frozen hash) as a conflict.
+    static func isConflict(_ error: Error) -> Bool {
+        if let error = error as? DaemonError, error.code == "conflict" { return true }
+        let text = error.localizedDescription.lowercased()
+        return text.contains("expected_version") || text.contains("changed since")
     }
 }
