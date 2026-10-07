@@ -46,14 +46,22 @@ final class SmokeTests: XCTestCase {
     func testBotChat() {
         app.openBot("iOS Dev")
         waitFor(app.pane("Chat")).tap()
-        // The bot's own transcript.
-        waitFor(app.staticTexts.containing(NSPredicate(format: "label BEGINSWITH 'Starting on the conflict banner'")).firstMatch)
-        let field = app.textViews.firstMatch.exists ? app.textViews.firstMatch : app.textFields.firstMatch
+        // The bot's own transcript. Lines are LinkedText (a TextView with its words as value),
+        // and the list is lazy: chat opens on its newest turn, so the first line needs scrolling to.
+        let first = app.descendants(matching: .any).matching(NSPredicate(format: "label BEGINSWITH %@ OR value BEGINSWITH %@",
+                                                                         "Starting on the conflict banner", "Starting on the conflict banner")).firstMatch
+        app.scroll(to: first, max: 25)
+        waitFor(first)
+        // The composer, not a transcript TextView.
+        let field = app.descendants(matching: .any).matching(NSPredicate(format: "label == 'Message iOS Dev' OR placeholderValue == 'Message iOS Dev'")).firstMatch
         waitFor(field).tap()
         let text = "UI smoke \(Int(Date().timeIntervalSince1970))"
         field.typeText(text)
         app.buttons["Send"].tap()
-        waitFor(app.staticTexts.containing(NSPredicate(format: "label CONTAINS %@", text)).firstMatch)
+        // Sent from up the transcript: the new line is at the bottom, beyond the lazy fold.
+        let sent = app.descendants(matching: .any).matching(NSPredicate(format: "label CONTAINS %@ OR value CONTAINS %@", text, text)).firstMatch
+        app.scroll(to: sent, max: 25)
+        waitFor(sent)
         screenshot("QA-004-smoke-chat")
     }
 
