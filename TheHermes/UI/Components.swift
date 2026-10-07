@@ -150,3 +150,24 @@ enum Page {
     /// Chat turns carry every step of the turn, so a page holds fewer.
     static let turns = 15
 }
+
+/// Runs `action` again whenever the computer reconnects (H-217), so a screen
+/// that failed to load while the link was down catches up without a pull.
+private struct ReloadOnReconnect: ViewModifier {
+    @Environment(AppStore.self) private var store
+    let action: () async -> Void
+    @State private var seen: Int?
+
+    func body(content: Content) -> some View {
+        content.task(id: store.reconnects) {
+            if let seen, seen != store.reconnects { await action() }
+            seen = store.reconnects
+        }
+    }
+}
+
+extension View {
+    func reloadsOnReconnect(_ action: @escaping () async -> Void) -> some View {
+        modifier(ReloadOnReconnect(action: action))
+    }
+}

@@ -335,6 +335,7 @@ struct BoardPane: View {
             }
         }
         .task { await load() }
+        .reloadsOnReconnect { await load() }
     }
 
     private func load() async {
@@ -462,6 +463,7 @@ struct ItemView: View {
         .navigationBarTitleDisplayMode(.inline)
         .refreshable { await load() }
         .task { await load() }
+        .reloadsOnReconnect { await load() }
         .sheet(item: $replying) { row in
             ReplySheet(to: CommentWords.author(row.author) { store.bot($0)?.name }, quote: row.body ?? "") { body in
                 replying = nil
@@ -722,6 +724,7 @@ struct ReleasesPane: View {
         .listStyle(.insetGrouped)
         .refreshable { await load() }
         .task { await load() }
+        .reloadsOnReconnect { await load() }
     }
 
     private func load() async {
@@ -808,6 +811,7 @@ struct ReleaseView: View {
         .navigationTitle(release?.version ?? "Release")
         .navigationBarTitleDisplayMode(.inline)
         .task { await load() }
+        .reloadsOnReconnect { await load() }
         // An approval for this package ended (here or elsewhere): show it as it is now.
         .task(id: fleet.rulings.outcome?.id) {
             guard let outcome = fleet.rulings.outcome, outcome.releaseId == releaseId else { return }
@@ -1096,6 +1100,7 @@ struct MeetingsPane: View {
         .listStyle(.insetGrouped)
         .refreshable { await load() }
         .task { await load() }
+        .reloadsOnReconnect { await load() }
     }
 
     private func line(_ meeting: Dashboard.Meeting) -> String {
