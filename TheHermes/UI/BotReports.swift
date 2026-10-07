@@ -80,6 +80,7 @@ struct BotReportsPane: View {
         .listStyle(.insetGrouped)
         .refreshable { await load() }
         .task { await load() }
+        .reloadsOnReconnect { await load() }
     }
 
     /// The bot's current step, else its latest word; never a message already
