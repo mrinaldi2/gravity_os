@@ -11,21 +11,20 @@ final class H003Tests: XCTestCase {
     func testClearChatIsDestructiveAndConfirms() throws {
         let app = try DemoApp.launch()
         allowSystemAlerts()
-        app.tab("Bots")
-        waitFor(app.botRow("Architect")).tap()
-        waitFor(app.buttons["More"]).tap()
+        app.openBot("Architect")
+        waitFor(app.pane("More")).tap()
         let clear = app.buttons["Clear conversation"]
         app.scroll(to: clear)
         waitFor(clear)
         // The words, not the icon: the eraser keeps the tint.
         XCTAssertTrue(Contrast(of: clear).redShare > 0.01, "Clear conversation is not drawn in the destructive red")
-        screenshot("QA-001-clear-chat-row")
+        screenshot("QA-004-clear-chat-row")
         clear.tap()
         waitFor(app.staticTexts["Clear Architect's conversation?"])
         // The dialog's button carries the same words as the row.
         XCTAssertTrue(app.buttons.matching(identifier: "Clear conversation").count >= 2, "No confirming button")
         let confirm = app.buttons.matching(identifier: "Clear conversation").allElementsBoundByIndex.last!
-        screenshot("QA-001-clear-chat-confirm")
+        screenshot("QA-004-clear-chat-confirm")
         XCTAssertTrue(Contrast(of: confirm).redShare > 0.01, "The confirming Clear conversation is not destructive")
         // Dismiss without confirming (away from the popover's button): the demo keeps its history.
         if app.buttons["Cancel"].exists {
@@ -42,12 +41,14 @@ final class H003Tests: XCTestCase {
     func testDecisionDetailContrastDark() throws { try decisionDetail(dark: true) }
 
     private func permissionCard(dark: Bool) throws {
+        try DemoControl.ensurePermissionPrompts()
         let app = try DemoApp.launch(dark: dark)
         allowSystemAlerts()
+        app.openDecisions()
         let allow = waitFor(app.buttons["Allow once"].firstMatch)
         sleep(1)
         XCTAssertEqual(DemoApp.isDark(app), dark, "Measured in the wrong appearance")
-        screenshot("QA-001-permission-card-\(dark ? "dark" : "light")")
+        screenshot("QA-004-permission-card-\(dark ? "dark" : "light")")
         for label in ["Allow once", "Allow for session", "Deny"] {
             check(app.buttons[label].firstMatch, label, dark)
         }
@@ -57,14 +58,12 @@ final class H003Tests: XCTestCase {
     private func decisionDetail(dark: Bool) throws {
         let app = try DemoApp.launch(dark: dark)
         allowSystemAlerts()
-        app.tab("Decisions")
-        let row = app.buttons.containing(NSPredicate(format: "label CONTAINS 'Resolve conflicts automatically or always ask?'")).firstMatch
-        app.scroll(to: row)
-        waitFor(row).tap()
+        app.tab("Needs you")
+        waitFor(app.needsRow("Resolve conflicts automatically or always ask?")).tap()
         waitFor(app.navigationBars["Decision"])
         sleep(1)
         XCTAssertEqual(DemoApp.isDark(app), dark, "Measured in the wrong appearance")
-        screenshot("QA-001-decision-detail-\(dark ? "dark" : "light")")
+        screenshot("QA-004-decision-detail-\(dark ? "dark" : "light")")
         check(waitFor(app.staticTexts["Urgent"]), "Urgent pill", dark)
         let recommended = app.staticTexts["Recommended"]
         app.scroll(to: recommended)
@@ -73,7 +72,7 @@ final class H003Tests: XCTestCase {
         let publish = app.buttons["Put on hold"]
         app.scroll(to: publish)
         sleep(1)
-        screenshot("QA-001-decision-answer-\(dark ? "dark" : "light")")
+        screenshot("QA-004-decision-answer-\(dark ? "dark" : "light")")
         for label in ["Publish ruling", "Save as draft", "Put on hold"] {
             check(app.buttons[label], label, dark)
         }
