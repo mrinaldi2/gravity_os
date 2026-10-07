@@ -235,11 +235,18 @@ final class DaemonClient {
         }
     }
 
-    /// Waits up to `connectWait` for the connection to come back.
+    /// Waits up to `connectWait` for the connection to come back. A cancelled
+    /// caller (the owner left the screen) stops waiting at once: a cancelled
+    /// sleep returns immediately, so `try?` would spin this loop on the main
+    /// thread until the deadline (Architect M1 on H-217).
     func awaitConnection() async {
         let deadline = ContinuousClock.now + connectWait
         while Self.waitsForConnection(status, wanted: wantConnected), ContinuousClock.now < deadline {
-            try? await Task.sleep(for: .milliseconds(100))
+            do {
+                try await Task.sleep(for: .milliseconds(100))
+            } catch {
+                return
+            }
         }
     }
 
