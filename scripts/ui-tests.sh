@@ -96,6 +96,9 @@ fresh_simulator() {
     xcrun simctl shutdown "$device" 2>/dev/null || true
     xcrun simctl erase "$device"
     xcrun simctl boot "$device"
+    # Less background load on a shared Mac: Siri and its suggestions off.
+    xcrun simctl spawn "$device" defaults write com.apple.assistant.support "Assistant Enabled" -bool false 2>/dev/null || true
+    xcrun simctl spawn "$device" defaults write com.apple.suggestions SuggestionsAppLibraryEnabled -bool false 2>/dev/null || true
 }
 
 # Ids the routing tests open: the designer's question and iOS Dev.
