@@ -25,14 +25,19 @@ final class ItemCommentsTests: XCTestCase {
         XCTAssertEqual(rows[0].pendingId, posted.id)
     }
 
-    func testAConfirmedCommentIsReplacedByTheBoardsCopy() {
+    func testTheBoardsCopyShowsPostedForAFewSeconds() {
         var posted = PendingComment(body: "Looks good", replyTo: nil)
         posted.state = .sent
+        posted.sentAt = Date(timeIntervalSince1970: 1000)
         let board = [comment("c1", "device:phone", "Looks good")]
         let rows = CommentThread.rows(comments: board, history: [], pending: [posted])
         XCTAssertEqual(rows.map(\.id), ["c1"], "no duplicate once the board echoes it")
-        XCTAssertEqual(rows[0].status, .onBoard)
-        XCTAssertTrue(CommentThread.stillPending([posted], comments: board).isEmpty)
+        XCTAssertEqual(rows[0].status, .sent, "QA-006: the board's copy says Posted")
+        // Kept while Posted shows, then dropped, and the row is plain again.
+        XCTAssertEqual(CommentThread.stillPending([posted], comments: board, now: Date(timeIntervalSince1970: 1002)).count, 1)
+        let later = CommentThread.stillPending([posted], comments: board, now: Date(timeIntervalSince1970: 1005))
+        XCTAssertTrue(later.isEmpty)
+        XCTAssertEqual(CommentThread.rows(comments: board, history: [], pending: later)[0].status, .onBoard)
     }
 
     func testAConfirmedCommentStaysPostedWhenTheBoardSendsNoText() {

@@ -18,6 +18,8 @@ struct PendingComment: Identifiable, Equatable {
     let replyTo: String?
     var state: State
     let at: Date
+    /// When the board took it: "✓ Posted" stays this long after (QA-006).
+    var sentAt: Date?
 
     init(body: String, replyTo: String?, at: Date = Date()) {
         id = UUID()
@@ -82,7 +84,8 @@ enum CommentThread {
 
     /// The rows to show. `history` stands in on older services that send no
     /// comments: each "commented" event becomes a comment without its text.
-    /// A pending comment the board now holds (ours, same text) is dropped.
+    /// A pending comment the board now holds (ours, same text) is shown by the
+    /// board's row, marked "Posted" while the pending one is kept.
     static func rows(comments: [Hermes_Board_V1_ItemComment], history: [Hermes_Board_V1_ItemEvent],
                      pending: [PendingComment]) -> [CommentRow] {
         var rows: [CommentRow] = comments.map { comment in
@@ -99,8 +102,15 @@ enum CommentThread {
             }
         }
         let echoed = Set(rows.filter { isOwner($0.author) }.compactMap(\.body))
+        // The board's copy of a comment just posted keeps its "Posted" mark (QA-006).
+        let justPosted = Set(pending.filter { $0.state == .sent }.map(\.body))
+        rows = rows.map { row in
+            guard row.status == .onBoard, isOwner(row.author), let body = row.body, justPosted.contains(body) else { return row }
+            return CommentRow(id: row.id, author: row.author, body: row.body, at: row.at, replyTo: row.replyTo,
+                              status: .sent, pendingId: nil)
+        }
         for local in pending {
-            // Confirmed and now on the board with its text: the board's row is enough.
+            // Confirmed and now on the board with its text: the board's row stands in.
             if local.state == .sent, echoed.contains(local.body) { continue }
             let status: CommentRow.Status = switch local.state {
             case .sending: .sending
@@ -123,11 +133,19 @@ enum CommentThread {
         }
     }
 
+    /// How long "✓ Posted" stays on a comment the board has echoed.
+    static let postedFor: TimeInterval = 4
+
     /// Pending comments still worth keeping after a reload: sending, failed,
-    /// and sent ones the board hasn't echoed with their text.
-    static func stillPending(_ pending: [PendingComment], comments: [Hermes_Board_V1_ItemComment]) -> [PendingComment] {
+    /// sent ones the board hasn't echoed with their text, and echoed ones
+    /// within `postedFor` of being sent, so "Posted" stays visible.
+    static func stillPending(_ pending: [PendingComment], comments: [Hermes_Board_V1_ItemComment],
+                             now: Date = Date()) -> [PendingComment] {
         let echoed = Set(comments.filter { isOwner($0.author) && !$0.body.isEmpty }.map(\.body))
-        return pending.filter { !($0.state == .sent && echoed.contains($0.body)) }
+        return pending.filter { comment in
+            guard comment.state == .sent, echoed.contains(comment.body) else { return true }
+            return now.timeIntervalSince(comment.sentAt ?? .distantPast) < postedFor
+        }
     }
 }
 

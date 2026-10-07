@@ -520,9 +520,15 @@ struct ItemView: View {
         Task {
             do {
                 try await store.postComment(on: itemId, comment.body, replyTo: comment.replyTo)
-                if let index = pending.firstIndex(where: { $0.id == id }) { pending[index].state = .sent }
+                if let index = pending.firstIndex(where: { $0.id == id }) {
+                    pending[index].state = .sent
+                    pending[index].sentAt = Date()
+                }
                 UINotificationFeedbackGenerator().notificationOccurred(.success)
                 await load()
+                // "✓ Posted" shows on the board's copy, then goes (QA-006).
+                try? await Task.sleep(for: .seconds(CommentThread.postedFor))
+                pending = CommentThread.stillPending(pending, comments: detail?.comments ?? [])
             } catch {
                 if let index = pending.firstIndex(where: { $0.id == id }) {
                     pending[index].state = .failed(error.localizedDescription)
