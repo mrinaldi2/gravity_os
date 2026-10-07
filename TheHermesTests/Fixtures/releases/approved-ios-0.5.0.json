@@ -1,0 +1,84 @@
+{
+ "id": "0eff48ae-57b6-4e6e-85f4-b867ddab9e47",
+ "name": "iOS 0.5.0",
+ "display_version": "iOS 0.5.0",
+ "status": "approved",
+ "items": [
+  {
+   "item_id": "H-108",
+   "owner_note": null,
+   "verdict": "ship"
+  },
+  {
+   "item_id": "H-118",
+   "owner_note": null,
+   "verdict": "ship"
+  },
+  {
+   "item_id": "H-134",
+   "owner_note": null,
+   "verdict": "ship"
+  }
+ ],
+ "plan": [
+  {
+   "ac_checked": 2,
+   "ac_total": 2,
+   "assignee": "fbe3be5a-2cec-4df3-b5aa-0ec1fb13cd5b",
+   "blocked": false,
+   "category": "deploying",
+   "column_key": "deploying",
+   "column_name": "Deploying",
+   "item_id": "H-108",
+   "ready": true,
+   "title": "iOS: show the terminal approval card read-only (\"Answer this on <computer>\")"
+  },
+  {
+   "ac_checked": 3,
+   "ac_total": 4,
+   "assignee": "fbe3be5a-2cec-4df3-b5aa-0ec1fb13cd5b",
+   "blocked": false,
+   "category": "deploying",
+   "column_key": "deploying",
+   "column_name": "Deploying",
+   "item_id": "H-118",
+   "ready": true,
+   "title": "iOS: show the permission grants on decision options (\"Grants DevOps: install\") and advertise decision_grants"
+  },
+  {
+   "ac_checked": 4,
+   "ac_total": 4,
+   "assignee": "fbe3be5a-2cec-4df3-b5aa-0ec1fb13cd5b",
+   "blocked": false,
+   "category": "deploying",
+   "column_key": "deploying",
+   "column_name": "Deploying",
+   "item_id": "H-134",
+   "ready": true,
+   "title": "Project-first iOS/iPad: Projects · Needs you · Chat · Settings tabs, project screen, main chat, iPad sidebar of ranked projects (H-128 I1–I3)"
+  }
+ ],
+ "readiness": {
+  "builds": [
+   "ios"
+  ],
+  "items_ready": 3,
+  "items_total": 3,
+  "tests_passed": [
+   "mac"
+  ],
+  "tests_required": [
+   "mac"
+  ]
+ },
+ "deployments": [],
+ "tests": [
+  {
+   "build_sha256": "b9373d79f1641301515429f53b5de9fcea700beee444144df4d33f5dc526f66b",
+   "machine": "mac",
+   "result": "pass",
+   "tester": "a55915d3-029e-4bec-a6d9-c90654607442"
+  }
+ ],
+ "changelog": "**The Hermes for iPhone and iPad 0.5.0**: the project-first app on the phone and the iPad.\n- Projects home ranked by what needs you, a Needs you tab, a project screen with bots and the board, bot page"
+}

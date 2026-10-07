@@ -345,8 +345,16 @@ struct ItemView: View {
     let itemId: String
     @State private var detail: BoardItemDetail?
     @State private var draft = ""
-    @State private var sending = false
+    /// What this device posted (H-202): shown at once, then confirmed or failed.
+    @State private var pending: [PendingComment] = []
+    @State private var replyTo: CommentRow?
     @State private var failure: String?
+    @FocusState private var composing: Bool
+
+    private var groups: [CommentGroup] {
+        CommentThread.grouped(CommentThread.rows(comments: detail?.comments ?? [], history: detail?.history ?? [],
+                                                 pending: pending))
+    }
 
     var body: some View {
         List {
@@ -370,22 +378,14 @@ struct ItemView: View {
                     }
                 }
                 Section {
-                    if detail?.comments.isEmpty ?? true { EmptyNote(text: "No comments yet", systemImage: "text.bubble") }
-                    ForEach(detail?.comments ?? [], id: \.id) { comment in
-                        VStack(alignment: .leading, spacing: 3) {
-                            Text(author(comment.author)).font(.caption.weight(.semibold))
-                            Text(comment.body).font(.callout)
-                            if comment.hasAt { Text(comment.at.date.relative).font(.caption2).foregroundStyle(Color.secondaryText) }
-                        }
+                    if groups.isEmpty { EmptyNote(text: "No comments yet", systemImage: "text.bubble") }
+                    ForEach(groups) { group in
+                        commentRow(group.comment, reply: false)
+                        ForEach(group.replies) { commentRow($0, reply: true) }
                     }
-                    if store.canControl {
-                        HStack {
-                            TextField("Comment", text: $draft, prompt: .placeholder("Comment on \(itemId)"), axis: .vertical)
-                            Button("Send") { send() }.disabled(draft.trimmingCharacters(in: .whitespaces).isEmpty || sending)
-                        }
-                    }
+                    if store.canControl { composer }
                 } header: {
-                    SectionTitle("Activity")
+                    SectionTitle("Comments")
                 }
             } else if let failure {
                 Text(failure).foregroundStyle(Color.errorText)
@@ -396,8 +396,74 @@ struct ItemView: View {
         .listStyle(.insetGrouped)
         .navigationTitle(itemId)
         .navigationBarTitleDisplayMode(.inline)
+        .refreshable { await load() }
         .task { await load() }
-        .errorAlert("Couldn’t post the comment.", $failure)
+    }
+
+    @ViewBuilder private func commentRow(_ row: CommentRow, reply: Bool) -> some View {
+        VStack(alignment: .leading, spacing: 3) {
+            HStack(spacing: 6) {
+                if reply { Image(systemName: "arrow.turn.down.right").font(.caption).foregroundStyle(Color.secondaryText) }
+                Text(author(row.author)).font(.caption.weight(.semibold))
+                if let at = row.at { Text(at.relative).font(.caption2).foregroundStyle(Color.secondaryText) }
+                Spacer(minLength: 4)
+                statusLabel(row)
+            }
+            Text(row.body ?? "A comment. Its text shows once The Hermes is updated on the computer.")
+                .font(.callout)
+                .foregroundStyle(row.body == nil ? Color.secondaryText : Color.primary)
+                .textSelection(.enabled)
+            if case .failed(let message) = row.status {
+                HStack(spacing: 12) {
+                    Text(message).font(.caption).foregroundStyle(Color.errorText)
+                    if let id = row.pendingId {
+                        Button("Retry") { retry(id) }.font(.caption.weight(.semibold))
+                        Button("Discard", role: .destructive) { pending.removeAll { $0.id == id } }.font(.caption)
+                    }
+                }
+                .buttonStyle(.borderless)
+            } else if row.status == .onBoard, store.canControl, !reply {
+                Button("Reply") {
+                    replyTo = row
+                    composing = true
+                }
+                .font(.caption.weight(.semibold))
+                .buttonStyle(.borderless)
+            }
+        }
+        .padding(.leading, reply ? 16 : 0)
+        .padding(.vertical, 2)
+    }
+
+    @ViewBuilder private func statusLabel(_ row: CommentRow) -> some View {
+        switch row.status {
+        case .onBoard: EmptyView()
+        case .sending:
+            Label("Sending…", systemImage: "clock").font(.caption2).foregroundStyle(Color.secondaryText)
+        case .sent:
+            Label("Posted", systemImage: "checkmark.circle.fill").font(.caption2).foregroundStyle(Color.successText)
+        case .failed:
+            Label("Not posted", systemImage: "exclamationmark.triangle.fill").font(.caption2).foregroundStyle(Color.errorText)
+        }
+    }
+
+    private var composer: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            if let replyTo {
+                HStack {
+                    Text("Replying to \(author(replyTo.author))").font(.caption).foregroundStyle(Color.secondaryText)
+                    Button("Cancel") { self.replyTo = nil }.font(.caption).buttonStyle(.borderless)
+                }
+            }
+            HStack(alignment: .bottom) {
+                TextField("Comment", text: $draft, prompt: .placeholder(replyTo == nil ? "Comment on \(itemId)" : "Reply"), axis: .vertical)
+                    .lineLimit(1...6)
+                    .focused($composing)
+                Button("Send") { post() }
+                    .disabled(draft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                    .buttonStyle(.borderless)
+            }
+        }
     }
 
     private func author(_ actor: String) -> String {
@@ -407,21 +473,46 @@ struct ItemView: View {
     }
 
     private func load() async {
-        do { detail = try await store.item(itemId) } catch { failure = error.localizedDescription }
+        do {
+            let fresh = try await store.item(itemId)
+            detail = fresh
+            pending = CommentThread.stillPending(pending, comments: fresh.comments)
+            failure = nil
+        } catch {
+            if detail == nil { failure = error.localizedDescription }
+        }
     }
 
-    private func send() {
+    /// Shows the comment at once, then sends it.
+    private func post() {
         let body = draft.trimmingCharacters(in: .whitespacesAndNewlines)
-        sending = true
+        guard !body.isEmpty else { return }
+        let comment = PendingComment(body: body, replyTo: replyTo?.status == .onBoard ? replyTo?.id : nil)
+        pending.append(comment)
+        draft = ""
+        replyTo = nil
+        send(comment.id)
+    }
+
+    private func retry(_ id: UUID) {
+        guard let index = pending.firstIndex(where: { $0.id == id }) else { return }
+        pending[index].state = .sending
+        send(id)
+    }
+
+    private func send(_ id: UUID) {
+        guard let comment = pending.first(where: { $0.id == id }) else { return }
         Task {
             do {
-                try await store.comment(on: itemId, body)
-                draft = ""
+                try await store.postComment(on: itemId, comment.body, replyTo: comment.replyTo)
+                if let index = pending.firstIndex(where: { $0.id == id }) { pending[index].state = .sent }
+                UINotificationFeedbackGenerator().notificationOccurred(.success)
                 await load()
             } catch {
-                failure = error.localizedDescription
+                if let index = pending.firstIndex(where: { $0.id == id }) {
+                    pending[index].state = .failed(error.localizedDescription)
+                }
             }
-            sending = false
         }
     }
 }
@@ -519,15 +610,28 @@ struct ReleaseView: View {
                         .font(.footnote).foregroundStyle(Color.secondaryText)
                 }
                 Section {
+                    // Each item's real state (H-200): its board state before the
+                    // package is submitted, the owner's ruling after.
                     ForEach(release.items) { item in
-                        ItemRow(title: item.itemId, subtitle: item.note) {
-                            IconTile(systemImage: "square.text.square")
-                        } trailing: {
-                            Pill(text: item.verdict.capitalizedFirst, tone: item.verdict == "ship" ? .ready : item.verdict == "pending" ? .quiet : .needsYou)
+                        let state = release.state(of: item) { store.bot($0)?.name }
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text(state.title).font(.subheadline.weight(.medium)).lineLimit(3)
+                            if let meta = state.meta {
+                                Text(meta).font(.caption).foregroundStyle(Color.secondaryText)
+                            }
+                            if let pill = state.pill, let tone = state.tone {
+                                Pill(text: pill, tone: tone)
+                            }
                         }
+                        .padding(.vertical, 2)
+                        .accessibilityElement(children: .combine)
                     }
                 } header: {
-                    SectionTitle("Items", count: release.items.count)
+                    SectionTitle(release.showsProgress ? "Progress" : "Items", count: release.items.count)
+                } footer: {
+                    if release.showsProgress {
+                        Text(release.readinessLine).foregroundStyle(Color.secondaryText)
+                    }
                 }
                 if !release.tests.isEmpty {
                     Section {

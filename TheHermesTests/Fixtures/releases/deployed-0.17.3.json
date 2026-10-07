@@ -1,0 +1,103 @@
+{
+ "id": "9db37f1b-f564-4716-b830-30bfa1839664",
+ "name": "0.17.3",
+ "display_version": "0.17.3",
+ "status": "deployed",
+ "items": [
+  {
+   "item_id": "H-167",
+   "owner_note": null,
+   "verdict": "ship"
+  },
+  {
+   "item_id": "H-189",
+   "owner_note": null,
+   "verdict": "ship"
+  }
+ ],
+ "plan": [
+  {
+   "ac_checked": 3,
+   "ac_total": 3,
+   "assignee": "fbd9be47-cd55-487d-bdbe-7f5176a0bee4",
+   "blocked": false,
+   "category": "done",
+   "column_key": "done",
+   "column_name": "Done",
+   "item_id": "H-167",
+   "ready": true,
+   "title": "P0 after 0.17.0 on the Mac: projects don't appear on the home, and bots' terminal/chat can't be opened"
+  },
+  {
+   "ac_checked": 3,
+   "ac_total": 3,
+   "assignee": "6f22b3da-1a3e-4766-ad8a-3ad6db00e43d",
+   "blocked": false,
+   "category": "done",
+   "column_key": "done",
+   "column_name": "Done",
+   "item_id": "H-189",
+   "ready": true,
+   "title": "0.17.2: every click inside a project (board, meetings, releases, a bot) opens the iOS QA bot instead"
+  }
+ ],
+ "readiness": {
+  "builds": [
+   "desktop-mac",
+   "desktop-win"
+  ],
+  "items_ready": 2,
+  "items_total": 2,
+  "tests_passed": [
+   "imac",
+   "mac",
+   "win-pc"
+  ],
+  "tests_required": [
+   "imac",
+   "mac",
+   "win-pc"
+  ]
+ },
+ "deployments": [
+  {
+   "action": "deploy",
+   "machine": "mac",
+   "result": "ok",
+   "at": "2026-10-07T03:25:28.629386Z"
+  },
+  {
+   "action": "deploy",
+   "machine": "imac",
+   "result": "ok",
+   "at": "2026-10-07T14:02:03.455724Z"
+  },
+  {
+   "action": "deploy",
+   "machine": "win-pc",
+   "result": "ok",
+   "at": "2026-10-07T14:01:58.351648Z"
+  }
+ ],
+ "tests": [
+  {
+   "build_sha256": "3efe148ad10826b9d0832d3c90773a9e07acd29dfadd3b6f14f7093e2609c459",
+   "machine": "imac",
+   "result": "pass",
+   "tester": "a7c2f848-438e-46ae-8068-b5d83bcc6544"
+  },
+  {
+   "build_sha256": "3efe148ad10826b9d0832d3c90773a9e07acd29dfadd3b6f14f7093e2609c459",
+   "machine": "mac",
+   "result": "pass",
+   "tester": "a55915d3-029e-4bec-a6d9-c90654607442"
+  },
+  {
+   "build_sha256": "7f4c1a6eca5ac8716f2ffdcaeaddf57f409d46e6446ae3b3878337f11d836a76",
+   "machine": "win-pc",
+   "result": "pass",
+   "tester": "68e44460-6c81-473a-823c-f1c070cee4c0"
+  }
+ ],
+ "changelog": "Hotfix for 0.17.2:\n- Clicks inside a project open what you clicked again (the Team tab caught every click and opened the iOS QA bot) (H-189).\n- Closes the 0.17.0 home fix card (H-167), already install"
+}

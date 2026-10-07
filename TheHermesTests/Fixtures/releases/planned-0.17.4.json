@@ -1,0 +1,262 @@
+{
+ "id": "5d4d7294-9285-4f9d-a002-89372420a06c",
+ "name": "0.17.4",
+ "display_version": "0.17.4",
+ "status": "planned",
+ "items": [
+  {
+   "item_id": "H-155",
+   "owner_note": null,
+   "verdict": "pending"
+  },
+  {
+   "item_id": "H-174",
+   "owner_note": null,
+   "verdict": "pending"
+  },
+  {
+   "item_id": "H-176",
+   "owner_note": null,
+   "verdict": "pending"
+  },
+  {
+   "item_id": "H-178",
+   "owner_note": null,
+   "verdict": "pending"
+  },
+  {
+   "item_id": "H-182",
+   "owner_note": null,
+   "verdict": "pending"
+  },
+  {
+   "item_id": "H-183",
+   "owner_note": null,
+   "verdict": "pending"
+  },
+  {
+   "item_id": "H-184",
+   "owner_note": null,
+   "verdict": "pending"
+  },
+  {
+   "item_id": "H-187",
+   "owner_note": null,
+   "verdict": "pending"
+  },
+  {
+   "item_id": "H-188",
+   "owner_note": null,
+   "verdict": "pending"
+  },
+  {
+   "item_id": "H-191",
+   "owner_note": null,
+   "verdict": "pending"
+  },
+  {
+   "item_id": "H-192",
+   "owner_note": null,
+   "verdict": "pending"
+  },
+  {
+   "item_id": "H-193",
+   "owner_note": null,
+   "verdict": "pending"
+  },
+  {
+   "item_id": "H-195",
+   "owner_note": null,
+   "verdict": "pending"
+  },
+  {
+   "item_id": "H-201",
+   "owner_note": null,
+   "verdict": "pending"
+  }
+ ],
+ "plan": [
+  {
+   "ac_checked": 0,
+   "ac_total": 3,
+   "assignee": null,
+   "blocked": false,
+   "category": "inbox",
+   "column_key": "inbox",
+   "column_name": "Inbox",
+   "item_id": "H-155",
+   "ready": false,
+   "title": "Guard false positives: python3 heredoc scripts flagged as touching the secrets folder; relative paths after `cd` resolved against the wrong repo"
+  },
+  {
+   "ac_checked": 1,
+   "ac_total": 1,
+   "assignee": "6f22b3da-1a3e-4766-ad8a-3ad6db00e43d",
+   "blocked": false,
+   "category": "verify",
+   "column_key": "verify",
+   "column_name": "Verify",
+   "item_id": "H-174",
+   "ready": true,
+   "title": "VR story browser-pane--live fails on every base (pre-existing since 0.16.x)"
+  },
+  {
+   "ac_checked": 0,
+   "ac_total": 4,
+   "assignee": "6f22b3da-1a3e-4766-ad8a-3ad6db00e43d",
+   "blocked": false,
+   "category": "doing",
+   "column_key": "doing",
+   "column_name": "Doing",
+   "item_id": "H-176",
+   "ready": false,
+   "title": "Release test targets per release/platform; iOS QA can record release_test for iOS packages"
+  },
+  {
+   "ac_checked": 2,
+   "ac_total": 2,
+   "assignee": "6f22b3da-1a3e-4766-ad8a-3ad6db00e43d",
+   "blocked": false,
+   "category": "verify",
+   "column_key": "verify",
+   "column_name": "Verify",
+   "item_id": "H-178",
+   "ready": true,
+   "title": "Dashboard 'Needs you' built from overview::attention_rows (include other linked computers), drop the dashboard_needs_you hop"
+  },
+  {
+   "ac_checked": 2,
+   "ac_total": 2,
+   "assignee": "fbd9be47-cd55-487d-bdbe-7f5176a0bee4",
+   "blocked": false,
+   "category": "verify",
+   "column_key": "verify",
+   "column_name": "Verify",
+   "item_id": "H-182",
+   "ready": true,
+   "title": "Daemon writes a bot's .claude/settings.json through a symlink the bot planted (can replace the owner's ~/.claude/settings.json)"
+  },
+  {
+   "ac_checked": 1,
+   "ac_total": 2,
+   "assignee": "6f22b3da-1a3e-4766-ad8a-3ad6db00e43d",
+   "blocked": false,
+   "category": "verify",
+   "column_key": "verify",
+   "column_name": "Verify",
+   "item_id": "H-183",
+   "ready": true,
+   "title": "Windows load flakes at 0.17.2: trust lock, watchdog toast deadline, port move-aside"
+  },
+  {
+   "ac_checked": 0,
+   "ac_total": 2,
+   "assignee": "6f22b3da-1a3e-4766-ad8a-3ad6db00e43d",
+   "blocked": false,
+   "category": "ready",
+   "column_key": "ready",
+   "column_name": "Ready",
+   "item_id": "H-184",
+   "ready": false,
+   "title": "CE-026 follow-ups on H-182: Windows no_follow by handle; refuse nlink>1 on read"
+  },
+  {
+   "ac_checked": 2,
+   "ac_total": 2,
+   "assignee": "fbd9be47-cd55-487d-bdbe-7f5176a0bee4",
+   "blocked": false,
+   "category": "verify",
+   "column_key": "verify",
+   "column_name": "Verify",
+   "item_id": "H-187",
+   "ready": true,
+   "title": "Guard on the PowerShell tool judges only links: protected paths, destructive writes and main/forced pushes are unguarded on Windows"
+  },
+  {
+   "ac_checked": 0,
+   "ac_total": 2,
+   "assignee": null,
+   "blocked": false,
+   "category": "inbox",
+   "column_key": "inbox",
+   "column_name": "Inbox",
+   "item_id": "H-188",
+   "ready": false,
+   "title": "Windows cold-run flake: tests/resume.rs:117 restarting_a_bot_tells_it_to_pick_its_work_back_up_once"
+  },
+  {
+   "ac_checked": 0,
+   "ac_total": 3,
+   "assignee": "6f22b3da-1a3e-4766-ad8a-3ad6db00e43d",
+   "blocked": false,
+   "category": "ready",
+   "column_key": "ready",
+   "column_name": "Ready",
+   "item_id": "H-191",
+   "ready": false,
+   "title": "Needs you still lists release approvals older than the version already installed"
+  },
+  {
+   "ac_checked": 0,
+   "ac_total": 3,
+   "assignee": "6f22b3da-1a3e-4766-ad8a-3ad6db00e43d",
+   "blocked": false,
+   "category": "verify",
+   "column_key": "verify",
+   "column_name": "Verify",
+   "item_id": "H-192",
+   "ready": true,
+   "title": "Main chat (⌘J) with a bot selected shows a different conversation than that bot's own Chat tab"
+  },
+  {
+   "ac_checked": 3,
+   "ac_total": 3,
+   "assignee": "6f22b3da-1a3e-4766-ad8a-3ad6db00e43d",
+   "blocked": false,
+   "category": "verify",
+   "column_key": "verify",
+   "column_name": "Verify",
+   "item_id": "H-193",
+   "ready": true,
+   "title": "Opening a newer app silently restarts the daemon (and every bot) without the install path"
+  },
+  {
+   "ac_checked": 0,
+   "ac_total": 4,
+   "assignee": "d303c6cc-d349-429c-8177-ec9d747203bf",
+   "blocked": false,
+   "category": "ready",
+   "column_key": "ready",
+   "column_name": "Ready",
+   "item_id": "H-195",
+   "ready": false,
+   "title": "Owner messages from the app chat or phone reach a bot's session as \"another Claude session, not typed by your user\""
+  },
+  {
+   "ac_checked": 0,
+   "ac_total": 3,
+   "assignee": "6f22b3da-1a3e-4766-ad8a-3ad6db00e43d",
+   "blocked": false,
+   "category": "ready",
+   "column_key": "ready",
+   "column_name": "Ready",
+   "item_id": "H-201",
+   "ready": false,
+   "title": "Commenting on a card (desktop or iPhone) gives no feedback, and the bots may never see the comment"
+  }
+ ],
+ "readiness": {
+  "builds": [],
+  "items_ready": 7,
+  "items_total": 14,
+  "tests_passed": [],
+  "tests_required": [
+   "imac",
+   "mac",
+   "win-pc"
+  ]
+ },
+ "deployments": [],
+ "tests": [],
+ "changelog": "- Security: a bot can't trick Hermes into overwriting your own Claude settings through a link in its folder (H-182, H-184).\n- Security: on Windows, the bots' safety check now applies all its rules to "
+}

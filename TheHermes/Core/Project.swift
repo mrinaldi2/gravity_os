@@ -113,6 +113,49 @@ struct Release: Identifiable {
         var id: String { machine }
     }
 
+    /// An item's live board state (`plan[]`, H-137): where it is, not the owner's ruling.
+    struct PlanItem {
+        let itemId: String
+        let title: String
+        let columnKey: String
+        let columnName: String
+        let ready: Bool
+        let blocked: Bool
+        let acChecked: Int
+        let acTotal: Int
+        let assignee: String?
+
+        init(_ d: JSONDict) {
+            itemId = d.str("item_id")
+            title = d.str("title")
+            columnKey = d.str("column_key")
+            columnName = d.optStr("column_name") ?? PlanItem.column(d.str("column_key"))
+            ready = d.bool("ready")
+            blocked = d.bool("blocked")
+            acChecked = d.int("ac_checked")
+            acTotal = d.int("ac_total")
+            assignee = d.optStr("assignee")
+        }
+
+        /// Column names when the board gives none (UX-025 §2, as desktop).
+        static func column(_ key: String) -> String {
+            let names = ["inbox": "Inbox", "ready": "Ready", "doing": "Doing", "review": "Review", "verify": "Verify",
+                         "approval": "Awaiting owner", "deploying": "Deploying", "done": "Done", "cancelled": "Cancelled"]
+            return names[key] ?? key.capitalizedFirst
+        }
+    }
+
+    /// What one item's row says (H-200): its live state before the package is
+    /// submitted, the owner's ruling after. Never the raw verdict "pending".
+    struct ItemState: Equatable {
+        let title: String
+        /// "Done · Team Lead · ☑ 3/3 AC · ⛔ Blocked"
+        let meta: String?
+        /// "✓ Included", "○ Still in progress"; nil when there is nothing to say yet.
+        let pill: String?
+        let tone: Tone?
+    }
+
     let id: String
     let name: String
     let version: String
@@ -125,6 +168,10 @@ struct Release: Identifiable {
     let ruleOn: String?
     let changelog: String?
     let createdAt: Date?
+    let plan: [PlanItem]
+    let builds: [String]
+    let testsPassed: [String]
+    let testsRequired: [String]
 
     init(_ d: JSONDict) {
         id = d.str("id")
@@ -140,6 +187,59 @@ struct Release: Identifiable {
         ruleOn = d.optStr("rule_on")
         changelog = d.optStr("changelog")
         createdAt = d.date("created_at")
+        plan = d.list("plan").map(PlanItem.init)
+        builds = (readiness?["builds"] as? [String]) ?? []
+        testsPassed = (readiness?["tests_passed"] as? [String]) ?? []
+        testsRequired = (readiness?["tests_required"] as? [String]) ?? []
+    }
+
+    /// Not yet submitted: the rows show each item's live state (desktop ReleaseProgress).
+    var showsProgress: Bool { ["planned", "assembling", "built"].contains(status) && !plan.isEmpty }
+
+    /// "1 of 3 items ready · Built for Mac and Windows · Tested on 0 of 2 computers"
+    var readinessLine: String {
+        let platforms = ["desktop-mac": "Mac", "desktop-win": "Windows", "desktop-linux": "Linux", "ios": "iPhone"]
+        let built = builds.isEmpty
+            ? "Not built yet"
+            : "Built for " + ListFormatter.localizedString(byJoining: builds.map { platforms[$0] ?? $0 })
+        let required = testsRequired.count
+        let tested = required == 0
+            ? "No computer to test on yet"
+            : "Tested on \(testsPassed.count) of \(required) computer\(required == 1 ? "" : "s")"
+        return "\(itemsReady) of \(itemsTotal) items ready · \(built) · \(tested)"
+    }
+
+    /// The row for one item, in the desktop's words. `botName` names an assignee.
+    func state(of item: Item, botName: (String) -> String?) -> ItemState {
+        let planned = plan.first { $0.itemId == item.itemId }
+        let title = planned.map { $0.title.isEmpty ? item.itemId : "\(item.itemId) · \($0.title)" } ?? item.itemId
+        var meta: String?
+        if let planned {
+            var parts = [planned.columnName, planned.assignee.map { botName($0) ?? "A bot" } ?? "Unassigned"]
+            if planned.acTotal > 0 { parts.append("☑ \(planned.acChecked)/\(planned.acTotal) AC") }
+            if planned.blocked { parts.append("⛔ Blocked") }
+            meta = parts.joined(separator: " · ")
+        }
+        if showsProgress, let planned {
+            return ItemState(title: title, meta: meta,
+                             pill: planned.ready ? "✓ Ready for the release" : "○ Still in progress",
+                             tone: planned.ready ? .ready : .quiet)
+        }
+        switch item.verdict {
+        case "ship":
+            return ItemState(title: title, meta: meta, pill: "✓ Included", tone: .ready)
+        case "hold":
+            return ItemState(title: title, meta: meta, pill: "⤼ Left out · waits for the next package", tone: .quiet)
+        case "rework":
+            // The owner's reason, quoted, under the item.
+            let reason = item.note.map { "“\($0)”" }
+            let line = [meta, reason].compactMap { $0 }.joined(separator: " · ")
+            return ItemState(title: title, meta: line.isEmpty ? nil : line, pill: "⤼ Left out · back to Doing", tone: .quiet)
+        default:
+            // Not ruled yet: only worth saying while it waits for the owner.
+            let waiting = status == "awaiting_owner"
+            return ItemState(title: title, meta: meta, pill: waiting ? "◐ For you to test" : nil, tone: waiting ? .needsYou : nil)
+        }
     }
 
     /// The glossary's words for its state, and a tone (§5).
@@ -198,15 +298,6 @@ extension AppStore {
     }
 
     /// A card comment from the owner (U4: control grant, on the board's home).
-    func comment(on id: String, _ body: String) async throws {
-        var comment = Hermes_Board_V1_ItemAddComment()
-        comment.id = id
-        comment.body = body
-        var request = Hermes_Board_V1_BoardRequest()
-        request.request = .itemComment(comment)
-        _ = try await client.request(.boardRequest(request), name: "item_comment")
-    }
-
     func releases(projectId: String) async throws -> [Release] {
         let reply = try await client.request("list_releases", ["project_id": projectId])
         return reply.list("releases").map(Release.init)
