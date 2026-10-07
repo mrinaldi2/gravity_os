@@ -77,4 +77,33 @@ final class LinkedTextTests: XCTestCase {
         XCTAssertEqual(view.cardId(at: CGPoint(x: first.midX, y: first.midY)), "HL-004")
         XCTAssertNil(view.cardId(at: CGPoint(x: 2, y: first.midY)), "plain text: no card")
     }
+
+    func testEveryLinkStaysReachableWithSeveralIds() {
+        // QA-007 / H-212: with several ids each link is its own lasting element.
+        let view = CardLinkTextView(frame: CGRect(x: 0, y: 0, width: 320, height: 120))
+        view.textContainerInset = .zero
+        view.attributedText = LinkedTextModel.attributed("Ships HL-001, HL-002 and HL-003 together.",
+                                                         prefixes: prefixes, font: font, color: .label)
+        view.links = LinkedTextModel.cardLinks(in: view.attributedText)
+        view.title = { ["HL-001": "Board chips", "HL-002": "Read marks"][$0] }
+        view.layoutIfNeeded()
+        let first = view.accessibilityElements as? [UIAccessibilityElement] ?? []
+        XCTAssertEqual(first.count, 4, "the text and three links")
+        XCTAssertEqual(first.dropFirst().map(\.accessibilityLabel), ["HL-001: Board chips", "HL-002: Read marks", "HL-003, card"])
+        for link in first.dropFirst() {
+            XCTAssertTrue(link.accessibilityTraits.contains(.link))
+            XCTAssertFalse(link.accessibilityFrameInContainerSpace.isEmpty, "each link has its own frame")
+        }
+        let second = view.accessibilityElements as? [UIAccessibilityElement] ?? []
+        XCTAssertTrue(zip(first, second).allSatisfy { $0 === $1 }, "the same elements, kept between reads")
+
+        // A title that arrives later is read; new text builds new elements.
+        view.title = { _ in "Now known" }
+        XCTAssertEqual((view.accessibilityElements as? [UIAccessibilityElement])?[3].accessibilityLabel, "HL-003: Now known")
+        view.attributedText = LinkedTextModel.attributed("Only HL-004.", prefixes: prefixes, font: font, color: .label)
+        view.links = LinkedTextModel.cardLinks(in: view.attributedText)
+        let third = view.accessibilityElements as? [UIAccessibilityElement] ?? []
+        XCTAssertEqual(third.count, 2)
+        XCTAssertFalse(third[1] === first[1])
+    }
 }

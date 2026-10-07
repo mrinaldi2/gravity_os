@@ -225,23 +225,45 @@ final class CardLinkTextView: UITextView {
     }
 
     // VoiceOver: the text, then one element per card link named "H-293: <title>".
+    // The elements are kept (QA-007, H-212): built anew on every read, nothing
+    // retained them and only one link stayed reachable. They are rebuilt when
+    // the text or its links change; labels and frames refresh on each read, so
+    // a title that arrives later or a new layout is picked up.
+    override var attributedText: NSAttributedString! {
+        didSet { linkElements = nil }
+    }
+
+    override func layoutSubviews() {
+        super.layoutSubviews()
+        if linkElements != nil { UIAccessibility.post(notification: .layoutChanged, argument: nil) }
+    }
+
     override var accessibilityElements: [Any]? {
         get {
             guard !links.isEmpty else { return nil }
-            let text = UIAccessibilityElement(accessibilityContainer: self)
-            text.accessibilityLabel = attributedText.string
-            text.accessibilityFrameInContainerSpace = bounds
-            let elements = links.map { link -> UIAccessibilityElement in
-                let element = CardLinkElement(accessibilityContainer: self)
+            let elements = linkElements ?? buildElements()
+            linkElements = elements
+            // The first element is the whole text; then the links in order.
+            elements[0].accessibilityLabel = attributedText.string
+            elements[0].accessibilityFrameInContainerSpace = bounds
+            for (element, link) in zip(elements.dropFirst(), links) {
                 element.accessibilityLabel = LinkedTextModel.spokenName(link.id, title: title(link.id))
-                element.accessibilityTraits = .link
                 element.accessibilityFrameInContainerSpace = rect(for: link.range)
-                element.activate = { [weak self] in self?.open(CardLinker.url(link.id)) }
-                return element
             }
-            return [text] + elements
+            return elements
         }
         set {}
+    }
+
+    private func buildElements() -> [UIAccessibilityElement] {
+        let text = UIAccessibilityElement(accessibilityContainer: self)
+        let elements = links.map { link -> UIAccessibilityElement in
+            let element = CardLinkElement(accessibilityContainer: self)
+            element.accessibilityTraits = .link
+            element.activate = { [weak self] in self?.open(CardLinker.url(link.id)) }
+            return element
+        }
+        return [text] + elements
     }
 }
 
