@@ -70,7 +70,9 @@ private struct CardMenu: ViewModifier {
             content.contextMenu {
                 actions(id)
             } preview: {
-                CardPreviewView(id: id).frame(width: 300)
+                // A context-menu preview is hosted outside the app's environment:
+                // it gets Fleet here or crashes (H-214).
+                CardPreviewView.hosted(id: id, fleet: fleet)
             }
         } else if ids.count > 1 {
             content
@@ -102,6 +104,14 @@ enum CardMenuWords {
         guard let preview else { return "\(id) · Loading…" }
         if let notice = preview.notice { return notice }
         return "\(id) · \(preview.title ?? "Loading…")"
+    }
+}
+
+extension CardPreviewView {
+    /// The preview as it is hosted on its own (a context-menu preview, a hover
+    /// popover): everything it reads from the environment is passed in (H-214).
+    static func hosted(id: String, fleet: Fleet) -> some View {
+        CardPreviewView(id: id).environment(fleet).frame(width: 300)
     }
 }
 

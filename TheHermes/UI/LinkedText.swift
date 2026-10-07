@@ -20,7 +20,7 @@ struct LinkedText: View {
             lineLimit: lineLimit,
             title: { id in fleet.cards.cached(id)?.title },
             open: { openURL($0) },
-            preview: { id in AnyView(CardPreviewView(id: id).environment(fleet).frame(width: 300)) },
+            preview: { id in AnyView(CardPreviewView.hosted(id: id, fleet: fleet)) },
             prefetch: { ids in
                 Task { @MainActor in for id in ids { _ = await fleet.cards.preview(id, fleet: fleet) } }
             })
