@@ -612,7 +612,7 @@ struct ItemView: View {
 }
 
 /// "Reply to Desktop Dev": the comment you answer, and a field ready to type (H-210).
-private struct ReplySheet: View {
+struct ReplySheet: View {
     @Environment(\.dismiss) private var dismiss
     let to: String
     let quote: String
@@ -945,7 +945,7 @@ struct ReleaseView: View {
 private struct ItemRef: Identifiable { let id: String }
 
 /// "Leave out H-117?": where it goes, and why (desktop LeaveOutDialog).
-private struct LeaveOutSheet: View {
+struct LeaveOutSheet: View {
     @Environment(\.dismiss) private var dismiss
     let itemId: String
     let title: String
@@ -986,7 +986,7 @@ private struct LeaveOutSheet: View {
 }
 
 /// "Hold 0.17.0?": a note and when to be reminded (desktop HoldDialog).
-private struct HoldReleaseSheet: View {
+struct HoldReleaseSheet: View {
     @Environment(\.dismiss) private var dismiss
     let version: String
     let done: (String, Date?) -> Void
@@ -1021,7 +1021,7 @@ private struct HoldReleaseSheet: View {
 }
 
 /// "Reject 0.17.0?": a reason for every item, and where each goes (desktop RejectDialog).
-private struct RejectReleaseSheet: View {
+struct RejectReleaseSheet: View {
     @Environment(\.dismiss) private var dismiss
     let release: Release
     let done: (String, [String: LeftOut.Verdict]) -> Void
