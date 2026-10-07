@@ -26,7 +26,10 @@ struct BotChatPane: View {
             }
             ScrollViewReader { proxy in
                 ScrollView {
-                    LazyVStack(alignment: .leading, spacing: 18) {
+                    // Not lazy (H-227): sent from far up with the keyboard up, the jump to
+                    // the bottom left a lazy stack with nothing laid out, so the transcript
+                    // went blank. A page is Page.turns turns; older ones load on request.
+                    VStack(alignment: .leading, spacing: 18) {
                         if hasMore {
                             Button("Load earlier turns") {
                                 following = false
