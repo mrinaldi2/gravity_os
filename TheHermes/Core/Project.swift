@@ -168,6 +168,9 @@ struct Release: Identifiable {
     let ruleOn: String?
     let changelog: String?
     let createdAt: Date?
+    /// The package's version number, sent back with a ruling (`expected_version`).
+    let revision: Int
+    let createdBy: String?
     let plan: [PlanItem]
     let builds: [String]
     let testsPassed: [String]
@@ -187,6 +190,8 @@ struct Release: Identifiable {
         ruleOn = d.optStr("rule_on")
         changelog = d.optStr("changelog")
         createdAt = d.date("created_at")
+        revision = d.int("version")
+        createdBy = d.optStr("created_by")
         plan = d.list("plan").map(PlanItem.init)
         builds = (readiness?["builds"] as? [String]) ?? []
         testsPassed = (readiness?["tests_passed"] as? [String]) ?? []

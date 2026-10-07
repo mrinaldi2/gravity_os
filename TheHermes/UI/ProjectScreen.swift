@@ -259,7 +259,8 @@ struct OverviewPane: View {
         let strip = dashboard.strip
         guard !strip.isEmpty else { return "No cards in progress" }
         return strip.map { column in
-            let count = column.wipLimit.map { "\(column.count)/\($0)" } ?? "\(column.count)"
+            // "Doing 0 of 1" (UX-038), not "0/1".
+            let count = column.wipLimit.map { "\(column.count) of \($0)" } ?? "\(column.count)"
             return "\(column.name) \(count)\(column.full ? " full" : "")"
         }.joined(separator: " · ")
     }
@@ -667,9 +668,23 @@ struct ReleaseView: View {
     let releaseId: String
     @State private var release: Release?
     @State private var failure: String?
+    /// The owner's choices before approving: items left out, and where they go.
+    @State private var leftOut: [String: LeftOut] = [:]
+    @State private var leavingOut: String?
+    @State private var holding = false
+    @State private var rejecting = false
+    /// After Face ID, approving waits 5 s for Undo (UX-023 screen 2).
+    @State private var pendingApproval: Task<Void, Never>?
+    @State private var busy = false
 
     /// The computer this release was read from.
     private var computerId: String { fleet.computers.first { $0.store === store }?.id ?? "" }
+
+    /// The phone rules on a package waiting for the owner, when it may (H-160 AC4).
+    private var reviewing: Bool {
+        guard let release else { return false }
+        return release.status == "awaiting_owner" && release.canRule && store.canApprove
+    }
 
     var body: some View {
         List {
@@ -677,54 +692,38 @@ struct ReleaseView: View {
                 Section {
                     let (words, tone) = release.statusWords
                     Pill(text: words, tone: tone)
+                    if let by = release.createdBy.flatMap({ store.bot($0)?.name }) ?? release.createdBy {
+                        Text([by, release.createdAt.map { $0.formatted(date: .omitted, time: .shortened) }].compactMap { $0 }.joined(separator: " · "))
+                            .font(.footnote).foregroundStyle(Color.secondaryText)
+                    }
                     if let changelog = release.changelog, !changelog.isEmpty {
                         LinkedText(markdown: changelog)
                     }
-                    Text(release.canRule
-                         ? "Ruling on a release from the phone comes with the release review. Approve, hold or reject it on the desktop for now."
-                         : "Rule on it on \(release.ruleOn ?? "the board's home computer"), in The Hermes app.")
-                        .font(.footnote).foregroundStyle(Color.secondaryText)
-                }
-                Section {
-                    // Each item's real state (H-200): its board state before the
-                    // package is submitted, the owner's ruling after.
-                    ForEach(release.items) { item in
-                        let state = release.state(of: item) { store.bot($0)?.name }
-                        // The row is the card: tap opens it, long-press previews it (H-204).
-                        NavigationLink(value: NeedsDestination.item(computerId: fleet.cards.home(for: item.itemId)?.computerId ?? computerId,
-                                                                    itemId: item.itemId)) {
-                        VStack(alignment: .leading, spacing: 4) {
-                            Text(state.title).font(.subheadline.weight(.medium)).lineLimit(3)
-                            if let meta = state.meta {
-                                Text(meta).font(.caption).foregroundStyle(Color.secondaryText)
-                            }
-                            if let pill = state.pill, let tone = state.tone {
-                                Pill(text: pill, tone: tone)
-                            }
-                        }
-                        .padding(.vertical, 2)
-                        .accessibilityElement(children: .combine)
-                        .contentShape(Rectangle())
-                        .hoverEffect(.highlight)
-                        }
-                        .cardMenu(id: item.itemId)
-                    }
-                } header: {
-                    SectionTitle(release.showsProgress ? "Progress" : "Items", count: release.items.count)
-                } footer: {
-                    if release.showsProgress {
-                        Text(release.readinessLine).foregroundStyle(Color.secondaryText)
+                    if release.status == "awaiting_owner", let why = ReleaseReview.cannotRule(release, canApprove: store.canApprove) {
+                        Text(why).font(.footnote).foregroundStyle(Color.secondaryText)
                     }
                 }
                 if !release.tests.isEmpty {
                     Section {
                         ForEach(release.tests) { test in
-                            LabeledContent(test.machine, value: test.result.capitalizedFirst)
+                            LabeledContent(test.machine, value: test.result == "pass" ? "✓ Passed" : "✗ \(test.result.capitalizedFirst)")
                         }
                     } header: {
                         SectionTitle("Tests")
                     }
                 }
+                Section {
+                    ForEach(release.items) { item in itemRow(release, item) }
+                } header: {
+                    SectionTitle(release.showsProgress ? "Progress" : "Items", count: release.items.count)
+                } footer: {
+                    if release.showsProgress {
+                        Text(release.readinessLine).foregroundStyle(Color.secondaryText)
+                    } else if reviewing, let line = ReleaseReview.leftOutLine(leftOut.count) {
+                        Text(line).foregroundStyle(Color.secondaryText)
+                    }
+                }
+                if reviewing { actions(release) }
             } else if let failure {
                 Text(failure).foregroundStyle(Color.errorText)
             } else {
@@ -734,8 +733,252 @@ struct ReleaseView: View {
         .listStyle(.insetGrouped)
         .navigationTitle(release?.version ?? "Release")
         .navigationBarTitleDisplayMode(.inline)
-        .task {
-            do { release = try await store.release(releaseId) } catch { failure = error.localizedDescription }
+        .task { await load() }
+        .sheet(item: Binding(get: { leavingOut.map(ItemRef.init) }, set: { leavingOut = $0?.id })) { ref in
+            LeaveOutSheet(itemId: ref.id, title: release?.plan.first { $0.itemId == ref.id }?.title ?? "") { out in
+                leftOut[ref.id] = out
+                leavingOut = nil
+            }
+        }
+        .sheet(isPresented: $holding) {
+            if let release {
+                HoldReleaseSheet(version: release.version) { note, remind in
+                    holding = false
+                    act { self.release = try await store.holdRelease(release, note: note, remindAt: remind) }
+                }
+            }
+        }
+        .sheet(isPresented: $rejecting) {
+            if let release {
+                RejectReleaseSheet(release: release) { reason, returns in
+                    rejecting = false
+                    act {
+                        try await OwnerAuth.confirm("Reject \(release.version)?", action: .reject, computer: store.computerName)
+                        self.release = try await store.ruleRelease(release,
+                                                                   verdicts: ReleaseReview.rejection(release, reason: reason, returns: returns))
+                    }
+                }
+            }
+        }
+    }
+
+    @ViewBuilder private func itemRow(_ release: Release, _ item: Release.Item) -> some View {
+        let state = release.state(of: item) { store.bot($0)?.name }
+        let out = leftOut[item.itemId]
+        HStack(alignment: .top, spacing: 8) {
+            // The row is the card: tap opens it, long-press previews it (H-204).
+            NavigationLink(value: NeedsDestination.item(computerId: fleet.cards.home(for: item.itemId)?.computerId ?? computerId,
+                                                        itemId: item.itemId)) {
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(state.title).font(.subheadline.weight(.medium)).lineLimit(3)
+                    if let meta = state.meta {
+                        Text(meta).font(.caption).foregroundStyle(Color.secondaryText)
+                    }
+                    if let out {
+                        Pill(text: "⤼ " + ReleaseReview.outWords(out), tone: .quiet)
+                    } else if let pill = state.pill, let tone = state.tone {
+                        Pill(text: pill, tone: tone)
+                    }
+                }
+                .padding(.vertical, 2)
+                .accessibilityElement(children: .combine)
+                .contentShape(Rectangle())
+                .hoverEffect(.highlight)
+            }
+            .cardMenu(id: item.itemId)
+            if reviewing {
+                Button(out == nil ? "Leave out" : "Include") {
+                    if out == nil { leavingOut = item.itemId } else { leftOut[item.itemId] = nil }
+                }
+                .font(.footnote.weight(.semibold))
+                .buttonStyle(.bordered)
+                .accessibilityLabel(out == nil ? "Leave out \(item.itemId)" : "Include \(item.itemId)")
+            }
+        }
+    }
+
+    @ViewBuilder private func actions(_ release: Release) -> some View {
+        Section {
+            if pendingApproval != nil {
+                HStack {
+                    Text(ReleaseReview.approving(release, leftOut: leftOut.count)).font(.subheadline)
+                    Spacer()
+                    Button("Undo") { pendingApproval?.cancel(); pendingApproval = nil }.fontWeight(.semibold)
+                }
+            } else {
+                Button {
+                    approve(release)
+                } label: {
+                    Label(ReleaseReview.approveButton(release, leftOut: leftOut.count), systemImage: "faceid")
+                        .frame(maxWidth: .infinity)
+                }
+                .buttonStyle(.borderedProminent)
+                .disabled(busy || leftOut.count == release.items.count)
+                Button("Hold") { holding = true }.disabled(busy)
+                Button("Reject…", role: .destructive) { rejecting = true }.disabled(busy)
+            }
+        } footer: {
+            Text(ReleaseReview.approveBody(release, leftOut: leftOut.count)).foregroundStyle(Color.secondaryText)
+        }
+    }
+
+    /// Face ID, then 5 s to Undo, then `release_rule`.
+    private func approve(_ release: Release) {
+        let verdicts = ReleaseReview.approval(release, leftOut: leftOut)
+        act {
+            try await OwnerAuth.confirm(ReleaseReview.approveQuestion(release, leftOut: leftOut.count),
+                                        action: .approve, computer: store.computerName)
+            pendingApproval = Task {
+                try? await Task.sleep(for: .seconds(5))
+                guard !Task.isCancelled else { return }
+                pendingApproval = nil
+                act {
+                    self.release = try await store.ruleRelease(release, verdicts: verdicts)
+                    leftOut = [:]
+                    UINotificationFeedbackGenerator().notificationOccurred(.success)
+                }
+            }
+        }
+    }
+
+    private func act(_ work: @escaping () async throws -> Void) {
+        busy = true
+        Task {
+            do {
+                try await work()
+                failure = nil
+            } catch {
+                failure = error.localizedDescription
+                UINotificationFeedbackGenerator().notificationOccurred(.error)
+            }
+            busy = false
+        }
+    }
+
+    private func load() async {
+        do { release = try await store.release(releaseId) } catch { failure = error.localizedDescription }
+    }
+}
+
+private struct ItemRef: Identifiable { let id: String }
+
+/// "Leave out H-117?": where it goes, and why (desktop LeaveOutDialog).
+private struct LeaveOutSheet: View {
+    @Environment(\.dismiss) private var dismiss
+    let itemId: String
+    let title: String
+    let done: (LeftOut) -> Void
+    @State private var verdict = LeftOut.Verdict.hold
+    @State private var note = ""
+
+    var body: some View {
+        NavigationStack {
+            Form {
+                if !title.isEmpty { Text(title) }
+                Section("It goes") {
+                    Picker("It goes", selection: $verdict) {
+                        Text("Hold: it waits for the next release").tag(LeftOut.Verdict.hold)
+                        Text("Rework: back to Doing, with a note").tag(LeftOut.Verdict.rework)
+                    }
+                    .pickerStyle(.inline)
+                    .labelsHidden()
+                }
+                Section(verdict == .rework ? "What needs rework" : "Note (optional)") {
+                    TextField(verdict == .rework ? "What needs rework" : "Note (optional)", text: $note,
+                              prompt: .placeholder(verdict == .rework ? "What needs rework" : "Note (optional)"), axis: .vertical)
+                        .lineLimit(2...5)
+                }
+            }
+            .navigationTitle("Leave out \(itemId)?")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) { Button("Cancel") { dismiss() } }
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("Leave out") { done(LeftOut(verdict: verdict, note: note.trimmingCharacters(in: .whitespacesAndNewlines))) }
+                        .disabled(verdict == .rework && note.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                }
+            }
+        }
+        .presentationDetents([.medium, .large])
+    }
+}
+
+/// "Hold 0.17.0?": a note and when to be reminded (desktop HoldDialog).
+private struct HoldReleaseSheet: View {
+    @Environment(\.dismiss) private var dismiss
+    let version: String
+    let done: (String, Date?) -> Void
+    @State private var note = ""
+    @State private var remind = ReleaseReview.Remind.tomorrow
+
+    var body: some View {
+        NavigationStack {
+            Form {
+                Section("Note (optional)") {
+                    TextField("Note (optional)", text: $note, prompt: .placeholder("Note (optional)"), axis: .vertical).lineLimit(2...5)
+                }
+                Section("Remind me") {
+                    Picker("Remind me", selection: $remind) {
+                        ForEach(ReleaseReview.Remind.allCases) { Text($0.rawValue).tag($0) }
+                    }
+                    .pickerStyle(.inline)
+                    .labelsHidden()
+                }
+            }
+            .navigationTitle("Hold \(version)?")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) { Button("Cancel") { dismiss() } }
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("Hold") { done(note.trimmingCharacters(in: .whitespacesAndNewlines), remind.date()) }
+                }
+            }
+        }
+        .presentationDetents([.medium])
+    }
+}
+
+/// "Reject 0.17.0?": a reason for every item, and where each goes (desktop RejectDialog).
+private struct RejectReleaseSheet: View {
+    @Environment(\.dismiss) private var dismiss
+    let release: Release
+    let done: (String, [String: LeftOut.Verdict]) -> Void
+    @State private var reason = ""
+    @State private var returns: [String: LeftOut.Verdict] = [:]
+
+    var body: some View {
+        NavigationStack {
+            Form {
+                Section("Reason (sent to DevOps and copied to every item)") {
+                    TextField("Reason", text: $reason, prompt: .placeholder("Reason"), axis: .vertical).lineLimit(2...5)
+                }
+                Section {
+                    ForEach(release.items) { item in
+                        Picker(release.plan.first { $0.itemId == item.itemId }.map { "\(item.itemId) · \($0.title)" } ?? item.itemId,
+                               selection: Binding(get: { returns[item.itemId] ?? .rework }, set: { returns[item.itemId] = $0 })) {
+                            Text("Back to Doing").tag(LeftOut.Verdict.rework)
+                            Text("Back to Ready").tag(LeftOut.Verdict.hold)
+                        }
+                        .accessibilityLabel("Where \(item.itemId) goes")
+                    }
+                } header: {
+                    Text("Where each item goes")
+                } footer: {
+                    if let hint = ReleaseReview.rejectHint(returns.merging(Dictionary(uniqueKeysWithValues: release.items.map { ($0.itemId, LeftOut.Verdict.rework) })) { mine, _ in mine },
+                                                           items: release.items.count) {
+                        Text(hint).foregroundStyle(Color.secondaryText)
+                    }
+                }
+            }
+            .navigationTitle("Reject \(release.version)?")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) { Button("Cancel") { dismiss() } }
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("Reject", role: .destructive) { done(reason.trimmingCharacters(in: .whitespacesAndNewlines), returns) }
+                        .disabled(reason.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                }
+            }
         }
     }
 }

@@ -8,9 +8,26 @@ enum OwnerAuth {
     /// What the owner is asked to do; the words follow it (UX-032).
     enum Action: Equatable {
         case publish, confirm
+        /// Ruling on a release (UX-023 decision 2: Approve and Reject ask for Face ID).
+        case approve, reject
 
-        var question: String { self == .publish ? "Publish this ruling?" : "Confirm this ruling?" }
-        var refused: String { self == .publish ? "Not published. Nothing was sent." : "Not confirmed. Nothing was sent." }
+        var question: String {
+            switch self {
+            case .publish: "Publish this ruling?"
+            case .confirm: "Confirm this ruling?"
+            case .approve: "Approve this release?"
+            case .reject: "Reject this release?"
+            }
+        }
+
+        var refused: String {
+            switch self {
+            case .publish: "Not published. Nothing was sent."
+            case .confirm: "Not confirmed. Nothing was sent."
+            case .approve: "Not approved. Nothing was sent."
+            case .reject: "Not rejected. Nothing was sent."
+            }
+        }
     }
 
     enum Failure: LocalizedError, Equatable {
