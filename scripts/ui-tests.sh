@@ -45,7 +45,10 @@ if [ -z "$device" ]; then
     exit 1
 fi
 
-for p in "$port" "$lens_port" "$peer_port" "$control_port"; do
+# NO_DEMO=1: tests that bring their own daemon (e.g. a scratch copy via SCRATCH_PORT,
+# SCRATCH_TOKEN, SCRATCH_READONLY_TOKEN) run without starting the demo world.
+no_demo=${NO_DEMO:-}
+for p in $( [ -z "$no_demo" ] && echo "$port $lens_port $peer_port $control_port" ); do
     if nc -z 127.0.0.1 "$p" 2>/dev/null; then
         echo "Port $p is in use (another demo?); set DEMO_PORT, DEMO_LENS_PORT, DEMO_PEER_PORT or DEMO_CONTROL_PORT" >&2
         exit 1
@@ -69,7 +72,7 @@ finish() {
 }
 trap finish EXIT INT TERM
 # The demo first, on a quiet machine; a second try when its daemon trips while starting.
-for attempt in 1 2; do
+for attempt in $( [ -z "$no_demo" ] && echo "1 2" ); do
     python3 -u demo/make_demo.py --serve --out "$out" --port "$port" --lens-port "$lens_port" \
         --peer-port "$peer_port" --control-port "$control_port" \
         ${daemon_bin:+--gravityd "$daemon_bin"} >"$log" 2>&1 &
@@ -87,7 +90,7 @@ for attempt in 1 2; do
         exit 1
     fi
 done
-sleep 3 # the demo's permission prompts reach the daemon just after it serves
+[ -z "$no_demo" ] && sleep 3 # the demo's permission prompts reach the daemon just after it serves
 
 fresh_simulator() {
     xcrun simctl shutdown "$device" 2>/dev/null || true
@@ -96,7 +99,8 @@ fresh_simulator() {
 }
 
 # Ids the routing tests open: the designer's question and iOS Dev.
-ids=$(python3 - "$out" "$port" <<'EOF'
+ids=" "
+[ -z "$no_demo" ] && ids=$(python3 - "$out" "$port" <<'EOF'
 import os, sys
 sys.path.insert(0, "demo")
 from make_demo import Socket
@@ -115,7 +119,9 @@ dark="-only-testing:UITests/H003Tests/testPermissionCardContrastDark -only-testi
 run_tests() { # <result bundle> <xcodebuild args…>
     bundle=$1; shift
     rm -rf "$bundle"
-    TEST_RUNNER_GRAV_TOKEN=$(cat "$out/gravity/secrets/client.token") \
+    TEST_RUNNER_GRAV_TOKEN=$(cat "$out/gravity/secrets/client.token" 2>/dev/null) \
+    TEST_RUNNER_SCRATCH_PORT=${SCRATCH_PORT:-} TEST_RUNNER_SCRATCH_TOKEN=${SCRATCH_TOKEN:-} \
+    TEST_RUNNER_SCRATCH_READONLY_TOKEN=${SCRATCH_READONLY_TOKEN:-} \
     TEST_RUNNER_GRAV_PORT=$port TEST_RUNNER_LENS_PORT=$lens_port \
     TEST_RUNNER_DEMO_DECISION_ID=${ids% *} TEST_RUNNER_DEMO_BOT_ID=${ids#* } \
     TEST_RUNNER_DEMO_CONTROL_PORT=$control_port TEST_RUNNER_FIXTURES=$PWD/contract/fixtures TEST_RUNNER_SCREENSHOT_DIR=${SCREENSHOT_DIR:-} \

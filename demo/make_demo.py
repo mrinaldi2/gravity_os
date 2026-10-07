@@ -334,7 +334,8 @@ LAB = ("Hermes Lab", [
 ])
 
 
-def serve_control(control_port: int, port: int, home: str, token: str, bots: Dict[str, Dict[str, str]]) -> None:
+def serve_control(control_port: int, port: int, home: str, token: str, bots: Dict[str, Dict[str, str]],
+                  daemon_pid: int = 0) -> None:
     """A small HTTP endpoint for UI tests to set the demo up per test (127.0.0.1 only):
 
     POST /permissions          the 3 demo prompts are pending again (missing ones re-asked)
@@ -349,6 +350,8 @@ def serve_control(control_port: int, port: int, home: str, token: str, bots: Dic
     POST /terminal             a terminal command asks to act as the owner (H-108), from
                                inside Desktop Dev's workspace; held until answered or timed out
     POST /pins                 {"pinned": [project names]} from projects_overview
+    POST /freeze, /thaw        pause and resume the demo daemon (SIGSTOP/SIGCONT), so a
+                               request from the app fails as a connection error would
     """
     lab: Dict[str, Any] = {}
 
@@ -472,6 +475,11 @@ def serve_control(control_port: int, port: int, home: str, token: str, bots: Dic
                     else:
                         terminal_request(dev["workspace"])
                         reply = {"ok": True}
+                elif url.path in ("/freeze", "/thaw"):
+                    if not daemon_pid:
+                        raise RuntimeError("no daemon pid")
+                    os.kill(daemon_pid, signal.SIGSTOP if url.path == "/freeze" else signal.SIGCONT)
+                    reply = {"ok": True}
                 elif url.path == "/pins":
                     rows = owner().request("projects_overview", project_ids=[])["overview"].get("rows", [])
                     reply = {"pinned": [r["name"] for r in rows if r.get("pinned")]}
@@ -970,7 +978,7 @@ def main() -> None:
         hold_permissions(args.port, token)
         ask_permissions(args.port, home, bots)
     if args.control_port:
-        serve_control(args.control_port, args.port, home, token, bots)
+        serve_control(args.control_port, args.port, home, token, bots, daemon.pid)
     # kill stops the lot as Ctrl-C does (scripts/ui-tests.sh runs the demo in the background).
     signal.signal(signal.SIGTERM, signal.default_int_handler)
     try:
