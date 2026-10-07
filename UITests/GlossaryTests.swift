@@ -6,7 +6,7 @@ final class GlossaryTests: XCTestCase {
     /// Words the glossary retired, as they would show on screen.
     static let retired = ["Gravity", "gravityd", "GravitiOS", "Permission prompts", "Waiting on you",
                           "Answer and publish", "Hold for later", "Restart session", "Clear chat",
-                          "Reports", "Runtime", "Grants", "Delivery backlog", "Auth failed",
+                          "Runtime", "Grants", "Delivery backlog", "Auth failed",
                           "Version mismatch", "Something went wrong", "Retry", "Between bots",
                           "Charter", "Standing instructions", "Note from Gravity", "Allow for this session",
                           "decisions waiting", "decision waiting"]
@@ -18,9 +18,10 @@ final class GlossaryTests: XCTestCase {
 
     override func setUpWithError() throws {
         continueAfterFailure = true
+        try DemoControl.ensurePermissionPrompts() // "Allow for session" is on their cards
         app = try DemoApp.launch()
         allowSystemAlerts()
-        waitFor(app.tabBars.buttons["Home"])
+        waitFor(app.tabBars.buttons["Projects"])
     }
 
     func testDisplayName() {
@@ -29,7 +30,7 @@ final class GlossaryTests: XCTestCase {
         let springboard = XCUIApplication(bundleIdentifier: "com.apple.springboard")
         let icon = springboard.icons["The Hermes"]
         XCTAssertTrue(icon.waitForExistence(timeout: 5), "No home-screen icon named The Hermes")
-        screenshot("QA-002-display-name")
+        screenshot("QA-004-display-name")
         app.activate()
     }
 
@@ -45,37 +46,32 @@ final class GlossaryTests: XCTestCase {
                     XCTFail("\(screen): retired word \"\(old)\" in \"\(word)\"")
                 }
             }
-            screenshot("QA-002-glossary-\(screen)")
+            screenshot("QA-004-glossary-\(screen)")
         }
 
-        look("home")
-        app.tab("Decisions")
-        waitFor(app.staticTexts["Permission requests"])
-        look("decisions")
-        let row = app.buttons.containing(NSPredicate(format: "label CONTAINS 'Resolve conflicts automatically or always ask?'")).firstMatch
-        app.scroll(to: row)
-        row.tap()
-        waitFor(app.navigationBars["Decision"])
-        app.scroll(to: app.buttons["Put on hold"])
-        XCTAssertTrue(app.buttons["Publish ruling"].exists)
-        XCTAssertTrue(app.buttons["Put on hold"].exists)
-        look("decision-detail")
-
-        app.tab("Bots")
-        look("bots")
+        look("projects")
+        app.tab("Projects")
+        waitFor(app.projectCard("Aurora Notes"))
+        app.openProject("Aurora Notes")
+        look("project-overview")
+        app.pane("Team").tap()
+        look("project-team")
         waitFor(app.botRow("Architect")).tap()
-        for pane in ["Chat", "Work", "Artifacts", "More"] {
-            XCTAssertTrue(waitFor(app.buttons[pane]).exists, "Pane \(pane)")
+        for pane in ["Reports", "Chat", "Terminal", "More"] {
+            XCTAssertTrue(waitFor(app.pane(pane)).exists, "Pane \(pane)")
         }
-        app.buttons["More"].tap()
+        look("bot-reports")
+        app.pane("More").tap()
         app.scroll(to: app.buttons["Clear conversation"])
         XCTAssertTrue(app.buttons["Restart bot"].exists)
         XCTAssertTrue(app.buttons["Clear conversation"].exists)
         look("bot-more")
 
-        app.tab("Files")
-        look("files")
-        app.tab("Computers")
+        app.tab("Chat")
+        look("chat")
+        app.tab("Settings")
+        look("settings")
+        waitFor(app.buttons["Computers"]).tap()
         look("computers")
         app.buttons.containing(NSPredicate(format: "label CONTAINS 'Demo Mac'")).firstMatch.tap()
         sleep(2)
@@ -83,9 +79,25 @@ final class GlossaryTests: XCTestCase {
         let service = app.labelled("Hermes service")
         app.scroll(to: service)
         look("computer-service")
+
+        // Needs you and Decisions last: the Decisions sheet is the end of the walk.
+        app.tab("Needs you")
+        waitFor(app.needsRow("Resolve conflicts automatically or always ask?"))
+        look("needs-you")
+        app.openDecisions()
+        waitFor(app.staticTexts["Permission requests"])
+        look("decisions")
+        app.tab("Needs you")
+        waitFor(app.needsRow("Resolve conflicts automatically or always ask?")).tap()
+        waitFor(app.navigationBars["Decision"])
+        app.scroll(to: app.buttons["Put on hold"])
+        XCTAssertTrue(app.buttons["Publish ruling"].exists)
+        XCTAssertTrue(app.buttons["Put on hold"].exists)
+        look("decision-detail")
+
         XCTAssertTrue(seen.contains { $0.contains("Hermes service") }, "\"Hermes service\" not on the computer page")
         XCTAssertTrue(seen.contains("Allow for session"), "No Allow for session answer on a permission card")
         XCTAssertTrue(seen.contains { $0.hasPrefix("Needs you") || $0.contains("need you") || $0.contains("needs you") },
-                      "\"Needs you\" not on Home")
+                      "\"Needs you\" not on the main screens")
     }
 }
