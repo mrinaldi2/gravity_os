@@ -29,6 +29,21 @@ final class ReconnectTests: XCTestCase {
         XCTAssertGreaterThanOrEqual(ContinuousClock.now - started, .milliseconds(350), "it waited for the reconnect")
     }
 
+    func testACancelledRequestStopsWaitingAtOnce() async {
+        // Architect M1: leaving a screen mid-reconnect must not spin the main
+        // thread until the 12 s deadline.
+        let client = DaemonClient()
+        client.connectWait = .seconds(5)
+        client.setForTests(status: .connecting, wanted: true)
+        let started = ContinuousClock.now
+        let request = Task { try await client.request("list_bots") }
+        try? await Task.sleep(for: .milliseconds(150))
+        request.cancel()
+        _ = try? await request.value
+        XCTAssertLessThan(ContinuousClock.now - started, .seconds(1), "it returned soon after the cancel")
+        XCTAssertEqual(client.status, .connecting, "nothing else changed")
+    }
+
     func testARequestWhenNotConnectingFailsAtOnce() async {
         let client = DaemonClient()
         client.connectWait = .seconds(5)
