@@ -29,6 +29,7 @@ struct TheHermesApp: App {
             .environment(fleet)
             .onOpenURL { url in
                 if let link = IncomingURL.pairing(url) { incoming = IncomingPairing(link: link) }
+                if let id = CardLinker.id(from: url) { fleet.openCard = id }
             }
             .onChange(of: scenePhase) { _, phase in fleet.setBackground(phase != .active) }
         }

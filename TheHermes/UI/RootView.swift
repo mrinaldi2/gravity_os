@@ -16,7 +16,13 @@ struct RootView: View {
     enum Tab { case projects, needs, chat, settings }
 
     /// Changes whenever a computer connects or drops, to refetch the home.
-    private var connections: String { fleet.computers.map { "\($0.id)=\($0.store.status == .connected)" }.joined(separator: ",") }
+    /// Changes when a computer's projects change.
+    private var projectsKey: String {
+        fleet.computers.map { "\($0.id)=\($0.store.status == .connected):\($0.store.projects.map(\.id).joined(separator: "+"))" }
+            .joined(separator: ",")
+    }
+
+        private var connections: String { fleet.computers.map { "\($0.id)=\($0.store.status == .connected)" }.joined(separator: ",") }
 
     var body: some View {
         Group {
@@ -37,6 +43,11 @@ struct RootView: View {
             #endif
             await fleet.home.refreshAll(fleet.computers)
         }
+        // Which card ids are links: each project's prefix (H-204). Projects
+        // arrive after the connection does, so this follows them.
+        .task(id: projectsKey) { await fleet.cards.refresh(fleet.computers) }
+        // thehermes://item/H-293 from outside (a notification): the card, on Projects.
+        .onChange(of: fleet.openCard) { _, id in if id != nil { tab = .projects } }
         // "See all in Needs you" on a project's Overview.
         .onChange(of: fleet.home.needsFocus) { _, id in if id != nil { tab = .needs } }
         .animation(.snappy, value: fleet.notice?.1)
@@ -52,6 +63,14 @@ struct RootView: View {
             guard parts.count >= 2 else { return }
             router.target = NotificationTarget(userInfo: ["computer": computer.id, "kind": parts[0], "id": parts[1],
                                                           "bot": parts.count > 2 ? parts[2] : ""])
+        }
+        // As a link from outside: -openCard H-293 (once its prefix is known).
+        .task(id: fleet.cards.prefixes.count) {
+            if let id = UserDefaults.standard.string(forKey: "openCard"), fleet.cards.home(for: id) != nil,
+               !UserDefaults.standard.bool(forKey: "openCardDone") {
+                UserDefaults.standard.set(true, forKey: "openCardDone")
+                fleet.openCard = id
+            }
         }
         // Screenshots of a tab: -openTab needs|chat|settings.
         .task {

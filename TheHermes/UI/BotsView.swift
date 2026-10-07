@@ -106,6 +106,7 @@ struct BotsView: View {
             }
             .navigationDestination(for: String.self) { BotDetailView(botId: $0) }
             .navigationDestination(for: BotLink.self) { BotDetailView(botId: $0.botId, initialPane: $0.pane) }
+            .needsDestinations()
             .onChange(of: openBot.wrappedValue, initial: true) { _, link in
                 guard let link else { return }
                 var fresh = NavigationPath()
@@ -135,6 +136,8 @@ struct BotsView: View {
             #endif
             .navigationDestination(for: TurnLink.self) { TurnDetailView(botId: $0.botId, turnId: $0.turnId) }
         }
+        // Card ids anywhere in this stack open the card here (H-204).
+        .opensCardLinks { path.append($0) }
     }
 
     private var emptyDetail: String {

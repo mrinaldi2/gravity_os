@@ -4,7 +4,7 @@ import SwiftUI
 struct DecisionsView: View {
     @Environment(AppStore.self) private var store
     @Binding var openDecision: String?
-    @State private var path: [String] = []
+    @State private var path = NavigationPath()
     @State private var openBot: String?
     /// A prompt to scroll to, from a tapped notification.
     var focusPermission: Binding<String?> = .constant(nil)
@@ -62,11 +62,14 @@ struct DecisionsView: View {
             .navigationTitle("Decisions")
             .toolbar { ToolbarItem(placement: .topBarLeading) { ComputerSwitcher() } }
             .navigationDestination(for: String.self) { DecisionDetailView(decisionId: $0) }
+            .needsDestinations()
             .navigationDestination(item: $openBot) { BotDetailView(botId: $0) }
         }
+        // Card ids anywhere in this stack open the card here (H-204).
+        .opensCardLinks { path.append($0) }
         .onChange(of: openDecision, initial: true) { _, id in
             guard let id else { return }
-            path = [id]
+            path = NavigationPath([id])
             openDecision = nil
         }
     }

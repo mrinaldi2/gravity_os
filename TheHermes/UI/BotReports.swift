@@ -6,6 +6,7 @@ import SwiftUI
 struct BotReportsPane: View {
     @Environment(AppStore.self) private var store
     @Environment(LensStore.self) private var lens
+    @Environment(Fleet.self) private var fleet
     let botId: String
     /// Opens the bot's chat, to answer it.
     let openChat: () -> Void
@@ -24,7 +25,8 @@ struct BotReportsPane: View {
             if store.hasOwnerThreads {
                 if let latest = sections.latest {
                     Section {
-                        Text(OwnerText.rich(latest.text)).font(.callout).textSelection(.enabled)
+                        Text(fleet.linkedText(OwnerText.stripEnvelope(latest.text))).font(.callout).textSelection(.enabled)
+                            .cardMenu(for: latest.text)
                     } header: {
                         SectionTitle(latest.at.map { "Latest report · \($0.relative)" } ?? "Latest report")
                     }
@@ -33,7 +35,8 @@ struct BotReportsPane: View {
                     Section {
                         ForEach(questions) { question in
                             VStack(alignment: .leading, spacing: 6) {
-                                Text(OwnerText.rich(question.text)).font(.callout).lineLimit(4)
+                                Text(fleet.linkedText(OwnerText.stripEnvelope(question.text))).font(.callout).lineLimit(4)
+                                    .cardMenu(for: question.text)
                                 Button("Answer in Chat", action: openChat).font(.subheadline.weight(.semibold))
                             }
                             .padding(.vertical, 2)
@@ -57,7 +60,8 @@ struct BotReportsPane: View {
                 Section {
                     ForEach(sections.earlier.prefix(10)) { entry in
                         VStack(alignment: .leading, spacing: 3) {
-                            Text(OwnerText.rich(entry.text)).font(.callout).lineLimit(5)
+                            Text(fleet.linkedText(OwnerText.stripEnvelope(entry.text))).font(.callout).lineLimit(5)
+                                .cardMenu(for: entry.text)
                             if let at = entry.at { Text(at.relative).font(.caption2).foregroundStyle(Color.secondaryText) }
                         }
                     }

@@ -164,6 +164,10 @@ final class Fleet {
     private(set) var computers: [Computer] = []
     /// The projects home and Needs you, across every computer.
     let home = HomeFeed()
+    /// Card ids this phone knows, and their previews (H-204).
+    let cards = CardDirectory()
+    /// A card to open, from a link that came from outside the app.
+    var openCard: String?
     private(set) var selectedId: String?
     /// Launched with test arguments: nothing is saved.
     @ObservationIgnored private var ephemeral = false

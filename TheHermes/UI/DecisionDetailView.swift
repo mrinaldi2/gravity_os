@@ -1,6 +1,7 @@
 import SwiftUI
 
 struct DecisionDetailView: View {
+    @Environment(Fleet.self) private var fleet
     @Environment(AppStore.self) private var store
     let decisionId: String
     @State private var option: String?
@@ -48,6 +49,7 @@ struct DecisionDetailView: View {
                 Text(decision.title).font(.title3.weight(.semibold))
                 if !decision.body.isEmpty {
                     Text(markdown(decision.body)).font(.callout).textSelection(.enabled)
+                        .cardMenu(for: decision.body)
                 }
                 if let deadline = decision.deadlineAt {
                     Label("Due \(deadline.formatted(date: .abbreviated, time: .shortened))", systemImage: "clock")
@@ -95,7 +97,7 @@ struct DecisionDetailView: View {
                                     if decision.recommendation == item.key { Pill(text: "Recommended", tone: .ready) }
                                 }
                                 if !item.description.isEmpty {
-                                    Text(item.description).font(.footnote).foregroundStyle(Color.secondaryText)
+                                    Text(markdown(item.description)).font(.footnote).foregroundStyle(Color.secondaryText)
                                 }
                                 if !item.grants.isEmpty {
                                     Label(OptionGrant.words(item.grants) { store.bot($0)?.name ?? $0 }, systemImage: "key")
@@ -183,6 +185,7 @@ struct DecisionDetailView: View {
                         }
                     }
                     Text(markdown(entry.body)).font(.callout).textSelection(.enabled)
+                        .cardMenu(for: entry.body)
                 }
             }
             if store.canControl {
@@ -216,10 +219,9 @@ struct DecisionDetailView: View {
         return fields
     }
 
-    private func markdown(_ text: String) -> AttributedString {
-        let options = AttributedString.MarkdownParsingOptions(interpretedSyntax: .inlineOnlyPreservingWhitespace)
-        return (try? AttributedString(markdown: text, options: options)) ?? AttributedString(text)
-    }
+    /// Inline Markdown with card ids as links (H-204).
+    private func markdown(_ text: String) -> AttributedString { fleet.linkedText(text) }
+
 
     private func act(_ action: @escaping () async throws -> Void) {
         busy = true

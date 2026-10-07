@@ -10,6 +10,10 @@ struct PadRootView: View {
     @Binding var openBot: BotLink?
     @State private var selection: Item? = .projects
     @State private var chatPanel = false
+    /// The project column's stack, so card links push there (H-204).
+    @State private var projectPath = NavigationPath()
+    /// A card to show once its project is selected.
+    @State private var pendingCard: NeedsDestination?
 
     enum Item: Hashable {
         case needs, chat, projects, settings
@@ -81,7 +85,22 @@ struct PadRootView: View {
             case .settings: selection = .settings
             }
         }
+        // A card link from outside: its project, with the card pushed (H-204).
+        .onChange(of: fleet.openCard, initial: true) { _, id in
+            guard let id, let home = fleet.cards.home(for: id) else { return }
+            fleet.openCard = nil
+            let card = NeedsDestination.item(computerId: home.computerId, itemId: id)
+            let project = Item.project(HomeProjectLink(computerId: home.computerId, projectId: home.projectId))
+            if selection == project {
+                projectPath = NavigationPath([card])
+            } else {
+                pendingCard = card
+                selection = project
+            }
+        }
         .onChange(of: selection) { _, item in
+            projectPath = pendingCard.map { NavigationPath([$0]) } ?? NavigationPath()
+            pendingCard = nil
             switch item {
             case .needs: tab = .needs
             case .chat: tab = .chat; chatPanel = false
@@ -101,11 +120,12 @@ struct PadRootView: View {
             SettingsView(inTab: true)
         case .project(let link):
             if let computer = fleet.computer(id: link.computerId) {
-                NavigationStack {
+                NavigationStack(path: $projectPath) {
                     ProjectScreen(projectId: link.projectId)
                         .computerEnvironment(computer)
                         .needsDestinations()
                 }
+                .opensCardLinks(projectIds: [link.projectId]) { projectPath.append($0) }
                 .id(link)
             }
         case .projects, nil:

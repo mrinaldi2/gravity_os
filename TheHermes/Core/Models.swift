@@ -14,6 +14,8 @@ struct Project: Identifiable, Equatable {
     var links: [ProjectLink]
     /// The shared git repository workers check out and push to, if any.
     var repo: ProjectRepo?
+    /// Its card ids' prefix ("H" for "H-017"), when the service sends it (H-203).
+    var itemPrefix: String?
 
     init(_ d: JSONDict) {
         id = d.str("id")
@@ -26,6 +28,7 @@ struct Project: Identifiable, Equatable {
         }
         leadBotId = d.optStr("lead_bot_id")
         deletedAt = d.date("deleted_at")
+        itemPrefix = d.optStr("item_prefix")
     }
 }
 

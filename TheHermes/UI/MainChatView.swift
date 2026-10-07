@@ -85,6 +85,7 @@ struct MainChatView: View {
                 }
             }
             .navigationDestination(for: BotLink.self) { BotDetailView(botId: $0.botId, initialPane: $0.pane) }
+            .needsDestinations()
             .onChange(of: openBot.wrappedValue, initial: true) { _, link in
                 guard let link else { return }
                 path = NavigationPath([link])
@@ -97,6 +98,8 @@ struct MainChatView: View {
                 }
             }
         }
+        // Card ids anywhere in this stack open the card here (H-204).
+        .opensCardLinks { path.append($0) }
     }
 
     private func projectName(_ card: ThreadCard) -> String? {
@@ -258,6 +261,7 @@ struct OwnerThreadView: View {
 }
 
 private struct ThreadBubble: View {
+    @Environment(Fleet.self) private var fleet
     let entry: ThreadEntry
 
     var body: some View {
@@ -265,12 +269,13 @@ private struct ThreadBubble: View {
             if entry.fromOwner { Spacer(minLength: 40) }
             VStack(alignment: entry.fromOwner ? .trailing : .leading, spacing: 4) {
                 if entry.asks && entry.open { Pill(text: "Question for you", tone: .needsYou) }
-                Text(OwnerText.rich(entry.text))
+                Text(fleet.linkedText(OwnerText.stripEnvelope(entry.text)))
                     .font(.callout)
                     .textSelection(.enabled)
                     .padding(10)
                     .background(entry.fromOwner ? Color.accentColor.opacity(0.15) : Color(.secondarySystemGroupedBackground),
                                 in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+                    .cardMenu(for: entry.text)
                 if let at = entry.at { Text(at.relative).font(.caption2).foregroundStyle(Color.secondaryText) }
             }
             if !entry.fromOwner { Spacer(minLength: 40) }

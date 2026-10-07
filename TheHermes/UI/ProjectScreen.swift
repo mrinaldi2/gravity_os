@@ -139,6 +139,7 @@ struct OverviewPane: View {
                     // Up to 5 here; the rest wait in Needs you (UX-029).
                     ForEach(needs.prefix(5), id: \.id) { row in
                         NavigationLink(value: fleet.needsDestination(row, answeredBy: card.computerId)) { NeedsRow(row: row) }
+                            .cardMenu(for: row.itemIdText)
                     }
                     let total = max(Int(card.row.attention.count), needs.count)
                     if total > 5 {
@@ -341,6 +342,7 @@ struct ColumnList: View {
 
 /// A card in full: description, criteria and comments; the owner can comment.
 struct ItemView: View {
+    @Environment(Fleet.self) private var fleet
     @Environment(AppStore.self) private var store
     let itemId: String
     @State private var detail: BoardItemDetail?
@@ -362,7 +364,8 @@ struct ItemView: View {
                 Section {
                     Text(item.title).font(.headline)
                     if !item.description_p.isEmpty {
-                        Text(LocalizedStringKey(item.description_p)).font(.callout)
+                        Text(fleet.linkedText(item.description_p)).font(.callout)
+                            .cardMenu(for: item.description_p)
                     }
                 } header: {
                     SectionTitle(item.id)
@@ -409,10 +412,16 @@ struct ItemView: View {
                 Spacer(minLength: 4)
                 statusLabel(row)
             }
-            Text(row.body ?? "A comment. Its text shows once the Hermes service on \(store.computerName.isEmpty ? "your computer" : store.computerName) is updated.")
-                .font(.callout)
-                .foregroundStyle(row.body == nil ? Color.secondaryText : Color.primary)
-                .textSelection(.enabled)
+            Group {
+                if let body = row.body {
+                    Text(fleet.linkedText(body)).cardMenu(for: body)
+                } else {
+                    Text("A comment. Its text shows once the Hermes service on \(store.computerName.isEmpty ? "your computer" : store.computerName) is updated.")
+                        .foregroundStyle(Color.secondaryText)
+                }
+            }
+            .font(.callout)
+            .textSelection(.enabled)
             if case .failed(let message) = row.status {
                 HStack(spacing: 12) {
                     Text(message).font(.caption).foregroundStyle(Color.errorText)
@@ -591,10 +600,14 @@ struct ReleasesPane: View {
 
 /// A package: where it stands, its items and tests. Ruling on it comes with the release review.
 struct ReleaseView: View {
+    @Environment(Fleet.self) private var fleet
     @Environment(AppStore.self) private var store
     let releaseId: String
     @State private var release: Release?
     @State private var failure: String?
+
+    /// The computer this release was read from.
+    private var computerId: String { fleet.computers.first { $0.store === store }?.id ?? "" }
 
     var body: some View {
         List {
@@ -603,7 +616,8 @@ struct ReleaseView: View {
                     let (words, tone) = release.statusWords
                     Pill(text: words, tone: tone)
                     if let changelog = release.changelog, !changelog.isEmpty {
-                        Text(LocalizedStringKey(changelog)).font(.callout)
+                        Text(fleet.linkedText(changelog)).font(.callout)
+                            .cardMenu(for: changelog)
                     }
                     Text(release.canRule
                          ? "Ruling on a release from the phone comes with the release review. Approve, hold or reject it on the desktop for now."
@@ -615,6 +629,9 @@ struct ReleaseView: View {
                     // package is submitted, the owner's ruling after.
                     ForEach(release.items) { item in
                         let state = release.state(of: item) { store.bot($0)?.name }
+                        // The row is the card: tap opens it, long-press previews it (H-204).
+                        NavigationLink(value: NeedsDestination.item(computerId: fleet.cards.home(for: item.itemId)?.computerId ?? computerId,
+                                                                    itemId: item.itemId)) {
                         VStack(alignment: .leading, spacing: 4) {
                             Text(state.title).font(.subheadline.weight(.medium)).lineLimit(3)
                             if let meta = state.meta {
@@ -626,6 +643,8 @@ struct ReleaseView: View {
                         }
                         .padding(.vertical, 2)
                         .accessibilityElement(children: .combine)
+                        }
+                        .cardMenu(id: item.itemId)
                     }
                 } header: {
                     SectionTitle(release.showsProgress ? "Progress" : "Items", count: release.items.count)
@@ -661,6 +680,7 @@ struct ReleaseView: View {
 // MARK: Meetings
 
 struct MeetingsPane: View {
+    @Environment(Fleet.self) private var fleet
     let home: (computer: Computer, projectId: String)?
     @State private var dashboard: Dashboard?
     @State private var failure: String?
@@ -675,7 +695,8 @@ struct MeetingsPane: View {
                             IconTile(systemImage: "person.3", tone: meeting.collecting ? .working : nil)
                         }
                         if let summary = meeting.lastSummary {
-                            Text(summary).font(.callout)
+                            Text(fleet.linkedText(summary)).font(.callout)
+                                .cardMenu(for: summary)
                         }
                     }
                 }

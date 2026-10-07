@@ -105,12 +105,20 @@ struct ProjectsHomeView: View {
                 }
             }
             .needsDestinations()
+            // A card link from outside (iPad: PadRootView opens it in the project column).
+            .onChange(of: fleet.openCard, initial: true) { _, id in
+                guard open == nil, let id, let home = fleet.cards.home(for: id) else { return }
+                fleet.openCard = nil
+                path.append(NeedsDestination.item(computerId: home.computerId, itemId: id))
+            }
             .onChange(of: openProject.wrappedValue, initial: true) { _, link in
                 guard let link else { return }
                 path = NavigationPath([link])
                 openProject.wrappedValue = nil
             }
         }
+        // Card ids anywhere in this stack open the card here (H-204).
+        .opensCardLinks { path.append($0) }
     }
 
     @ViewBuilder private func pinButton(_ card: HomeCard) -> some View {
@@ -244,6 +252,7 @@ struct NeedsYouView: View {
                         }
                         ForEach(rows, id: \.id) { row in
                             NavigationLink(value: fleet.needsDestination(row, answeredBy: card.computerId)) { NeedsRow(row: row) }
+                            .cardMenu(for: row.itemIdText)
                         }
                     } header: {
                         SectionTitle(card.rank.map { "\(card.row.name) · #\($0)" } ?? card.row.name)
@@ -280,6 +289,8 @@ struct NeedsYouView: View {
                 openDecision.wrappedValue = nil
             }
         }
+        // Card ids anywhere in this stack open the card here (H-204).
+        .opensCardLinks { path.append($0) }
     }
 
 }
@@ -402,6 +413,14 @@ struct PermissionWords: Equatable {
     }
 }
 
+extension HomeAttentionRow {
+    /// The card a row is about, for its long-press preview; empty otherwise.
+    var itemIdText: String {
+        if case .itemID(let id)? = target { return id }
+        return ""
+    }
+}
+
 struct NeedsRow: View {
     let row: HomeAttentionRow
 
@@ -409,9 +428,16 @@ struct NeedsRow: View {
     /// "Backend Dev asks: Bash: rm -rf build/".
     private var prompt: PermissionWords? { row.kind == .permissionPrompt ? PermissionWords(row.title) : nil }
 
+    /// A row about one card reads "H-293 · <title>" (UX-035 §2).
+    private var title: String {
+        if let prompt { return prompt.title }
+        if case .itemID(let id)? = row.target, !row.title.hasPrefix(id) { return "\(id) · \(row.title)" }
+        return row.title
+    }
+
     var body: some View {
         // The command gets its own room, so "Permission request · 8m ago" stays whole.
-        ItemRow(title: prompt?.title ?? row.title, subtitle: subtitle, titleLines: 2,
+        ItemRow(title: title, subtitle: subtitle, titleLines: 2,
                 subtitleLines: prompt?.command == nil ? 1 : 2) {
             IconTile(systemImage: symbol, tone: tone)
         }

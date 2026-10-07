@@ -5,6 +5,7 @@ import SwiftUI
 /// a file path is fetched from the Mac through Gravity Lens (reports only);
 /// a web image is loaded from the web.
 struct MarkdownText: View {
+    @Environment(Fleet.self) private var fleet
     let text: String
     /// The report this text is, so its local images can be resolved.
     var report: (project: String, name: String)?
@@ -15,10 +16,12 @@ struct MarkdownText: View {
     }
 
     var body: some View {
-        Markdown(text)
+        // Card ids become links (H-204); a long-press previews them.
+        Markdown(CardLinker.linked(text, prefixes: fleet.cards.prefixes))
             .markdownTheme(.gravity)
             .markdownImageProvider(MarkdownImages(report: report.map { ReportRef(project: $0.project, name: $0.name) }))
             .textSelection(.enabled)
+            .cardMenu(for: text)
     }
 }
 
