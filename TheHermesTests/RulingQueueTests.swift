@@ -20,7 +20,7 @@ final class RulingQueueTests: XCTestCase {
         await settle(queue)
         XCTAssertEqual(sent, 1)
         XCTAssertNil(queue.pending)
-        XCTAssertEqual(queue.outcome?.text, "2 of 3 items of 0.17.0 approved.")
+        XCTAssertEqual(queue.outcome?.text, "2 of 3 items of 0.17.0 approved. DevOps repackages them next.")
         XCTAssertEqual(queue.outcome?.ok, true)
     }
 
@@ -32,7 +32,7 @@ final class RulingQueueTests: XCTestCase {
         try? await Task.sleep(for: .milliseconds(200))
         XCTAssertEqual(sent, 0)
         XCTAssertNil(queue.pending)
-        XCTAssertEqual(queue.outcome?.text, "Not approved. Nothing was sent.")
+        XCTAssertEqual(queue.outcome?.text, "Undone. Nothing was sent.")
     }
 
     func testAVersionConflictSaysThePackageChanged() async {
@@ -43,7 +43,7 @@ final class RulingQueueTests: XCTestCase {
         await settle(queue)
         XCTAssertEqual(queue.outcome?.changed, true)
         XCTAssertEqual(queue.outcome?.ok, false)
-        XCTAssertEqual(queue.outcome?.text, "0.17.0 changed while you were looking at it, so nothing was sent. Check it again, then rule.")
+        XCTAssertEqual(queue.outcome?.text, "0.17.0 changed while you were reviewing it. Nothing was sent. Check it again, then rule.")
     }
 
     func testAnotherRefusalKeepsItsReason() async {
@@ -53,7 +53,16 @@ final class RulingQueueTests: XCTestCase {
         }
         await settle(queue)
         XCTAssertEqual(queue.outcome?.changed, false)
-        XCTAssertEqual(queue.outcome?.text, "Not approved: rule on it in the release review")
+        XCTAssertEqual(queue.outcome?.text, "Couldn't approve 0.17.0: rule on it in the release review")
+    }
+
+    func testAWholeApprovalSaysTheRolloutIsNext() async {
+        let queue = RulingQueue()
+        queue.approve(release, leftOut: 0, wait: .milliseconds(10)) { self.release }
+        await settle(queue)
+        XCTAssertEqual(queue.outcome?.text, "0.17.0 approved. DevOps rolls it out next.")
+        XCTAssertEqual(OwnerAuth.Failure.cancelled(.approve).localizedDescription, "Not approved. Nothing was sent.",
+                       "a cancelled Face ID keeps its own words")
     }
 
     func testConflictDetection() {

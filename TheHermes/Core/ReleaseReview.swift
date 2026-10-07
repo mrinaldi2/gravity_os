@@ -154,7 +154,7 @@ final class RulingQueue {
                 self.finish(release, RulingWords.approved(release, leftOut: leftOut), ok: true, changed: false)
             } catch {
                 let changed = RulingWords.isConflict(error)
-                self.finish(release, changed ? RulingWords.changed(release) : RulingWords.notApproved(error), ok: false, changed: changed)
+                self.finish(release, changed ? RulingWords.changed(release) : RulingWords.notApproved(release, error), ok: false, changed: changed)
             }
         }
     }
@@ -180,19 +180,23 @@ final class RulingQueue {
 }
 
 enum RulingWords {
-    /// "0.17.0 approved." or "2 of 3 items of 0.17.0 approved."
+    /// What happens next too (UX): "0.17.0 approved. DevOps rolls it out next."
     static func approved(_ release: Release, leftOut: Int) -> String {
-        leftOut > 0 ? "\(release.items.count - leftOut) of \(release.items.count) items of \(release.version) approved."
-                    : "\(release.version) approved."
+        leftOut > 0
+            ? "\(release.items.count - leftOut) of \(release.items.count) items of \(release.version) approved. DevOps repackages them next."
+            : "\(release.version) approved. DevOps rolls it out next."
     }
 
-    static let undone = "Not approved. Nothing was sent."
+    /// After Undo. A cancelled Face ID keeps "Not approved. Nothing was sent."
+    static let undone = "Undone. Nothing was sent."
 
-    static func notApproved(_ error: Error) -> String { "Not approved: \(error.localizedDescription)" }
+    static func notApproved(_ release: Release, _ error: Error) -> String {
+        "Couldn't approve \(release.version): \(error.localizedDescription)"
+    }
 
     /// CE: a version conflict reloads the package and says so.
     static func changed(_ release: Release) -> String {
-        "\(release.version) changed while you were looking at it, so nothing was sent. Check it again, then rule."
+        "\(release.version) changed while you were reviewing it. Nothing was sent. Check it again, then rule."
     }
 
     /// `release_rule` refuses a stale `expected_version` (or frozen hash) as a conflict.
