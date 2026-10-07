@@ -61,4 +61,20 @@ final class LinkedTextTests: XCTestCase {
         XCTAssertFalse(LinkedTextModel.isRunningText("```\nlog\n```"))
         XCTAssertFalse(LinkedTextModel.isRunningText("![shot](a.png)"))
     }
+
+    func testThePointerOrPressFindsTheLinkUnderIt() {
+        // Hover (AC1) and the per-link long-press (AC0) both start from the link
+        // under the finger or pointer: only that card, never the whole block.
+        let view = CardLinkTextView(frame: CGRect(x: 0, y: 0, width: 320, height: 100))
+        view.textContainerInset = .zero
+        view.attributedText = LinkedTextModel.attributed("See HL-004 and HL-005 today.", prefixes: prefixes, font: font, color: .label)
+        view.links = LinkedTextModel.cardLinks(in: view.attributedText)
+        view.layoutIfNeeded()
+        let second = view.rect(for: view.range(of: "HL-005")!)
+        XCTAssertFalse(second.isEmpty)
+        XCTAssertEqual(view.cardId(at: CGPoint(x: second.midX, y: second.midY)), "HL-005")
+        let first = view.rect(for: view.range(of: "HL-004")!)
+        XCTAssertEqual(view.cardId(at: CGPoint(x: first.midX, y: first.midY)), "HL-004")
+        XCTAssertNil(view.cardId(at: CGPoint(x: 2, y: first.midY)), "plain text: no card")
+    }
 }
