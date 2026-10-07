@@ -95,7 +95,12 @@ final class DaemonClient {
     /// large reply on a slow link holds back everything behind it, pongs too.
     private static let busySilenceLimit: Duration = .seconds(45)
     /// How long a check of a link that may have broken waits for an answer.
-    private static let probeTimeout: Duration = .seconds(4)
+    /// A loaded Mac over a relayed Tailscale path easily takes 4 s; replacing
+    /// a healthy socket fails everything in flight (H-217).
+    static let probeTimeout: Duration = .seconds(10)
+    /// How long a request made while (re)connecting waits for the connection
+    /// instead of failing at once (H-217).
+    var connectWait: Duration = .seconds(12)
     /// A socket that opens but never answers the hello is given up on.
     private static let handshakeTimeout: Duration = .seconds(10)
 
@@ -157,6 +162,7 @@ final class DaemonClient {
     // MARK: Requests
 
     func request(_ type: String, _ fields: JSONDict = [:]) async throws -> JSONDict {
+        await awaitConnection()
         guard status == .connected, let task else {
             throw DaemonError(code: "not_connected", message: "Not connected to the Hermes service.")
         }
@@ -184,6 +190,7 @@ final class DaemonClient {
     /// A typed request in a binary frame (ADR-001): one `Envelope` out, the
     /// one under the same `req_id` back. An `Error` body throws.
     func request(_ body: Hermes_Wire_V1_Envelope.OneOf_Body, name: String) async throws -> Hermes_Wire_V1_Envelope {
+        await awaitConnection()
         guard status == .connected, let task else {
             throw DaemonError(code: "not_connected", message: "Not connected to the Hermes service.")
         }
@@ -217,6 +224,39 @@ final class DaemonClient {
     }
 
     // MARK: Connection
+
+    /// A request during a reconnect waits for it (H-217): only these states
+    /// are on their way back. Not connecting on purpose, or refused, fails now.
+    static func waitsForConnection(_ status: ConnectionStatus, wanted: Bool) -> Bool {
+        guard wanted else { return false }
+        switch status {
+        case .connecting, .disconnected: return true
+        case .connected, .idle, .authFailed, .versionMismatch: return false
+        }
+    }
+
+    /// Waits up to `connectWait` for the connection to come back. A cancelled
+    /// caller (the owner left the screen) stops waiting at once: a cancelled
+    /// sleep returns immediately, so `try?` would spin this loop on the main
+    /// thread until the deadline (Architect M1 on H-217).
+    func awaitConnection() async {
+        let deadline = ContinuousClock.now + connectWait
+        while Self.waitsForConnection(status, wanted: wantConnected), ContinuousClock.now < deadline {
+            do {
+                try await Task.sleep(for: .milliseconds(100))
+            } catch {
+                return
+            }
+        }
+    }
+
+    #if DEBUG
+    /// Tests: a client in a given state, without a socket.
+    func setForTests(status: ConnectionStatus, wanted: Bool) {
+        wantConnected = wanted
+        self.status = status
+    }
+    #endif
 
     private func open() {
         teardown()

@@ -99,7 +99,11 @@ final class AppStore {
     @ObservationIgnored private var sinks: [String: TerminalSink] = [:]
     @ObservationIgnored private var troubleTask: Task<Void, Never>?
     /// How long a drop lasts before `connectionTrouble` shows it.
-    @ObservationIgnored var troubleDelay: Duration = .seconds(3)
+    /// Eight seconds (H-217): retries on a loaded Mac over Tailscale often
+    /// take longer than three, and say nothing the owner must act on.
+    @ObservationIgnored var troubleDelay: Duration = .seconds(8)
+    /// Bumped on every connection: screens that failed to load reload (H-217).
+    var reconnects = 0
 
     var canControl: Bool { grants.contains("control") }
     var canApprove: Bool { grants.contains("approve") }
@@ -180,6 +184,7 @@ final class AppStore {
         if status != .connected { latency = nil }
         noteTrouble(status)
         guard status == .connected else { return }
+        reconnects += 1
         Task { await refresh() }
         for sink in sinks.values { sink.reattach() }
         // A new connection watches nothing yet: pick the bot's browser back up.

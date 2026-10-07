@@ -82,6 +82,7 @@ struct MainChatView: View {
             }
             .refreshable { await load() }
             .task(id: versions) { await load() }
+            .reloadsOnReconnect { await load() }
             .navigationDestination(for: ThreadLink.self) { link in
                 if let computer = fleet.computer(id: link.computerId) {
                     Group {
@@ -221,6 +222,7 @@ struct OwnerThreadView: View {
             }
         }
         .task(id: store.ownerThreadsVersion) { await load() }
+        .reloadsOnReconnect { await load() }
     }
 
     private var composer: some View {
