@@ -34,8 +34,8 @@ final class ReleaseStateTests: XCTestCase {
         let submitted = try release("submitted-ios-0.5.0")
         XCTAssertFalse(submitted.showsProgress, "submitted: the ruling, not the progress")
         for row in states(submitted).values {
-            XCTAssertEqual(row.pill, "◐ For you to test")
-            XCTAssertEqual(row.tone, .needsYou)
+            XCTAssertEqual(row.pill, "✓ Included", "it ships unless left out, as desktop (UX-036)")
+            XCTAssertEqual(row.tone, .ready)
             XCTAssertTrue(row.meta?.hasPrefix("Awaiting owner") ?? false)
         }
     }

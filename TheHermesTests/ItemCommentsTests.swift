@@ -81,4 +81,17 @@ final class ItemCommentsTests: XCTestCase {
         XCTAssertNil(rows[0].body)
         XCTAssertEqual(rows[0].author, "bot:dev")
     }
+
+    func testAnUnknownAuthorIsABotNeverAnId() {
+        let names = ["dev": "Desktop Dev"]
+        XCTAssertEqual(CommentWords.author("bot:dev") { names[$0] }, "Desktop Dev")
+        XCTAssertEqual(CommentWords.author("bot:3f2a9c10-aaaa-bbbb-cccc-0123456789ab") { names[$0] }, "A bot")
+        XCTAssertEqual(CommentWords.author("device:phone") { names[$0] }, "You")
+        XCTAssertEqual(CommentWords.author("user") { names[$0] }, "You")
+    }
+
+    func testReplyingToYourOwnComment() {
+        XCTAssertEqual(CommentWords.replying(to: "user") { _ in "You" }, "Replying to your comment")
+        XCTAssertEqual(CommentWords.replying(to: "bot:dev") { _ in "Desktop Dev" }, "Replying to Desktop Dev")
+    }
 }

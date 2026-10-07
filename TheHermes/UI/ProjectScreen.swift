@@ -409,7 +409,7 @@ struct ItemView: View {
                 Spacer(minLength: 4)
                 statusLabel(row)
             }
-            Text(row.body ?? "A comment. Its text shows once The Hermes is updated on the computer.")
+            Text(row.body ?? "A comment. Its text shows once the Hermes service on \(store.computerName.isEmpty ? "your computer" : store.computerName) is updated.")
                 .font(.callout)
                 .foregroundStyle(row.body == nil ? Color.secondaryText : Color.primary)
                 .textSelection(.enabled)
@@ -417,8 +417,11 @@ struct ItemView: View {
                 HStack(spacing: 12) {
                     Text(message).font(.caption).foregroundStyle(Color.errorText)
                     if let id = row.pendingId {
+                        // Caption-sized words, 44 pt targets.
                         Button("Retry") { retry(id) }.font(.caption.weight(.semibold))
+                            .frame(minWidth: 44, minHeight: 44).contentShape(Rectangle())
                         Button("Discard", role: .destructive) { pending.removeAll { $0.id == id } }.font(.caption)
+                            .frame(minWidth: 44, minHeight: 44).contentShape(Rectangle())
                     }
                 }
                 .buttonStyle(.borderless)
@@ -451,7 +454,7 @@ struct ItemView: View {
         VStack(alignment: .leading, spacing: 6) {
             if let replyTo {
                 HStack {
-                    Text("Replying to \(author(replyTo.author))").font(.caption).foregroundStyle(Color.secondaryText)
+                    Text(CommentWords.replying(to: replyTo.author) { author($0) }).font(.caption).foregroundStyle(Color.secondaryText)
                     Button("Cancel") { self.replyTo = nil }.font(.caption).buttonStyle(.borderless)
                 }
             }
@@ -467,9 +470,7 @@ struct ItemView: View {
     }
 
     private func author(_ actor: String) -> String {
-        if actor == "user" || actor == "owner" || actor.hasPrefix("device:") { return "You" }
-        let id = actor.hasPrefix("bot:") ? String(actor.dropFirst(4)) : actor
-        return store.bot(id)?.name ?? id
+        CommentWords.author(actor) { store.bot($0)?.name }
     }
 
     private func load() async {

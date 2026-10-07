@@ -56,6 +56,25 @@ struct CommentGroup: Identifiable, Equatable {
     var id: String { comment.id }
 }
 
+/// Who wrote a comment, in the glossary's words (UX-036).
+enum CommentWords {
+    static func isOwner(_ actor: String) -> Bool {
+        actor == "user" || actor == "owner" || actor.hasPrefix("device:")
+    }
+
+    /// "You", the bot's name, or "A bot": never a raw id.
+    static func author(_ actor: String, botName: (String) -> String?) -> String {
+        if isOwner(actor) { return "You" }
+        let id = actor.hasPrefix("bot:") ? String(actor.dropFirst(4)) : actor
+        return botName(id) ?? "A bot"
+    }
+
+    /// "Replying to Desktop Dev", or "Replying to your comment".
+    static func replying(to actor: String, botName: (String) -> String) -> String {
+        isOwner(actor) ? "Replying to your comment" : "Replying to \(botName(actor))"
+    }
+}
+
 enum CommentThread {
     private static func isOwner(_ actor: String) -> Bool {
         actor == "user" || actor == "owner" || actor.hasPrefix("device:")
@@ -129,7 +148,7 @@ extension AppStore {
             let reasons = refused.unmet.map(\.text).filter { !$0.isEmpty }
             throw DaemonError(code: "refused", message: reasons.isEmpty ? "The board refused the comment." : reasons.joined(separator: " "))
         case .conflict?:
-            throw DaemonError(code: "conflict", message: "The card changed while you wrote. Try again.")
+            throw DaemonError(code: "conflict", message: "The card changed while you wrote.")
         default:
             return
         }

@@ -236,9 +236,10 @@ struct Release: Identifiable {
             let line = [meta, reason].compactMap { $0 }.joined(separator: " · ")
             return ItemState(title: title, meta: line.isEmpty ? nil : line, pill: "⤼ Left out · back to Doing", tone: .quiet)
         default:
-            // Not ruled yet: only worth saying while it waits for the owner.
+            // Not ruled yet. While the package waits for the owner every item
+            // ships unless left out, as desktop says (UX-036); otherwise nothing.
             let waiting = status == "awaiting_owner"
-            return ItemState(title: title, meta: meta, pill: waiting ? "◐ For you to test" : nil, tone: waiting ? .needsYou : nil)
+            return ItemState(title: title, meta: meta, pill: waiting ? "✓ Included" : nil, tone: waiting ? .ready : nil)
         }
     }
 
