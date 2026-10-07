@@ -145,7 +145,9 @@ extension XCUIApplication {
         let tab = tabBars.buttons[name]
         let tabFrame = tab.exists ? tab.frame : nil
         let matches = buttons.matching(NSPredicate(format: "label == %@", name))
-        return matches.allElementsBoundByIndex.first { $0.frame != tabFrame } ?? matches.firstMatch
+        // H-160 AC6 adds hidden ⌘1–5 buttons named like the segments, below them: take the topmost.
+        return matches.allElementsBoundByIndex.filter { $0.frame != tabFrame }.min { $0.frame.minY < $1.frame.minY }
+            ?? matches.firstMatch
     }
 
     /// A bot's page, through its project's Team.

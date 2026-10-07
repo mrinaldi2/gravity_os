@@ -46,7 +46,7 @@ if [ -z "$device" ]; then
 fi
 
 # NO_DEMO=1: tests that bring their own daemon (e.g. a scratch copy via SCRATCH_PORT,
-# SCRATCH_TOKEN, SCRATCH_READONLY_TOKEN) run without starting the demo world.
+# SCRATCH_TOKEN, SCRATCH_READONLY_TOKEN, SCRATCH_CONTROL_PORT) run without starting the demo world.
 no_demo=${NO_DEMO:-}
 for p in $( [ -z "$no_demo" ] && echo "$port $lens_port $peer_port $control_port" ); do
     if nc -z 127.0.0.1 "$p" 2>/dev/null; then
@@ -124,7 +124,7 @@ run_tests() { # <result bundle> <xcodebuild args…>
     rm -rf "$bundle"
     TEST_RUNNER_GRAV_TOKEN=$(cat "$out/gravity/secrets/client.token" 2>/dev/null) \
     TEST_RUNNER_SCRATCH_PORT=${SCRATCH_PORT:-} TEST_RUNNER_SCRATCH_TOKEN=${SCRATCH_TOKEN:-} \
-    TEST_RUNNER_SCRATCH_READONLY_TOKEN=${SCRATCH_READONLY_TOKEN:-} \
+    TEST_RUNNER_SCRATCH_READONLY_TOKEN=${SCRATCH_READONLY_TOKEN:-} TEST_RUNNER_SCRATCH_CONTROL_PORT=${SCRATCH_CONTROL_PORT:-} \
     TEST_RUNNER_GRAV_PORT=$port TEST_RUNNER_LENS_PORT=$lens_port \
     TEST_RUNNER_DEMO_DECISION_ID=${ids% *} TEST_RUNNER_DEMO_BOT_ID=${ids#* } \
     TEST_RUNNER_DEMO_CONTROL_PORT=$control_port TEST_RUNNER_FIXTURES=$PWD/contract/fixtures TEST_RUNNER_SCREENSHOT_DIR=${SCREENSHOT_DIR:-} \
