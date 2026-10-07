@@ -59,6 +59,8 @@ private struct CardMenu: ViewModifier {
     @Environment(Fleet.self) private var fleet
     @Environment(\.openURL) private var openURL
     let text: String
+    /// Looked up when the text appears, so the menu names every card (UX-037).
+    @State private var previews: [String: CardPreview] = [:]
 
     private var ids: [String] { CardLinker.ids(in: text, prefixes: fleet.cards.prefixes) }
 
@@ -71,11 +73,17 @@ private struct CardMenu: ViewModifier {
                 CardPreviewView(id: id).frame(width: 300)
             }
         } else if ids.count > 1 {
-            content.contextMenu {
-                ForEach(ids, id: \.self) { id in
-                    Section(fleet.cards.cached(id).flatMap(\.title).map { "\(id) · \($0)" } ?? id) { actions(id) }
+            content
+                .contextMenu {
+                    ForEach(ids, id: \.self) { id in
+                        Section(CardMenuWords.entry(id, previews[id] ?? fleet.cards.cached(id))) { actions(id) }
+                    }
                 }
-            }
+                .task(id: ids) {
+                    for id in ids where previews[id] == nil {
+                        previews[id] = await fleet.cards.preview(id, fleet: fleet)
+                    }
+                }
         } else {
             content
         }
@@ -84,6 +92,16 @@ private struct CardMenu: ViewModifier {
     @ViewBuilder private func actions(_ id: String) -> some View {
         Button("Open card", systemImage: "rectangle.portrait.on.rectangle.portrait") { openURL(CardLinker.url(id)) }
         Button("Copy \(id)", systemImage: "doc.on.doc") { UIPasteboard.general.string = id }
+    }
+}
+
+/// A multi-card menu's entry: "HL-005 · <title>", "HL-005 · Loading…" until
+/// known, or what happened to it; never a bare id (UX-037).
+enum CardMenuWords {
+    static func entry(_ id: String, _ preview: CardPreview?) -> String {
+        guard let preview else { return "\(id) · Loading…" }
+        if let notice = preview.notice { return notice }
+        return "\(id) · \(preview.title ?? "Loading…")"
     }
 }
 
@@ -109,7 +127,7 @@ struct CardPreviewView: View {
                 }
             } else if slow, let home = fleet.cards.home(for: id) {
                 // Over a second: say where it lives rather than spin (§3).
-                Text(CardPreview(id: id, state: .offline(computer: fleet.computer(id: home.computerId)?.name ?? "its computer",
+                Text(CardPreview(id: id, state: .offline(computer: fleet.computer(id: home.computerId)?.name,
                                                          lastSeen: nil), project: home.projectName).notice ?? "")
                     .font(.callout)
             } else {

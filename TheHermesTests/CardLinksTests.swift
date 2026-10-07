@@ -98,4 +98,38 @@ final class CardLinksTests: XCTestCase {
         XCTAssertEqual(ItemCardAnswer(["id": "H-9", "missing": true]).preview(CardPreview(id: "H-9", state: .found)) { _ in nil }.state,
                        .missing)
     }
+
+    func testAnUnknownComputerIsAnotherComputer() {
+        var offline = CardPreview(id: "H-293", state: .offline(computer: nil, lastSeen: nil), project: "The Hermes")
+        XCTAssertEqual(offline.notice, "H-293 is on The Hermes's board, kept on another computer, which is offline.")
+        offline.title = "Card links"
+        XCTAssertEqual(offline.notice, "H-293 is on The Hermes's board, kept on another computer, which is offline.\nLast seen as: Card links")
+    }
+
+    func testMenuEntriesNeverShowABareId() {
+        XCTAssertEqual(CardMenuWords.entry("HL-005", nil), "HL-005 · Loading…")
+        var found = CardPreview(id: "HL-005", state: .found)
+        found.title = "Owner threads read marks"
+        XCTAssertEqual(CardMenuWords.entry("HL-005", found), "HL-005 · Owner threads read marks")
+        XCTAssertEqual(CardMenuWords.entry("HL-009", CardPreview(id: "HL-009", state: .missing, project: "Hermes Lab")),
+                       "HL-009 isn't on Hermes Lab's board. It may have been deleted or mistyped.")
+    }
+
+    func testTheCardScreenSaysWhereTheCardStands() {
+        var item = Hermes_Board_V1_Item()
+        item.id = "HL-004"
+        item.title = "Board chips on iPad"
+        item.type = .bug
+        item.priority = .p0
+        item.columnKey = "doing"
+        item.assignee = "b1"
+        let facts = CardPreview.of(item) { $0 == "b1" ? "Desktop Dev" : nil }
+        XCTAssertEqual(facts.kindLine, "Bug · P0")
+        XCTAssertEqual(facts.placeLine, "Doing · Desktop Dev")
+        item.priority = .p2
+        item.clearAssignee()
+        let plain = CardPreview.of(item) { _ in nil }
+        XCTAssertEqual(plain.kindLine, "Bug")
+        XCTAssertEqual(plain.placeLine, "Doing · Unassigned")
+    }
 }

@@ -363,12 +363,17 @@ struct ItemView: View {
             if let item = detail?.item {
                 Section {
                     Text(item.title).font(.headline)
+                    // Where the card stands (UX-037): "Doing · Desktop Dev", flags.
+                    let facts = CardPreview.of(item) { store.bot($0)?.name }
+                    if let place = facts.placeLine { Text(place).font(.subheadline) }
+                    if let flags = facts.flagsLine { Text(flags).font(.subheadline).foregroundStyle(Color.warningText) }
                     if !item.description_p.isEmpty {
                         Text(fleet.linkedText(item.description_p)).font(.callout)
                             .cardMenu(for: item.description_p)
                     }
                 } header: {
-                    SectionTitle(item.id)
+                    // The id is the navigation title; the header says what kind of card it is.
+                    if let kind = CardPreview.of(item, botName: { _ in nil }).kindLine { SectionTitle(kind) }
                 }
                 if !item.acceptanceCriteria.isEmpty {
                     Section {

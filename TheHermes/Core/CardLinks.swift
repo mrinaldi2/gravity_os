@@ -106,8 +106,8 @@ struct CardPreview: Equatable {
         case found
         /// The prefix is known, but no such card.
         case missing
-        /// Kept on a computer that isn't connected.
-        case offline(computer: String, lastSeen: Date?)
+        /// Kept on a computer that isn't connected; nil when its name isn't known.
+        case offline(computer: String?, lastSeen: Date?)
         /// The service can't look cards up.
         case oldService(computer: String)
     }
@@ -154,8 +154,10 @@ struct CardPreview: Equatable {
         case .missing:
             return "\(id) isn't on \(board). It may have been deleted or mistyped."
         case .offline(let computer, let lastSeen):
-            let seen = lastSeen.map { " · last seen \($0.formatted(date: .omitted, time: .shortened))" } ?? ""
             let cached = title.map { "\nLast seen as: \($0)" } ?? ""
+            // A name we don't know: say so plainly (UX-037), never "its computer".
+            guard let computer else { return "\(id) is on \(board), kept on another computer, which is offline.\(cached)" }
+            let seen = lastSeen.map { " · last seen \($0.formatted(date: .omitted, time: .shortened))" } ?? ""
             return "\(id) is on \(board), kept on \(computer). \(computer) is offline\(seen).\(cached)"
         case .oldService(let computer):
             return "Update the Hermes service on \(computer) to see cards from here."
@@ -164,6 +166,24 @@ struct CardPreview: Equatable {
 
     /// "H-293: <title>" for VoiceOver; "H-293, card" before the title is known.
     var accessibilityName: String { title.map { "\(id): \($0)" } ?? "\(id), card" }
+
+    /// The card screen's facts, from the item itself (UX-037 follow-up).
+    static func of(_ item: Hermes_Board_V1_Item, botName: (String) -> String?) -> CardPreview {
+        var preview = CardPreview(id: item.id, state: .found)
+        preview.title = item.title
+        preview.type = words(item.type)
+        preview.priority = words(item.priority)
+        preview.column = Release.PlanItem.column(item.columnKey)
+        preview.assignee = item.hasAssignee ? (botName(item.assignee) ?? "A bot") : nil
+        preview.blocked = item.hasBlocked
+        return preview
+    }
+
+    /// "Bug · P0", without the id: priority only for P0/P1.
+    var kindLine: String? {
+        let parts = [type, (priority == "P0" || priority == "P1") ? priority : nil].compactMap { $0 }
+        return parts.isEmpty ? nil : parts.joined(separator: " · ")
+    }
 
     static func words(_ type: Hermes_Board_V1_ItemType) -> String? {
         switch type {
@@ -256,7 +276,7 @@ final class CardDirectory {
         var base = CardPreview(id: id, state: .found, project: home.projectName)
         if let wanted = projectIds.first, wanted != home.projectId { base.otherProject = home.projectName }
         guard let computer = fleet.computer(id: home.computerId), computer.store.status == .connected else {
-            base.state = .offline(computer: fleet.computer(id: home.computerId)?.name ?? "its computer", lastSeen: nil)
+            base.state = .offline(computer: fleet.computer(id: home.computerId)?.name, lastSeen: nil)
             base.title = lastTitles[id]
             return base
         }
@@ -323,7 +343,7 @@ struct ItemCardAnswer {
     let columnName: String?
     let release: String?
     let missing: Bool
-    let unreachable: (computer: String, lastSeen: Date?)?
+    let unreachable: (computer: String?, lastSeen: Date?)?
 
     init(_ d: JSONDict) {
         id = d.str("id")
@@ -333,7 +353,7 @@ struct ItemCardAnswer {
         columnName = d.optStr("column_name")
         release = d.optStr("release")
         missing = d.bool("missing")
-        unreachable = d.dict("unreachable").map { ($0.optStr("computer") ?? "its computer", $0.date("last_seen")) }
+        unreachable = d.dict("unreachable").map { ($0.optStr("computer"), $0.date("last_seen")) }
     }
 
     func preview(_ base: CardPreview, botName: (String) -> String?) -> CardPreview {
