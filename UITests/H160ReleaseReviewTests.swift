@@ -108,7 +108,7 @@ final class H160ReleaseReviewTests: XCTestCase {
     /// Leave out (Hold and Rework), Include, Approve 1 of 3 → Undo within 5 s → nothing sent;
     /// approve again, switch tabs while the app-wide bar runs, outcome line, and the copy's ruling.
     func testLeaveOutApproveNofMUndoThenApproveAcrossTabs() throws {
-        let name = "iOS 0.5.0-qb6"
+        let name = "iOS 0.5.0-qc1"
         let app = launch()
         let approve = review(app, name)
         XCTAssertEqual(approve.label, "Approve \(name)")
@@ -145,7 +145,12 @@ final class H160ReleaseReviewTests: XCTestCase {
         // Approve again, and leave for another tab while the bar runs: it follows (UX-040).
         app.scroll(to: app.buttons["Approve 1 of 3 items"])
         if !app.buttons["Approve 1 of 3 items"].exists {
-            XCTAssertTrue(text(app, "Left out").exists, "left-out choices lost after Undo")
+            // Finding: Undo's outcome is ok, and the screen clears leftOut on any ok outcome.
+            XCTFail("left-out choices lost after Undo")
+            screenshot("QA-008-h160-ac4-after-undo-choices-lost")
+            leaveOut(app, "H-118", rework: nil)
+            leaveOut(app, "H-108", rework: "QA-007 needs rework")
+            app.scroll(to: app.buttons["Approve 1 of 3 items"])
         }
         app.buttons["Approve 1 of 3 items"].tap()
         XCTAssertTrue(bar.waitForExistence(timeout: 5))
@@ -164,7 +169,7 @@ final class H160ReleaseReviewTests: XCTestCase {
     }
 
     func testApproveAll() throws {
-        let name = "iOS 0.5.0-qb2"
+        let name = "iOS 0.5.0-qc2"
         let app = launch()
         let approve = review(app, name)
         XCTAssertTrue(text(app, "DevOps rolls \(name) out to each computer").exists, "approve footer")
@@ -180,7 +185,7 @@ final class H160ReleaseReviewTests: XCTestCase {
     }
 
     func testRejectWithAReason() throws {
-        let name = "iOS 0.5.0-qb3"
+        let name = "iOS 0.5.0-qc3"
         let app = launch()
         review(app, name)
         let reject = app.buttons["Reject…"]
@@ -202,7 +207,7 @@ final class H160ReleaseReviewTests: XCTestCase {
     }
 
     func testHoldWithANote() throws {
-        let name = "iOS 0.5.0-qb4"
+        let name = "iOS 0.5.0-qc4"
         let app = launch()
         review(app, name)
         let hold = app.buttons["Hold"]
@@ -226,7 +231,7 @@ final class H160ReleaseReviewTests: XCTestCase {
     /// Face ID refused: nothing sent. Then the package changes from another client mid-review:
     /// approving says it changed and sends nothing; the daemon's own error is attached.
     func testFaceIDRefusedThenVersionConflict() throws {
-        let name = "iOS 0.5.0-qb5"
+        let name = "iOS 0.5.0-qc5"
         var app = launch("fail")
         review(app, name).tap()
         XCTAssertTrue(text(app, "Not approved. Nothing was sent.").waitForExistence(timeout: 8), "Face ID refusal words")

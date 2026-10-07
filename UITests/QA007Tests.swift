@@ -31,6 +31,9 @@ private func show(_ app: XCUIApplication, _ segment: String, until target: XCUIE
     repeat {
         app.pane(segment).tap()
         if target.waitForExistence(timeout: 4) { return true }
+            // Lists are lazy: a row below the fold exists only once scrolled to.
+            for _ in 0..<6 where !target.exists { app.swipeUp() }
+            if target.exists { return true }
         app.pane(segment == "Overview" ? "Team" : "Overview").tap()
         sleep(1)
     } while Date() < deadline

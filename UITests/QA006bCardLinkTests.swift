@@ -59,6 +59,9 @@ final class QA006bCardLinkTests: XCTestCase {
         repeat {
             app.pane(name).tap()
             if target.waitForExistence(timeout: 4) { return }
+            // Lists are lazy: a row below the fold exists only once scrolled to.
+            for _ in 0..<6 where !target.exists { app.swipeUp() }
+            if target.exists { return }
             app.pane("Overview").tap()
             sleep(1)
         } while Date() < deadline
@@ -94,8 +97,8 @@ final class QA006bCardLinkTests: XCTestCase {
         waitFor(thread, 30).tap()
         sleep(3)
         // H-193 when it is an element; else the lowest card link on screen (H-207: multi-id texts expose one).
-        let onScreen = app.links.allElementsBoundByIndex.filter { $0.frame.minY > 120 && $0.frame.maxY < 760 }
-        let id = link(app, "H-193").exists ? "H-193" : onScreen.last.map { Self.id($0.label) } ?? "H-193"
+        let onScreen = app.links.allElementsBoundByIndex.filter { $0.isHittable }
+        let id = link(app, "H-193").exists && link(app, "H-193").isHittable ? "H-193" : onScreen.first.map { Self.id($0.label) } ?? "H-193"
         if id != "H-193" { XCTContext.runActivity(named: "H-193 not an element; using \(id)") { _ in } }
         tapThrough(app, id, from: "chat thread", capture: "chat")
     }
@@ -123,7 +126,8 @@ final class QA006bCardLinkTests: XCTestCase {
             let standup = app.buttons.matching(NSPredicate(format: "label CONTAINS 'stand-up' OR label CONTAINS 'Stand-up'")).firstMatch
             if standup.waitForExistence(timeout: 4), !anyLink.exists { standup.tap(); sleep(2) }
             if anyLink.waitForExistence(timeout: 4) { break }
-            app.pane("Overview").tap()
+            if !app.pane("Overview").exists { app.navigationBars.buttons["BackButton"].firstMatch.tap(); sleep(1) }
+            if app.pane("Overview").exists { app.pane("Overview").tap() }
         } while Date() < deadline
         screenshot("QA-006b-minutes")
         tapThrough(app, anyLink.exists ? Self.id(anyLink.label) : "H-123", from: "meeting minutes", capture: "minutes")

@@ -43,7 +43,7 @@ final class H214Tests: XCTestCase {
         let app = launch(["-openProject", "The Hermes", "-openSegment", "releases"])
         waitFor(app.navigationBars["The Hermes"], 30)
         // A seeded package awaiting the owner (top of the list): its rows are H-108, H-118, H-134.
-        let release = app.buttons.matching(NSPredicate(format: "label BEGINSWITH 'iOS 0.5.0-qb1,'")).firstMatch
+        let release = app.buttons.matching(NSPredicate(format: "label BEGINSWITH 'iOS 0.5.0-qc1,'")).firstMatch
         let deadline = Date().addingTimeInterval(45)
         repeat {
             app.pane("Releases").tap()

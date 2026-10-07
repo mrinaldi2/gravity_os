@@ -77,9 +77,15 @@ final class QA008Tests: XCTestCase {
         app.typeText("QA-008 reply \(stamp)")  // the field is focused
         sheet.buttons["Send"].tap()
         let posted = any(app, "label BEGINSWITH '✓ Posted.'")
-        XCTAssertTrue(posted.waitForExistence(timeout: 15), "No '✓ Posted. … are told.' line")
         let mine = any(app, "label CONTAINS %@", "QA-008 reply \(stamp)")
-        app.scroll(to: mine)
+        // The reply lands under its comment, often far down a long card.
+        // Nested under the comment it answers: look both ways, posted line first (it may be brief).
+        var sawPosted = posted.exists
+        for _ in 0..<20 where !(mine.exists && mine.isHittable) { app.swipeDown(); sawPosted = sawPosted || posted.exists }
+        for _ in 0..<40 where !(mine.exists && mine.isHittable) { app.swipeUp(); sawPosted = sawPosted || posted.exists }
+        if posted.exists { print("QA-008 posted line: \(posted.label)") }
+        screenshot("QA-008-h210-reply-nested")
+        XCTAssertTrue(sawPosted || posted.waitForExistence(timeout: 3), "No '✓ Posted. … are told.' line")
         screenshot("QA-008-ux041-posted")
         XCTAssertTrue(mine.exists, "The reply is not on the card")
         print("QA-008 posted line: \(posted.exists ? posted.label : "-")")
@@ -143,6 +149,8 @@ final class QA008Tests: XCTestCase {
         repeat {
             app.pane("Releases").tap()
             if release.waitForExistence(timeout: 4) { break }
+            for _ in 0..<6 where !release.exists { app.swipeUp() }
+            if release.exists { break }
             app.pane("Overview").tap(); sleep(1)
         } while Date() < deadline
         app.scroll(to: release, max: 15)

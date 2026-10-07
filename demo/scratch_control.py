@@ -7,6 +7,7 @@ package under the phone, and reads back what the copy recorded.
   POST /bump?name=<release>          hold + unhold from this client: same package, version + 2
   POST /stale?name=<release>         release_rule with a wrong expected_version; returns the daemon's raw error
   POST /state?name=<release>         status, version, verdicts and the release decision, from the copy
+  POST /cut?seconds=N                drop every connection through --proxy-port and refuse new ones for N s
   POST /freeze, /thaw                SIGSTOP / SIGCONT the scratch daemon (--daemon-pid, a process this run started)
 
 Usage: scratch_control.py --port <daemon> --control-port <port> --token-file <f> --db <bus.sqlite>
@@ -33,8 +34,65 @@ def main() -> None:
     parser.add_argument("--token-file", required=True)
     parser.add_argument("--db", required=True)
     parser.add_argument("--daemon-pid-file")
+    parser.add_argument("--proxy-port", type=int, help="a TCP proxy to the daemon that /cut can drop")
     args = parser.parse_args()
     token = open(args.token_file).read().strip()
+
+    import socket as net
+    import threading
+    import time
+    proxy = {"down_until": 0.0, "conns": set(), "lock": threading.Lock()}
+
+    def pipe(a, b) -> None:
+        try:
+            while True:
+                data = a.recv(65536)
+                if not data:
+                    break
+                b.sendall(data)
+        except OSError:
+            pass
+        for s_ in (a, b):
+            try:
+                s_.close()
+            except OSError:
+                pass
+
+    def serve_proxy(port: int) -> None:
+        listener = net.socket(net.AF_INET, net.SOCK_STREAM)
+        listener.setsockopt(net.SOL_SOCKET, net.SO_REUSEADDR, 1)
+        listener.bind(("127.0.0.1", port))
+        listener.listen(64)
+        while True:
+            client, _ = listener.accept()
+            if time.time() < proxy["down_until"]:
+                client.close()  # the network is down: refused
+                continue
+            try:
+                upstream = net.create_connection(("127.0.0.1", args.port), timeout=5)
+                upstream.settimeout(None)
+            except OSError:
+                client.close()
+                continue
+            with proxy["lock"]:
+                proxy["conns"].update({client, upstream})
+            threading.Thread(target=pipe, args=(client, upstream), daemon=True).start()
+            threading.Thread(target=pipe, args=(upstream, client), daemon=True).start()
+
+    def cut(seconds: float) -> int:
+        proxy["down_until"] = time.time() + seconds
+        with proxy["lock"]:
+            conns, proxy["conns"] = list(proxy["conns"]), set()
+        for c in conns:
+            try:
+                c.shutdown(net.SHUT_RDWR)
+                c.close()
+            except OSError:
+                pass
+        return len(conns)
+
+    if args.proxy_port:
+        threading.Thread(target=serve_proxy, args=(args.proxy_port,), daemon=True).start()
 
     def owner() -> Socket:
         ws = Socket(args.port)
@@ -74,7 +132,10 @@ def main() -> None:
             url = urlparse(self.path)
             name = parse_qs(url.query).get("name", [""])[0]
             try:
-                if url.path in ("/freeze", "/thaw"):
+                if url.path == "/cut":
+                    seconds = float(parse_qs(url.query).get("seconds", ["2"])[0])
+                    body = {"dropped": cut(seconds), "seconds": seconds}
+                elif url.path in ("/freeze", "/thaw"):
                     pid = int(open(args.daemon_pid_file).read().strip())
                     os.kill(pid, signal.SIGSTOP if url.path == "/freeze" else signal.SIGCONT)
                     body = {"pid": pid, "done": url.path[1:]}
