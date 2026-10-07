@@ -7,6 +7,7 @@ package under the phone, and reads back what the copy recorded.
   POST /bump?name=<release>          hold + unhold from this client: same package, version + 2
   POST /stale?name=<release>         release_rule with a wrong expected_version; returns the daemon's raw error
   POST /state?name=<release>         status, version, verdicts and the release decision, from the copy
+  POST /freeze, /thaw                SIGSTOP / SIGCONT the scratch daemon (--daemon-pid, a process this run started)
 
 Usage: scratch_control.py --port <daemon> --control-port <port> --token-file <f> --db <bus.sqlite>
 """
@@ -15,6 +16,7 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import signal
 import sqlite3
 import sys
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
@@ -30,6 +32,7 @@ def main() -> None:
     parser.add_argument("--control-port", type=int, required=True)
     parser.add_argument("--token-file", required=True)
     parser.add_argument("--db", required=True)
+    parser.add_argument("--daemon-pid-file")
     args = parser.parse_args()
     token = open(args.token_file).read().strip()
 
@@ -71,7 +74,11 @@ def main() -> None:
             url = urlparse(self.path)
             name = parse_qs(url.query).get("name", [""])[0]
             try:
-                if url.path == "/state":
+                if url.path in ("/freeze", "/thaw"):
+                    pid = int(open(args.daemon_pid_file).read().strip())
+                    os.kill(pid, signal.SIGSTOP if url.path == "/freeze" else signal.SIGCONT)
+                    body = {"pid": pid, "done": url.path[1:]}
+                elif url.path == "/state":
                     body = state(name)
                 elif url.path == "/bump":
                     r, _ = release(name)
