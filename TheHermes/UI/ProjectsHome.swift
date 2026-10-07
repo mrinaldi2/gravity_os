@@ -255,6 +255,7 @@ struct NeedsYouView: View {
                         ForEach(rows, id: \.id) { row in
                             NavigationLink(value: fleet.needsDestination(row, answeredBy: card.computerId)) { NeedsRow(row: row) }
                             .cardMenu(for: row.itemIdText)
+                            .dismissible(row)
                         }
                     } header: {
                         SectionTitle(card.rank.map { "\(card.row.name) · #\($0)" } ?? card.row.name)
@@ -328,7 +329,9 @@ extension Fleet {
         case .actionID?:
             return .note(title: row.title, text: "Run cards come to the phone in a later update. For now, run or reject it on \(place), in The Hermes app.")
         case .itemID(let id)?:
-            if let on { return .item(computerId: on.id, itemId: id) }
+            // The card on the computer that keeps its board, where a comment is
+            // accepted (H-210); the bot's computer would refuse it.
+            if let home = boardComputer(itemId: id) ?? on { return .item(computerId: home.id, itemId: id) }
         case nil:
             break
         }
@@ -412,6 +415,21 @@ struct PermissionWords: Equatable {
         guard text.count > limit else { return text }
         let head = (limit - 1) / 2
         return "\(text.prefix(head))…\(text.suffix(limit - 1 - head))"
+    }
+}
+
+extension Fleet {
+    /// The computer that keeps a card's board: the project's board home from the
+    /// projects home, when this phone talks to it (H-210).
+    func boardComputer(itemId: String) -> Computer? {
+        guard let place = cards.home(for: itemId) else { return nil }
+        let daemon = computer(id: place.computerId)?.store.daemonId
+        let card = home.cards(computers).first { card in
+            card.row.projectID == place.projectId
+                || card.row.members.contains { $0.projectID == place.projectId && $0.daemonID == daemon }
+        }
+        guard let boardHome = card?.row.boardHome, !boardHome.isEmpty else { return nil }
+        return computer(daemonId: boardHome)
     }
 }
 
@@ -511,4 +529,49 @@ struct NeedsNote: View {
         .navigationTitle("Needs you")
         .navigationBarTitleDisplayMode(.inline)
     }
+}
+
+/// Swipe a stale question away (H-210): `attention_dismiss` on the computer
+/// that holds it, then Needs you reloads.
+private struct DismissRow: ViewModifier {
+    @Environment(Fleet.self) private var fleet
+    let row: HomeAttentionRow
+    @State private var failure: String?
+
+    func body(content: Content) -> some View {
+        if Dismissal.allowed(row) {
+            content
+                .swipeActions(edge: .trailing) {
+                    Button("Dismiss", systemImage: "xmark.circle") { dismiss() }
+                        .tint(.gray)
+                }
+                .accessibilityAction(named: "Dismiss") { dismiss() }
+                .alert("Couldn’t dismiss it", isPresented: Binding(get: { failure != nil }, set: { if !$0 { failure = nil } })) {
+                    Button("OK", role: .cancel) {}
+                } message: {
+                    Text(failure ?? "")
+                }
+        } else {
+            content
+        }
+    }
+
+    private func dismiss() {
+        guard let computer = fleet.computer(daemonId: Dismissal.daemonId(of: row)) else {
+            failure = "The computer that holds this question isn’t connected."
+            return
+        }
+        Task {
+            do {
+                try await computer.store.dismissAttention(row.id)
+                await fleet.home.refreshAll(fleet.computers, force: true)
+            } catch {
+                failure = error.localizedDescription
+            }
+        }
+    }
+}
+
+extension View {
+    func dismissible(_ row: HomeAttentionRow) -> some View { modifier(DismissRow(row: row)) }
 }

@@ -71,6 +71,9 @@ enum CommentWords {
         return botName(id) ?? "A bot"
     }
 
+    /// The reply sheet's title: "Reply to Desktop Dev", or "Reply to your comment".
+    static func replyTitle(_ name: String) -> String { name == "You" ? "Reply to your comment" : "Reply to \(name)" }
+
     /// "Replying to Desktop Dev", or "Replying to your comment".
     static func replying(to actor: String, botName: (String) -> String) -> String {
         isOwner(actor) ? "Replying to your comment" : "Replying to \(botName(actor))"

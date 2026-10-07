@@ -173,6 +173,7 @@ struct OverviewPane: View {
                     ForEach(needs.prefix(5), id: \.id) { row in
                         NavigationLink(value: fleet.needsDestination(row, answeredBy: card.computerId)) { NeedsRow(row: row) }
                             .cardMenu(for: row.itemIdText)
+                            .dismissible(row)
                     }
                     let total = max(Int(card.row.attention.count), needs.count)
                     if total > 5 {
@@ -393,6 +394,7 @@ struct ItemView: View {
     /// What this device posted (H-202): shown at once, then confirmed or failed.
     @State private var pending: [PendingComment] = []
     @State private var replyTo: CommentRow?
+    @State private var replying: CommentRow?
     @State private var failure: String?
     @FocusState private var composing: Bool
 
@@ -448,6 +450,12 @@ struct ItemView: View {
         .navigationBarTitleDisplayMode(.inline)
         .refreshable { await load() }
         .task { await load() }
+        .sheet(item: $replying) { row in
+            ReplySheet(to: CommentWords.author(row.author) { store.bot($0)?.name }, quote: row.body ?? "") { body in
+                replying = nil
+                post(body, replyTo: row.id)
+            }
+        }
     }
 
     @ViewBuilder private func commentRow(_ row: CommentRow, reply: Bool) -> some View {
@@ -482,10 +490,9 @@ struct ItemView: View {
                 }
                 .buttonStyle(.borderless)
             } else if row.status == .onBoard, store.canControl, !reply {
-                Button("Reply") {
-                    replyTo = row
-                    composing = true
-                }
+                // A sheet with the comment and a focused field (H-210): the inline
+                // composer sits at the end of the list, often off screen.
+                Button("Reply") { replying = row }
                 .font(.caption.weight(.semibold))
                 .buttonStyle(.borderless)
             }
@@ -544,10 +551,15 @@ struct ItemView: View {
     private func post() {
         let body = draft.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !body.isEmpty else { return }
-        let comment = PendingComment(body: body, replyTo: replyTo?.status == .onBoard ? replyTo?.id : nil)
-        pending.append(comment)
         draft = ""
+        let to = replyTo?.status == .onBoard ? replyTo?.id : nil
         replyTo = nil
+        post(body, replyTo: to)
+    }
+
+    private func post(_ body: String, replyTo: String?) {
+        let comment = PendingComment(body: body, replyTo: replyTo)
+        pending.append(comment)
         send(comment.id)
     }
 
@@ -568,6 +580,8 @@ struct ItemView: View {
                 }
                 UINotificationFeedbackGenerator().notificationOccurred(.success)
                 await load()
+                // The bot's question on this card closes with your comment: Needs you follows.
+                await fleet.home.refreshAll(fleet.computers, force: true)
                 // "✓ Posted" shows on the board's copy, then goes (QA-006).
                 try? await Task.sleep(for: .seconds(CommentThread.postedFor))
                 pending = CommentThread.stillPending(pending, comments: detail?.comments ?? [])
@@ -577,6 +591,44 @@ struct ItemView: View {
                 }
             }
         }
+    }
+}
+
+/// "Reply to Desktop Dev": the comment you answer, and a field ready to type (H-210).
+private struct ReplySheet: View {
+    @Environment(\.dismiss) private var dismiss
+    let to: String
+    let quote: String
+    let send: (String) -> Void
+    @State private var text = ""
+    @FocusState private var focused: Bool
+
+    var body: some View {
+        NavigationStack {
+            Form {
+                if !quote.isEmpty {
+                    Section(to) {
+                        Text(quote).font(.callout).foregroundStyle(Color.secondaryText).lineLimit(6)
+                    }
+                }
+                Section {
+                    TextField("Your reply", text: $text, prompt: .placeholder("Your reply"), axis: .vertical)
+                        .lineLimit(3...10)
+                        .focused($focused)
+                }
+            }
+            .navigationTitle(CommentWords.replyTitle(to))
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) { Button("Cancel") { dismiss() } }
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("Send") { send(text.trimmingCharacters(in: .whitespacesAndNewlines)) }
+                        .disabled(text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                }
+            }
+            .onAppear { focused = true }
+        }
+        .presentationDetents([.medium, .large])
     }
 }
 

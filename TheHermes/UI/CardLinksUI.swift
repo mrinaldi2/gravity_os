@@ -33,7 +33,7 @@ private struct OpensCardLinks: ViewModifier {
             return
         }
         guard let home = fleet.cards.home(for: id, preferring: projectIds) else { return }
-        push(.item(computerId: home.computerId, itemId: id))
+        push(.item(computerId: fleet.boardComputer(itemId: id)?.id ?? home.computerId, itemId: id))
     }
 }
 

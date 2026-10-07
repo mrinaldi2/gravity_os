@@ -374,3 +374,24 @@ enum AttentionWords {
         return parts.isEmpty ? "\(attention.count) need\(attention.count == 1 ? "s" : "") you" : parts.prefix(limit).joined(separator: " · ")
     }
 }
+
+extension AppStore {
+    /// `attention_dismiss` (approve grant): a stale question leaves Needs you.
+    /// Only the computer that holds the question can dismiss it (the row's daemon).
+    func dismissAttention(_ rowId: String) async throws {
+        _ = try await client.request("attention_dismiss", ["id": rowId])
+    }
+}
+
+/// Which Needs-you rows the owner may dismiss (H-210): a bot's question, here
+/// or on a card. Everything else clears when it is dealt with.
+enum Dismissal {
+    static func allowed(_ row: HomeAttentionRow) -> Bool { row.kind == .ownerQuestion }
+
+    /// The computer to send it to: the one whose daemon id the row carries.
+    static func daemonId(of row: HomeAttentionRow) -> String {
+        if !row.daemonID.isEmpty { return row.daemonID }
+        let parts = row.id.split(separator: ":", maxSplits: 2)
+        return parts.count == 3 ? String(parts[1]) : ""
+    }
+}
