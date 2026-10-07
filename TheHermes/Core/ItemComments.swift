@@ -71,6 +71,18 @@ enum CommentWords {
         return botName(id) ?? "A bot"
     }
 
+    /// "✓ Posted. Desktop Dev and Team Lead are told." (UX-041), naming who it reached.
+    static func posted(told: [String]) -> String {
+        switch told.count {
+        case 0: "✓ Posted."
+        case 1: "✓ Posted. \(told[0]) is told."
+        default: "✓ Posted. \(told.dropLast().joined(separator: ", ")) and \(told.last!) are told."
+        }
+    }
+
+    /// "Couldn't post your comment. <reason>" (UX-041, the glossary's "Couldn't …").
+    static func couldntPost(_ reason: String) -> String { "Couldn’t post your comment. \(reason)" }
+
     /// The reply sheet's title: "Reply to Desktop Dev", or "Reply to your comment".
     static func replyTitle(_ name: String) -> String { name == "You" ? "Reply to your comment" : "Reply to \(name)" }
 

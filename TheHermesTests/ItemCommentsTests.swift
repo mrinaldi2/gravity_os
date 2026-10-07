@@ -99,4 +99,15 @@ final class ItemCommentsTests: XCTestCase {
         XCTAssertEqual(CommentWords.replying(to: "user") { _ in "You" }, "Replying to your comment")
         XCTAssertEqual(CommentWords.replying(to: "bot:dev") { _ in "Desktop Dev" }, "Replying to Desktop Dev")
     }
+
+    func testThePostedLineNamesWhoWasTold() {
+        XCTAssertEqual(CommentWords.posted(told: ["Desktop Dev", "Team Lead"]), "✓ Posted. Desktop Dev and Team Lead are told.")
+        XCTAssertEqual(CommentWords.posted(told: ["Team Lead"]), "✓ Posted. Team Lead is told.")
+        XCTAssertEqual(CommentWords.posted(told: []), "✓ Posted.")
+    }
+
+    func testAFailureSaysItCouldntPost() {
+        XCTAssertEqual(CommentWords.couldntPost("The board for H-017 lives on mac. Comment on it from there."),
+                       "Couldn’t post your comment. The board for H-017 lives on mac. Comment on it from there.")
+    }
 }

@@ -546,7 +546,7 @@ private struct DismissRow: ViewModifier {
                         .tint(.gray)
                 }
                 .accessibilityAction(named: "Dismiss") { dismiss() }
-                .alert("Couldn’t dismiss it", isPresented: Binding(get: { failure != nil }, set: { if !$0 { failure = nil } })) {
+                .alert("Couldn’t dismiss this question", isPresented: Binding(get: { failure != nil }, set: { if !$0 { failure = nil } })) {
                     Button("OK", role: .cancel) {}
                 } message: {
                     Text(failure ?? "")

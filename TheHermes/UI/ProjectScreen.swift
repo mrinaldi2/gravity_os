@@ -398,6 +398,18 @@ struct ItemView: View {
     @State private var failure: String?
     @FocusState private var composing: Bool
 
+    /// Who an owner comment reaches (H-201): the card's assignee and the project's lead.
+    private var told: [String] {
+        var names: [String] = []
+        if let assignee = detail?.item, assignee.hasAssignee, let name = store.bot(assignee.assignee)?.name { names.append(name) }
+        let projectId = fleet.cards.home(for: itemId)?.projectId
+        if let lead = store.projects.first(where: { $0.id == projectId })?.leadBotId,
+           let name = store.bot(lead)?.name, !names.contains(name) {
+            names.append(name)
+        }
+        return names
+    }
+
     private var groups: [CommentGroup] {
         CommentThread.grouped(CommentThread.rows(comments: detail?.comments ?? [], history: detail?.history ?? [],
                                                  pending: pending))
@@ -477,9 +489,13 @@ struct ItemView: View {
             }
             .font(.callout)
             .textSelection(.enabled)
+            if row.status == .sent {
+                // Who the comment reached (UX-041): the assignee and the lead.
+                Text(CommentWords.posted(told: told)).font(.caption).foregroundStyle(Color.successText)
+            }
             if case .failed(let message) = row.status {
                 HStack(spacing: 12) {
-                    Text(message).font(.caption).foregroundStyle(Color.errorText)
+                    Text(CommentWords.couldntPost(message)).font(.caption).foregroundStyle(Color.errorText)
                     if let id = row.pendingId {
                         // Caption-sized words, 44 pt targets.
                         Button("Retry") { retry(id) }.font(.caption.weight(.semibold))
@@ -507,9 +523,10 @@ struct ItemView: View {
         case .sending:
             Label("Sending…", systemImage: "clock").font(.caption2).foregroundStyle(Color.secondaryText)
         case .sent:
-            Label("Posted", systemImage: "checkmark.circle.fill").font(.caption2).foregroundStyle(Color.successText)
+            // The line under the comment says it: "✓ Posted. … are told."
+            EmptyView()
         case .failed:
-            Label("Not posted", systemImage: "exclamationmark.triangle.fill").font(.caption2).foregroundStyle(Color.errorText)
+            Label("Couldn’t post", systemImage: "exclamationmark.triangle.fill").font(.caption2).foregroundStyle(Color.errorText)
         }
     }
 
