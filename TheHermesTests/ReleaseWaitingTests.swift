@@ -72,6 +72,39 @@ final class ReleaseWaitingTests: XCTestCase {
         XCTAssertEqual(BlockerAction.of(b[4]).label, "Answer")
     }
 
+    // MARK: Progress "Now:" (UX-048 §3)
+
+    private func release(_ extra: JSONDict) -> Release {
+        var d: JSONDict = ["id": "r", "name": "0.17.5", "display_version": "0.17.5", "version": 1, "owner_blockers": [Any]()]
+        for (k, v) in extra { d[k] = v }
+        return Release(d)
+    }
+
+    func testNowNamesWhoItWaitsOn() {
+        let waiting = release(["status": "approved", "owner_blockers": [
+            blocker("run", "a-1", "Clear the cache", item: "H-244", computer: "mac", at: "2026-10-08T08:00:00Z")]])
+        XCTAssertEqual(ReleaseNow.line(waiting), .init(text: "Now: waiting for you, Run a command on mac (H-244).", waitsForYou: true))
+
+        let plan: [JSONDict] = [["item_id": "H-241", "column_name": "Doing", "ready": false],
+                                ["item_id": "H-243", "column_name": "Review", "ready": false],
+                                ["item_id": "H-245", "column_name": "Ready", "ready": false],
+                                ["item_id": "H-246", "column_name": "Verify", "ready": true]]
+        XCTAssertEqual(ReleaseNow.line(release(["status": "planned", "plan": plan])).text,
+                       "Now: 3 items still in progress (H-241 in Doing, H-243 in Review, +1).")
+        XCTAssertEqual(ReleaseNow.line(release(["status": "assembling", "how_to_test": [["platform": "desktop-mac"], ["platform": "desktop-win"]]])).text,
+                       "Now: DevOps is building the Mac and Windows packages.")
+        XCTAssertEqual(ReleaseNow.line(release(["status": "built",
+                                                "readiness": ["tests_required": ["mac", "win-pc"], "tests_passed": ["mac"]] as JSONDict])).text,
+                       "Now: testing on win-pc (1 of 2 computers).")
+        XCTAssertEqual(ReleaseNow.line(release(["status": "deploying", "deploys_to": ["mac", "win-pc", "imac"],
+                                                "deployments": [["machine": "mac", "action": "deploy", "result": "ok"],
+                                                                ["machine": "imac", "action": "deploy", "result": "ok"],
+                                                                ["machine": "win-pc", "action": "deploy", "result": "failed"]]])).text,
+                       "Now: rolling out, 2 of 3 computers updated.")
+        XCTAssertEqual(ReleaseNow.line(release(["status": "approved"])).text, "Now: nothing is blocking it.")
+        XCTAssertEqual(WaitingWords.projectsPill("0.17.5"), "◐ 0.17.5 waits for you")
+    }
+
     func testAReleaseUpdatedPushRereadsThatRelease() {
         let store = AppStore(defaults: ComputerDefaults(id: "test-release-updated"))
         store.pushReceived("release_updated", ["type": "release_updated", "project_id": "p1", "release_id": "rel-1"])

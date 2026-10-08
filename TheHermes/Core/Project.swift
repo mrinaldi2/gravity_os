@@ -177,6 +177,12 @@ struct Release: Identifiable {
     let ownerBlockers: [OwnerBlocker]?
     /// The release's own card.
     let workItemId: String?
+    /// The computers it must reach before it counts as deployed.
+    let deploysTo: [String]
+    /// The computers a deploy finished on.
+    let deployedOn: [String]
+    /// The platforms its how-to-test names, e.g. desktop-mac.
+    let platforms: [String]
     let builds: [String]
     let testsPassed: [String]
     let testsRequired: [String]
@@ -200,6 +206,10 @@ struct Release: Identifiable {
         plan = d.list("plan").map(PlanItem.init)
         ownerBlockers = OwnerBlocker.list(d)
         workItemId = d.optStr("work_item_id").flatMap { $0.isEmpty ? nil : $0 }
+        deploysTo = (d["deploys_to"] as? [String]) ?? []
+        deployedOn = d.list("deployments").filter { $0.str("action") != "rollback" && $0.str("result") == "ok" }.map { $0.str("machine") }
+        var seen = Set<String>()
+        platforms = d.list("how_to_test").map { $0.str("platform") }.filter { !$0.isEmpty && seen.insert($0).inserted }
         builds = (readiness?["builds"] as? [String]) ?? []
         testsPassed = (readiness?["tests_passed"] as? [String]) ?? []
         testsRequired = (readiness?["tests_required"] as? [String]) ?? []

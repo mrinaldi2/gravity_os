@@ -139,10 +139,71 @@ enum WaitingWords {
 
     /// Progress, on a service without owner_blockers.
     static let olderService = "Open Needs you to see what waits for you."
+
+    /// The Projects card's release pill (needs HomeOverview.ReleaseBrief.owner_blocker_count, H-247).
+    static func projectsPill(_ version: String) -> String { "◐ \(version) waits for you" }
 }
 
 /// A `release_updated` push: that release's owner_blockers changed.
 struct ReleaseUpdate: Equatable {
     let releaseId: String
     let id = UUID()
+}
+
+/// Progress's first line (UX-048 §3): who the release waits on now, never a raw state.
+enum ReleaseNow {
+    struct Line: Equatable {
+        let text: String
+        /// It names an owner item: tapping goes to its row in "Waiting for you".
+        let waitsForYou: Bool
+    }
+
+    static let platformNames = ["desktop-mac": "Mac", "desktop-win": "Windows", "desktop-linux": "Linux", "ios": "iPhone"]
+
+    static func line(_ release: Release, botName: (String) -> String? = { _ in nil }) -> Line {
+        // Something waits for you: the first owner item.
+        if let first = release.ownerBlockers?.first {
+            let item = first.itemId.map { " (\($0))" } ?? ""
+            return Line(text: "Now: waiting for you, \(ask(first, botName: botName))\(item).", waitsForYou: true)
+        }
+        // Items not ready yet.
+        let open = release.plan.filter { !$0.ready }
+        if ["planned", "assembling"].contains(release.status), !open.isEmpty {
+            let named = open.prefix(2).map { "\($0.itemId) in \($0.columnName)" }
+            let rest = open.count > 2 ? ", +\(open.count - 2)" : ""
+            let noun = open.count == 1 ? "item" : "items"
+            return Line(text: "Now: \(open.count) \(noun) still in progress (\(named.joined(separator: ", "))\(rest)).", waitsForYou: false)
+        }
+        // Building.
+        if release.status == "assembling" || release.status == "repackaging" {
+            let names = release.platforms.map { platformNames[$0] ?? $0 }
+            let what = names.isEmpty ? "the packages"
+                : "the \(ListFormatter.localizedString(byJoining: names)) package\(names.count == 1 ? "" : "s")"
+            return Line(text: "Now: DevOps is building \(what).", waitsForYou: false)
+        }
+        // Testing.
+        if release.status == "built", let next = release.testsRequired.first(where: { !release.testsPassed.contains($0) }) {
+            let total = release.testsRequired.count
+            return Line(text: "Now: testing on \(next) (\(release.testsPassed.count) of \(total) computer\(total == 1 ? "" : "s")).",
+                        waitsForYou: false)
+        }
+        // Rolling out.
+        if ["deploying", "partially_deployed"].contains(release.status), !release.deploysTo.isEmpty {
+            let done = Set(release.deployedOn).intersection(release.deploysTo).count
+            return Line(text: "Now: rolling out, \(done) of \(release.deploysTo.count) computers updated.", waitsForYou: false)
+        }
+        return Line(text: "Now: nothing is blocking it.", waitsForYou: false)
+    }
+
+    /// The owner item as the line names it: "Run a command on mac".
+    static func ask(_ blocker: OwnerBlocker, botName: (String) -> String?) -> String {
+        let bot = blocker.botId.flatMap(botName) ?? "A bot"
+        switch blocker.kind {
+        case .ruling: return "Test \(blocker.title) and rule on it"
+        case .run: return "Run a command on \(blocker.computer ?? "its computer")"
+        case .decision: return "Decide: \(blocker.title)"
+        case .question: return "\(bot) asks: \(blocker.title)"
+        case .permission: return "\(bot) wants to run \(blocker.title)"
+        }
+    }
 }

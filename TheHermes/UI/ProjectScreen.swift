@@ -771,6 +771,10 @@ struct ReleaseView: View {
 
     /// Where Review… on the ruling scrolls to (UX-040's release review).
     private static let reviewAnchor = "release-review"
+    /// "Now: waiting for you, …" goes to its row.
+    private static let waitingAnchor = "waiting-for-you"
+    /// Released or stopped: no "Now:" line.
+    private static let settled: Set = ["deployed", "rejected", "cancelled", "rolled_back", "held"]
 
     /// The phone rules on a package waiting for the owner, when it may (H-160 AC4).
     private var reviewing: Bool {
@@ -787,6 +791,7 @@ struct ReleaseView: View {
                     WaitingSection(blockers: blockers, computerId: computerId) {
                         withAnimation { proxy.scrollTo(Self.reviewAnchor, anchor: .top) }
                     }
+                    .id(Self.waitingAnchor)
                 }
                 Section {
                     let (words, tone) = release.statusWords
@@ -814,6 +819,16 @@ struct ReleaseView: View {
                     }
                 }
                 Section {
+                    // Who it waits on now (UX-048 §3).
+                    if !Self.settled.contains(release.status) {
+                        let now = ReleaseNow.line(release) { store.bot($0)?.name }
+                        if now.waitsForYou {
+                            Button(now.text) { withAnimation { proxy.scrollTo(Self.waitingAnchor, anchor: .top) } }
+                                .font(.subheadline.weight(.medium))
+                        } else {
+                            Text(now.text).font(.subheadline.weight(.medium))
+                        }
+                    }
                     ForEach(release.items) { item in itemRow(release, item) }
                 } header: {
                     SectionTitle(release.showsProgress ? "Progress" : "Items", count: release.items.count)
