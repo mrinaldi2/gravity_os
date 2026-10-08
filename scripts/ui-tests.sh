@@ -124,6 +124,20 @@ print(decision["id"], bot["id"])
 EOF
 )
 
+# The demo's Aurora Notes project, for tests that name it by id (QA-013's offer stub).
+project_id=
+[ -z "$no_demo" ] && project_id=$(python3 - "$out" "$port" <<'EOF'
+import os, sys
+sys.path.insert(0, "demo")
+from make_demo import Socket
+out, port = sys.argv[1], int(sys.argv[2])
+ws = Socket(port)
+ws.request("hello", protocol_version=2, token=open(os.path.join(out, "gravity", "secrets", "client.token")).read().strip(),
+           client="ui-tests")
+print(next(p["id"] for p in ws.request("list_projects")["projects"] if p["name"] == "Aurora Notes"))
+EOF
+)
+
 # A long chat for the long-chat tests: earlier turns in iOS Dev's demo transcript.
 if [ -n "${LONG_CHAT:-}" ] && [ -z "$no_demo" ]; then
     python3 demo/long_chat.py "$out" "Starting on the conflict banner" "${LONG_CHAT_TURNS:-120}"
@@ -139,7 +153,7 @@ run_tests() { # <result bundle> <xcodebuild args…>
     TEST_RUNNER_SCRATCH_READONLY_TOKEN=${SCRATCH_READONLY_TOKEN:-} TEST_RUNNER_SCRATCH_CONTROL_PORT=${SCRATCH_CONTROL_PORT:-} TEST_RUNNER_SCRATCH_PROXY_PORT=${SCRATCH_PROXY_PORT:-} \
     TEST_RUNNER_GRAV_PORT=$port TEST_RUNNER_LENS_PORT=$lens_port \
     TEST_RUNNER_DEMO_DECISION_ID=${ids% *} TEST_RUNNER_DEMO_BOT_ID=${ids#* } \
-    TEST_RUNNER_DEMO_CONTROL_PORT=$control_port TEST_RUNNER_LONG_CHAT=${LONG_CHAT:-} TEST_RUNNER_DEMO_OUT="$out" TEST_RUNNER_DEMO_SKIPPED="$(cat "$out/skipped" 2>/dev/null | tr '\n' ' ')" TEST_RUNNER_FIXTURES=$PWD/contract/fixtures TEST_RUNNER_SCREENSHOT_DIR=${SCREENSHOT_DIR:-} \
+    TEST_RUNNER_DEMO_CONTROL_PORT=$control_port TEST_RUNNER_LONG_CHAT=${LONG_CHAT:-} TEST_RUNNER_DEMO_OUT="$out" TEST_RUNNER_DEMO_PROJECT_ID=$project_id TEST_RUNNER_DEMO_SKIPPED="$(cat "$out/skipped" 2>/dev/null | tr '\n' ' ')" TEST_RUNNER_FIXTURES=$PWD/contract/fixtures TEST_RUNNER_SCREENSHOT_DIR=${SCREENSHOT_DIR:-} \
     xcodebuild -project "$project" -scheme UITests -destination "id=$device" \
         -derivedDataPath build/ui-tests -resultBundlePath "$bundle" test "$@"
 }
