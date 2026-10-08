@@ -115,8 +115,10 @@ struct InstallOfferBanner: View {
     }
 }
 
-/// "Updated to The Hermes 0.6.1.", once, at the first launch of a new version.
+/// "Updated to The Hermes 0.6.1.", once, at the first launch of a new version:
+/// shown once the app is active, and marked seen only after it was on screen.
 struct UpdatedToast: View {
+    @Environment(\.scenePhase) private var scenePhase
     @State private var text: String?
 
     var body: some View {
@@ -128,14 +130,23 @@ struct UpdatedToast: View {
                     .padding(.vertical, 10)
                     .background(.regularMaterial, in: Capsule())
                     .transition(.move(edge: .top).combined(with: .opacity))
+                    .task {
+                        // Counted in short main-actor steps: a launch that keeps the main
+                        // thread busy doesn't use up the time before anything is drawn.
+                        let steps = Int(UpdateNotice.visible / .milliseconds(100))
+                        for _ in 0..<steps {
+                            try? await Task.sleep(for: .milliseconds(100))
+                            if Task.isCancelled { return }
+                        }
+                        UpdateNotice.markShown()
+                        self.text = nil
+                    }
             }
         }
         .animation(.snappy, value: text)
-        .task {
-            guard let notice = UpdateNotice.atLaunch() else { return }
+        .task(id: scenePhase) {
+            guard scenePhase == .active, text == nil, let notice = UpdateNotice.pending() else { return }
             text = notice
-            try? await Task.sleep(for: .seconds(4))
-            text = nil
         }
     }
 }

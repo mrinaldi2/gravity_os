@@ -191,19 +191,30 @@ enum InstallAction {
     }
 }
 
-/// "Updated to The Hermes 0.6.1.", once per new version (UX-043 §5).
+/// "Updated to The Hermes 0.6.1.", once per new version (UX-043 §5). The new
+/// version counts as announced only once the toast was seen (QA-013: a cold
+/// launch can stay blank for seconds, and a toast shown then was lost).
 enum UpdateNotice {
     static let key = "lastLaunchedVersion"
+    /// How long the toast stays on screen, counted while the app runs.
+    static let visible: Duration = .seconds(4)
 
-    /// The toast to show at this launch, if the version changed since the last one.
-    /// A first launch says nothing.
-    static func atLaunch(_ defaults: UserDefaults = .standard, version: String = AppInfo.version,
-                         build: String = AppInfo.build) -> String? {
+    /// The toast this launch owes, if the version changed since the last one
+    /// announced. A first launch says nothing, and records the version.
+    static func pending(_ defaults: UserDefaults = .standard, version: String = AppInfo.version,
+                        build: String = AppInfo.build) -> String? {
         let label = "\(version) (\(build))"
-        let last = defaults.string(forKey: key)
-        defaults.set(label, forKey: key)
-        guard let last, last != label else { return nil }
-        return InstallWords.updated(version)
+        guard let last = defaults.string(forKey: key) else {
+            defaults.set(label, forKey: key)
+            return nil
+        }
+        return last == label ? nil : InstallWords.updated(version)
+    }
+
+    /// After the toast has been on screen.
+    static func markShown(_ defaults: UserDefaults = .standard, version: String = AppInfo.version,
+                          build: String = AppInfo.build) {
+        defaults.set("\(version) (\(build))", forKey: key)
     }
 }
 
@@ -226,8 +237,15 @@ enum InstallStubs {
         reply(releaseKey)?.dict("release").map { $0.str("id") }.flatMap { $0.isEmpty ? nil : $0 }
     }
 
-    static func reply(_ key: String, _ defaults: UserDefaults = .standard) -> JSONDict? {
-        defaults.string(forKey: key).flatMap(JSONText.decode)
+    /// Bare JSON straight from the launch arguments (the argument domain can't
+    /// parse `{…}`), else a quoted plist string through UserDefaults.
+    static func reply(_ key: String, _ defaults: UserDefaults = .standard,
+                      arguments: [String] = ProcessInfo.processInfo.arguments) -> JSONDict? {
+        if let flag = arguments.firstIndex(of: "-" + key), flag + 1 < arguments.count,
+           let bare = JSONText.decode(arguments[flag + 1]) {
+            return bare
+        }
+        return defaults.string(forKey: key).flatMap(JSONText.decode)
     }
 }
 #endif

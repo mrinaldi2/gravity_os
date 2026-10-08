@@ -1,3 +1,4 @@
+import SwiftUI
 import XCTest
 @testable import TheHermes
 
@@ -223,12 +224,37 @@ final class ReleaseInstallTests: XCTestCase {
         XCTAssertEqual(hello.str("token"), "t")
     }
 
-    func testUpdatedToastOnceAfterANewVersion() {
+    func testUpdatedToastOnceAfterANewVersionAndOnlyOnceSeen() {
         let defaults = UserDefaults(suiteName: "test-update-notice")!
         defaults.removePersistentDomain(forName: "test-update-notice")
-        XCTAssertNil(UpdateNotice.atLaunch(defaults, version: "0.6.1", build: "12"), "first launch: nothing")
-        XCTAssertNil(UpdateNotice.atLaunch(defaults, version: "0.6.1", build: "12"), "same version: nothing")
-        XCTAssertEqual(UpdateNotice.atLaunch(defaults, version: "0.6.2", build: "13"), "Updated to The Hermes 0.6.2.")
-        XCTAssertNil(UpdateNotice.atLaunch(defaults, version: "0.6.2", build: "13"), "once")
+        XCTAssertNil(UpdateNotice.pending(defaults, version: "0.6.1", build: "12"), "first launch: nothing")
+        XCTAssertNil(UpdateNotice.pending(defaults, version: "0.6.1", build: "12"), "same version: nothing")
+        XCTAssertEqual(UpdateNotice.pending(defaults, version: "0.6.2", build: "13"), "Updated to The Hermes 0.6.2.")
+        // QA-013: shown too early (a blank cold launch) and never seen: still owed.
+        XCTAssertEqual(UpdateNotice.pending(defaults, version: "0.6.2", build: "13"), "Updated to The Hermes 0.6.2.",
+                       "not marked until it was on screen")
+        UpdateNotice.markShown(defaults, version: "0.6.2", build: "13")
+        XCTAssertNil(UpdateNotice.pending(defaults, version: "0.6.2", build: "13"), "once seen, done")
+        XCTAssertEqual(UpdateNotice.visible, .seconds(4))
+    }
+
+    func testStubsTakeBareJSONFromTheLaunchArguments() {
+        let bare = #"{"release": {"id": "rel-qa", "status": "approved"}}"#
+        let args = ["TheHermes", "-gravHost", "127.0.0.1", "-releaseStub", bare]
+        XCTAssertEqual(InstallStubs.reply(InstallStubs.releaseKey, arguments: args)?.dict("release")?.str("id"), "rel-qa")
+        XCTAssertNil(InstallStubs.reply(InstallStubs.installKey, arguments: args), "only the flag asked for")
+        // The quoted-plist form still works, through UserDefaults.
+        let defaults = UserDefaults(suiteName: "test-stub-args")!
+        defaults.set(#"{"install": {"release_id": "r9"}}"#, forKey: InstallStubs.installKey)
+        XCTAssertEqual(InstallStubs.reply(InstallStubs.installKey, defaults, arguments: ["-installStub", #""{…}""#])?
+            .dict("install")?.str("release_id"), "r9")
+        defaults.removePersistentDomain(forName: "test-stub-args")
+    }
+
+    func testAnOutsideRouteLandsOnThatScreenAlone() {
+        // H-230 iPad: the route's push is deferred a turn; where it lands is unchanged.
+        let route = NeedsDestination.release(computerId: "mac", releaseId: "rel-qa")
+        XCTAssertEqual(NeedsRoute.path(to: route), NavigationPath([route]))
+        XCTAssertEqual(NeedsRoute.path(to: route).count, 1)
     }
 }

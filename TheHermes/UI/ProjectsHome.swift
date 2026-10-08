@@ -217,6 +217,11 @@ struct RankBadge: View {
 
 // MARK: Needs you
 
+/// Where an outside route lands in Needs you: that screen on an empty stack.
+enum NeedsRoute {
+    static func path(to destination: NeedsDestination) -> NavigationPath { NavigationPath([destination]) }
+}
+
 struct NeedsYouView: View {
     @Environment(Fleet.self) private var fleet
     @State private var path = NavigationPath()
@@ -290,8 +295,11 @@ struct NeedsYouView: View {
             .needsDestinations()
             .onChange(of: openDecision.wrappedValue, initial: true) { _, destination in
                 guard let destination else { return }
-                path = NavigationPath([destination])
                 openDecision.wrappedValue = nil
+                // On iPad a route switches the sidebar to Needs you and arrives as this
+                // column first shows; pushed in that same update it is lost, since the
+                // split view rebuilds the detail stack right after. Push on the next turn (H-230).
+                Task { @MainActor in path = NeedsRoute.path(to: destination) }
             }
         }
         // Card ids anywhere in this stack open the card here (H-204).
