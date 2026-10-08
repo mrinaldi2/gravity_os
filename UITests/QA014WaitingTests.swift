@@ -160,18 +160,21 @@ final class QA014WaitingTests: XCTestCase {
         }
     }
 
-    /// 7: an older service (no owner_blockers): no section; Progress links to Needs you.
+    /// 7: an older service (no owner_blockers): no section; under "Now:" a row
+    /// "Open Needs you to see what waits for you." that goes to Needs you (d778e8a).
     func test7OlderServiceLinksToNeedsYou() throws {
         if device == "iPad" { throw XCTSkip("iPhone capture") }
-        let app = try open(release("planned", blockers: nil, extra: ["plan": plan(open: 2, ready: 1)]))
-        let link = app.buttons["Open Needs you to see what waits for you."]
+        let stub = #"{"release":{"id":"rel-qa","name":"0.17.5","display_version":"0.17.5","status":"approved","version":3}}"#
+        let app = try open(stub)
+        let link = any(app, "Open Needs you to see what waits for you.")
         if !link.waitForExistence(timeout: 20) { app.scroll(to: link) }
-        XCTAssertTrue(link.exists, "No Needs you link")
+        XCTAssertTrue(link.exists, "No Needs you row")
         XCTAssertFalse(any(app, "Waiting for you").exists, "A section on an older service")
-        app.scroll(to: link)
+        let now = any(app, "Now:")
+        if link.exists, now.exists { XCTAssertLessThan(now.frame.minY, link.frame.minY, "The row isn't under 'Now:'") }
         shot("7-older-service")
         link.tap()
-        XCTAssertTrue(app.navigationBars["Needs you"].waitForExistence(timeout: 10), "The link did not open Needs you")
+        XCTAssertTrue(app.navigationBars["Needs you"].waitForExistence(timeout: 10), "The row did not open Needs you")
         shot("7b-needs-you")
     }
 
