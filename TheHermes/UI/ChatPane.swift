@@ -17,6 +17,7 @@ struct BotChatPane: View {
 
     private var turns: [ChatTurn] { lens.chats[botId] ?? [] }
     private var hasMore: Bool { lens.chatHasMore[botId] ?? false }
+    private var canLoadEarlier: Bool { ChatPaging.canLoadEarlier(loaded: turns.count, hasMore: hasMore) }
     private var bot: Bot? { store.bot(botId) }
 
     var body: some View {
@@ -26,29 +27,39 @@ struct BotChatPane: View {
             }
             ScrollViewReader { proxy in
                 ScrollView {
-                    // Not lazy (H-227): sent from far up with the keyboard up, the jump to
-                    // the bottom left a lazy stack with nothing laid out, so the transcript
-                    // went blank. A page is Page.turns turns; older ones load on request.
+                    // Older turns are lazy (H-228): laid out, a turn costs ~1.9 MB. The newest
+                    // turns, pending messages and the end marker are not: a jump to the end
+                    // from far up left a fully lazy stack with nothing drawn (H-227).
                     VStack(alignment: .leading, spacing: 18) {
-                        if hasMore {
-                            Button("Load earlier turns") {
-                                following = false
-                                Task { await loadOlder() }
-                            }
-                            .buttonStyle(.bordered)
-                            .frame(maxWidth: .infinity)
-                        }
-                        if let error {
-                            Text(error).font(.footnote).foregroundStyle(Color.errorText)
-                        }
-                        if loaded, turns.isEmpty, pending.isEmpty {
-                            Text("Nothing here yet. Messages you send, and everything \(bot?.name ?? "the bot") does, show up here.")
-                                .font(.callout)
-                                .foregroundStyle(Color.secondaryText)
+                        LazyVStack(alignment: .leading, spacing: 18) {
+                            if canLoadEarlier {
+                                Button("Load earlier turns") {
+                                    following = false
+                                    Task { await loadOlder() }
+                                }
+                                .buttonStyle(.bordered)
                                 .frame(maxWidth: .infinity)
-                                .padding(.top, 40)
+                            } else if hasMore {
+                                Text(ChatPaging.capped)
+                                    .font(.footnote)
+                                    .foregroundStyle(Color.secondaryText)
+                                    .frame(maxWidth: .infinity)
+                            }
+                            if let error {
+                                Text(error).font(.footnote).foregroundStyle(Color.errorText)
+                            }
+                            if loaded, turns.isEmpty, pending.isEmpty {
+                                Text("Nothing here yet. Messages you send, and everything \(bot?.name ?? "the bot") does, show up here.")
+                                    .font(.callout)
+                                    .foregroundStyle(Color.secondaryText)
+                                    .frame(maxWidth: .infinity)
+                                    .padding(.top, 40)
+                            }
+                            ForEach(turns.dropLast(Self.eagerTurns)) { turn in
+                                ChatTurnView(botId: botId, turn: turn, search: search)
+                            }
                         }
-                        ForEach(turns) { turn in
+                        ForEach(turns.suffix(Self.eagerTurns)) { turn in
                             ChatTurnView(botId: botId, turn: turn, search: search)
                         }
                         ForEach(pending) { message in PendingBubble(message: message) }
@@ -106,6 +117,8 @@ struct BotChatPane: View {
     }
 
     private static let bottom = "chat-bottom"
+    /// Drawn always, below the lazy stack, so the end has something to land on.
+    private static let eagerTurns = 2
 
     private var blockedReason: String? {
         if !store.canControl { return "This device can read but not write: it needs control access." }
@@ -145,6 +158,18 @@ struct BotChatPane: View {
         }
         if let index = pending.firstIndex(where: { $0.id == message.id }) { pending[index] = message }
     }
+}
+
+/// How far back the phone's chat goes (H-228): the newest page and up to
+/// `earlierPages` more, so a long chat can't grow without bound.
+enum ChatPaging {
+    static let earlierPages = 5
+
+    static func canLoadEarlier(loaded: Int, hasMore: Bool) -> Bool {
+        hasMore && loaded < Page.turns * (1 + earlierPages)
+    }
+
+    static let capped = "Earlier turns are on the computer."
 }
 
 // MARK: A turn
