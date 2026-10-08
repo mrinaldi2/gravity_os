@@ -214,9 +214,17 @@ enum UpdateNotice {
 ///   -installStub <json>       the `release_install` reply, {"install": {...}}
 ///   -installOfferStub <json>  the `install_offers` reply, {"offers": [{...}]}, also
 ///                             delivered as an `install_offer` push
+///   -releaseStub <json>       the `get_release` reply, {"release": {...}}: that release
+///                             opens at launch (Needs you), for the install section to render in
 enum InstallStubs {
     static let installKey = "installStub"
     static let offerKey = "installOfferStub"
+    static let releaseKey = "releaseStub"
+
+    /// The stubbed release's id, to open at launch.
+    static var releaseId: String? {
+        reply(releaseKey)?.dict("release").map { $0.str("id") }.flatMap { $0.isEmpty ? nil : $0 }
+    }
 
     static func reply(_ key: String, _ defaults: UserDefaults = .standard) -> JSONDict? {
         defaults.string(forKey: key).flatMap(JSONText.decode)

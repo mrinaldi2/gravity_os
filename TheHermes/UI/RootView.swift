@@ -74,6 +74,13 @@ struct RootView: View {
             router.target = NotificationTarget(userInfo: ["computer": computer.id, "kind": parts[0], "id": parts[1],
                                                           "bot": parts.count > 2 ? parts[2] : ""])
         }
+        // QA captures (H-230): -releaseStub <get_release json> opens that release.
+        .task {
+            if let id = InstallStubs.releaseId {
+                tab = .needs
+                openNeeds = .release(computerId: computer.id, releaseId: id)
+            }
+        }
         // As a link from outside: -openCard H-293 (once its prefix is known).
         .task(id: fleet.cards.prefixes.count) {
             if let id = UserDefaults.standard.string(forKey: "openCard"), fleet.cards.home(for: id) != nil,
