@@ -183,6 +183,19 @@ def bot_tool(port: int, home: str, bot_id: str, tool: str, **arguments: Any) -> 
         return {}
 
 
+def gated(refusal: SystemExit) -> bool:
+    """A step newer daemons keep from the owner token (0.17.4: H-205, approve capability)."""
+    return "capability" in str(refusal) or "owner" in str(refusal)
+
+
+def skip(out: str, step: str, refusal: SystemExit) -> None:
+    """Leave out a demo step the daemon refuses, say so, and list it in out/skipped for the
+    tests (scripts/ui-tests.sh passes it as DEMO_SKIPPED). A proper demo path is H-234."""
+    print(f"  skipped {step}: {refusal}")
+    with open(os.path.join(out, "skipped"), "a") as handle:
+        handle.write(step + "\n")
+
+
 def spawn_workers(ws: "Socket", port: int, home: str, out: str, bots: Dict[str, Dict[str, str]]) -> None:
     """Temporary workers for daemons that have them: Aurora Notes shares a git
     repository, Tech Writer splits the user guide into chapters past the cap
@@ -203,7 +216,13 @@ def spawn_workers(ws: "Socket", port: int, home: str, out: str, bots: Dict[str, 
     shutil.rmtree(seed)
 
     project = next(p for p in ws.request("list_projects")["projects"] if p["name"] == "Aurora Notes")
-    ws.request("set_project_repo", project_id=project["id"], url=repo, branch="main")
+    try:
+        ws.request("set_project_repo", project_id=project["id"], url=repo, branch="main")
+    except SystemExit as refusal:
+        if not gated(refusal):
+            raise
+        skip(out, "project-repo", refusal)  # the workers below commit to that repo
+        return
     chapters = ["Getting started", "Sync across devices", "Working offline", "When edits conflict",
                 "Sharing a notebook", "Search", "Shortcuts", "Privacy and backups"]
     for number, title in enumerate(chapters, 1):
@@ -234,7 +253,7 @@ def spawn_workers(ws: "Socket", port: int, home: str, out: str, bots: Dict[str, 
     time.sleep(4)
 
 
-def link_peer(ws: "Socket", out: str, gravityd: str, port: int, project_id: str) -> subprocess.Popen:
+def link_peer(ws: "Socket", out: str, gravityd: str, port: int, project_id: str) -> Optional[subprocess.Popen]:
     """A second throwaway gravityd, "Studio PC", peered with the demo one and linked
     into one project, so the app has a link to show (and to unlink)."""
     peer_out = os.path.join(out, "peer")
@@ -244,7 +263,14 @@ def link_peer(ws: "Socket", out: str, gravityd: str, port: int, project_id: str)
     with open(os.path.join(peer_out, "gravity", "secrets", "client.token")) as handle:
         other = Socket(port)
         other.request("hello", protocol_version=2, token=handle.read().strip(), client="gravitios-demo")
-    invite = other.request("create_peer_invite", name="Demo Mac", url=f"ws://127.0.0.1:{port}/peer")["invite"]
+    try:
+        invite = other.request("create_peer_invite", name="Demo Mac", url=f"ws://127.0.0.1:{port}/peer")["invite"]
+    except SystemExit as refusal:
+        if not gated(refusal):
+            raise
+        skip(out, "peer-link", refusal)
+        peer.terminate()
+        return None
     peer_id = ws.request("add_peer", name="Studio PC", invite=invite)["peer"]["id"]
     for _ in range(50):
         if any(p["id"] == peer_id and p.get("online") for p in ws.request("list_peers")["peers"]):

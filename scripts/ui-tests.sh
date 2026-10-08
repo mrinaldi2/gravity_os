@@ -127,7 +127,7 @@ run_tests() { # <result bundle> <xcodebuild args…>
     TEST_RUNNER_SCRATCH_READONLY_TOKEN=${SCRATCH_READONLY_TOKEN:-} TEST_RUNNER_SCRATCH_CONTROL_PORT=${SCRATCH_CONTROL_PORT:-} TEST_RUNNER_SCRATCH_PROXY_PORT=${SCRATCH_PROXY_PORT:-} \
     TEST_RUNNER_GRAV_PORT=$port TEST_RUNNER_LENS_PORT=$lens_port \
     TEST_RUNNER_DEMO_DECISION_ID=${ids% *} TEST_RUNNER_DEMO_BOT_ID=${ids#* } \
-    TEST_RUNNER_DEMO_CONTROL_PORT=$control_port TEST_RUNNER_FIXTURES=$PWD/contract/fixtures TEST_RUNNER_SCREENSHOT_DIR=${SCREENSHOT_DIR:-} \
+    TEST_RUNNER_DEMO_CONTROL_PORT=$control_port TEST_RUNNER_DEMO_SKIPPED="$(cat "$out/skipped" 2>/dev/null | tr '\n' ' ')" TEST_RUNNER_FIXTURES=$PWD/contract/fixtures TEST_RUNNER_SCREENSHOT_DIR=${SCREENSHOT_DIR:-} \
     xcodebuild -project "$project" -scheme UITests -destination "id=$device" \
         -derivedDataPath build/ui-tests -resultBundlePath "$bundle" test "$@"
 }

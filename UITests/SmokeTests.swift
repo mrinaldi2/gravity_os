@@ -79,7 +79,11 @@ final class SmokeTests: XCTestCase {
         screenshot("QA-004-smoke-decision-answered")
     }
 
-    func testLinkSheetUnlink() {
+    func testLinkSheetUnlink() throws {
+        // hermesd 0.17.4 keeps peer invites from the demo's owner token: no link to show (H-234).
+        if (DemoApp.environment["DEMO_SKIPPED"] ?? "").contains("peer-link") {
+            throw XCTSkip("The demo has no peer link on this daemon (create_peer_invite needs approve); H-234")
+        }
         app.openProject("Aurora Notes")
         waitFor(app.navigationBars["Aurora Notes"].buttons["More"]).tap()
         waitFor(app.buttons["Project settings"]).tap()
