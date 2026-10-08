@@ -16,7 +16,7 @@ final class QA013InstallStateTests: XCTestCase {
     }
 
     private func json(_ object: [String: Any]) -> String {
-        String(decoding: try! JSONSerialization.data(withJSONObject: object), as: UTF8.self)
+        String(decoding: try! JSONSerialization.data(withJSONObject: object, options: [.withoutEscapingSlashes]), as: UTF8.self)
     }
 
     private func release(_ status: String, name: String = "0.6.2") -> String {
@@ -35,7 +35,7 @@ final class QA013InstallStateTests: XCTestCase {
     }
 
     private func open(_ release: String, _ install: String) throws -> XCUIApplication {
-        let app = try DemoApp.launch(["-releaseStub", release, "-installStub", install])
+        let app = try DemoApp.launch(["-releaseStub", release.asArgumentString, "-installStub", install.asArgumentString])
         allowSystemAlerts()
         return app
     }
@@ -118,5 +118,14 @@ final class QA013InstallStateTests: XCTestCase {
         sleep(3)
         XCTAssertFalse(any(rejected, "Install on this").exists, "A rejected package shows Install")
         screenshot("QA-013-x2-rejected-no-section-STUB-\(device)")
+    }
+}
+
+extension String {
+    /// A launch-argument value the argument domain keeps as this exact string: a bare
+    /// `{…}` is read as an old-style property list (JSON isn't one) and comes back nil,
+    /// so the JSON goes in as a quoted plist string.
+    var asArgumentString: String {
+        "\"" + replacingOccurrences(of: "\\", with: "\\\\").replacingOccurrences(of: "\"", with: "\\\"") + "\""
     }
 }

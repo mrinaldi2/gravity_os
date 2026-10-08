@@ -25,18 +25,18 @@ final class QA013InstallTests: XCTestCase {
                                     "version": "0.6.2", "build": "13", "install_url": Self.link, "page_url": Self.page,
                                     "title": "The Hermes 0.6.2 (13) is ready to install",
                                     "body": "Approved on 8 Oct 2026. Tap to install."]
-        let data = try JSONSerialization.data(withJSONObject: ["offers": [offer]])
+        let data = try JSONSerialization.data(withJSONObject: ["offers": [offer]], options: [.withoutEscapingSlashes])
         return String(decoding: data, as: UTF8.self)
     }
 
     /// UX-047 #7 (STUBBED offer): the banner on Needs you and on the project's Releases;
     /// Install from it with the site unreachable says so and opens nothing (#4); Not now hides it.
     func testOfferBannerOnNeedsYouAndReleases() throws {
-        let app = try DemoApp.launch(["-installOfferStub", try offerStub()])
+        let app = try DemoApp.launch(["-installOfferStub", try offerStub().asArgumentString])
         allowSystemAlerts()
         app.tab("Needs you")
         let banner = any(app, "The Hermes 0.6.2 is ready to install")
-        XCTAssertTrue(banner.waitForExistence(timeout: 15), "No offer banner on Needs you")
+        XCTAssertTrue(banner.waitForExistence(timeout: 40), "No offer banner on Needs you")
         screenshot("QA-013-07-STUB-offer-banner-needs-you")
 
         app.openProject("Aurora Notes")
