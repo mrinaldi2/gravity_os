@@ -593,14 +593,25 @@ struct ItemView: View {
     private func retry(_ id: UUID) {
         guard let index = pending.firstIndex(where: { $0.id == id }) else { return }
         pending[index].state = .sending
-        send(id)
+        send(id, retrying: true)
     }
 
-    private func send(_ id: UUID) {
+    /// A retry re-reads the card first: the comment may have landed after all (H-225).
+    private func send(_ id: UUID, retrying: Bool = false) {
         guard let comment = pending.first(where: { $0.id == id }) else { return }
         Task {
             do {
-                try await store.postComment(on: itemId, comment.body, replyTo: comment.replyTo)
+                if retrying {
+                    _ = try await CommentThread.retry(comment, reread: {
+                        let fresh = try await store.item(itemId)
+                        detail = fresh
+                        return fresh.comments
+                    }, post: {
+                        try await store.postComment(on: itemId, comment.body, replyTo: comment.replyTo)
+                    })
+                } else {
+                    try await store.postComment(on: itemId, comment.body, replyTo: comment.replyTo)
+                }
                 if let index = pending.firstIndex(where: { $0.id == id }) {
                     pending[index].state = .sent
                     pending[index].sentAt = Date()
@@ -865,7 +876,7 @@ struct ReleaseView: View {
         .task(id: fleet.rulings.outcome?.id) {
             guard let outcome = fleet.rulings.outcome, outcome.releaseId == releaseId else { return }
             await load()
-            if outcome.ok || outcome.changed { leftOut = [:] }
+            if outcome.clearsChoices { leftOut = [:] }
         }
         .sheet(item: Binding(get: { leavingOut.map(ItemRef.init) }, set: { leavingOut = $0?.id })) { ref in
             LeaveOutSheet(itemId: ref.id, title: release?.plan.first { $0.itemId == ref.id }?.title ?? "") { out in

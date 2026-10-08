@@ -16,6 +16,44 @@ final class ItemCommentsTests: XCTestCase {
         return c
     }
 
+    // H-225 (desktop H-201 S4): a late "Couldn't post", then Retry, never posts twice.
+    func testRetryFindsACommentThatLandedLateAndSendsNothing() async throws {
+        let failed = PendingComment(body: "Ship it after the fix", replyTo: "c1", at: Date(timeIntervalSince1970: 1_000))
+        var posts = 0
+        var reads = 0
+        let result = try await CommentThread.retry(failed, reread: {
+            reads += 1
+            return [self.comment("c1", "bot:dev", "Ready?"),
+                    self.comment("c9", "device:phone", "Ship it after the fix", replyTo: "c1", at: 1_003)]
+        }, post: { posts += 1 })
+        XCTAssertEqual(result, .alreadyPosted)
+        XCTAssertEqual(reads, 1, "the card is re-read first")
+        XCTAssertEqual(posts, 0, "not posted twice")
+    }
+
+    func testRetryPostsWhenTheCardDoesNotHaveIt() async throws {
+        let failed = PendingComment(body: "Ship it after the fix", replyTo: nil, at: Date(timeIntervalSince1970: 1_000))
+        var posts = 0
+        // The same words, but older, or under another comment, or by a bot: not this one.
+        let result = try await CommentThread.retry(failed, reread: {
+            [self.comment("old", "user", "Ship it after the fix", at: 500),
+             self.comment("reply", "user", "Ship it after the fix", replyTo: "c1", at: 1_001),
+             self.comment("bot", "bot:dev", "Ship it after the fix", at: 1_001)]
+        }, post: { posts += 1 })
+        XCTAssertEqual(result, .posted)
+        XCTAssertEqual(posts, 1)
+    }
+
+    func testRetrySendsNothingWhenTheCardCannotBeRead() async {
+        let failed = PendingComment(body: "Ship it", replyTo: nil)
+        var posts = 0
+        do {
+            _ = try await CommentThread.retry(failed, reread: { throw URLError(.notConnectedToInternet) }, post: { posts += 1 })
+            XCTFail("expected the read to fail")
+        } catch {}
+        XCTAssertEqual(posts, 0)
+    }
+
     func testAPostedCommentShowsAtOnceAsSending() {
         let posted = PendingComment(body: "Ship it after the fix", replyTo: nil)
         let rows = CommentThread.rows(comments: [], history: [], pending: [posted])

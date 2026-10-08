@@ -35,6 +35,19 @@ final class RulingQueueTests: XCTestCase {
         XCTAssertEqual(queue.outcome?.text, "Undone. Nothing was sent.")
     }
 
+    func testUndoKeepsTheLeaveOutChoices() async {
+        // H-225 (QA-008 D3): only a ruling that went, or a changed package, spends them.
+        let queue = RulingQueue()
+        queue.approve(release, leftOut: 1, wait: .milliseconds(80)) { self.release }
+        queue.undo()
+        XCTAssertEqual(queue.outcome?.undone, true)
+        XCTAssertEqual(queue.outcome?.clearsChoices, false, "Undo keeps what was left out")
+
+        queue.approve(release, leftOut: 1, wait: .milliseconds(10)) { self.release }
+        await settle(queue)
+        XCTAssertEqual(queue.outcome?.clearsChoices, true, "approved: the choices are spent")
+    }
+
     func testAVersionConflictSaysThePackageChanged() async {
         let queue = RulingQueue()
         queue.approve(release, leftOut: 0, wait: .milliseconds(10)) {
