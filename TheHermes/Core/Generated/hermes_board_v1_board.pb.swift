@@ -1069,61 +1069,110 @@ nonisolated struct Hermes_Board_V1_Item: @unchecked Sendable {
 }
 
 /// The compact form a board column lists; the drawer fetches the Item.
-nonisolated struct Hermes_Board_V1_ItemCard: Sendable {
+nonisolated struct Hermes_Board_V1_ItemCard: @unchecked Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
 
-  var id: String = String()
+  var id: String {
+    get {_storage._id}
+    set {_uniqueStorage()._id = newValue}
+  }
 
-  var type: Hermes_Board_V1_ItemType = .unspecified
+  var type: Hermes_Board_V1_ItemType {
+    get {_storage._type}
+    set {_uniqueStorage()._type = newValue}
+  }
 
-  var title: String = String()
+  var title: String {
+    get {_storage._title}
+    set {_uniqueStorage()._title = newValue}
+  }
 
-  var priority: Hermes_Board_V1_Priority = .unspecified
+  var priority: Hermes_Board_V1_Priority {
+    get {_storage._priority}
+    set {_uniqueStorage()._priority = newValue}
+  }
 
   var size: Hermes_Board_V1_Size {
-    get {_size ?? .unspecified}
-    set {_size = newValue}
+    get {_storage._size ?? .unspecified}
+    set {_uniqueStorage()._size = newValue}
   }
   /// Returns true if `size` has been explicitly set.
-  var hasSize: Bool {self._size != nil}
+  var hasSize: Bool {_storage._size != nil}
   /// Clears the value of `size`. Subsequent reads from it will return its default value.
-  mutating func clearSize() {self._size = nil}
+  mutating func clearSize() {_uniqueStorage()._size = nil}
 
-  var rank: String = String()
+  var rank: String {
+    get {_storage._rank}
+    set {_uniqueStorage()._rank = newValue}
+  }
 
-  var columnKey: String = String()
+  var columnKey: String {
+    get {_storage._columnKey}
+    set {_uniqueStorage()._columnKey = newValue}
+  }
 
   var assignee: String {
-    get {_assignee ?? String()}
-    set {_assignee = newValue}
+    get {_storage._assignee ?? String()}
+    set {_uniqueStorage()._assignee = newValue}
   }
   /// Returns true if `assignee` has been explicitly set.
-  var hasAssignee: Bool {self._assignee != nil}
+  var hasAssignee: Bool {_storage._assignee != nil}
   /// Clears the value of `assignee`. Subsequent reads from it will return its default value.
-  mutating func clearAssignee() {self._assignee = nil}
+  mutating func clearAssignee() {_uniqueStorage()._assignee = nil}
 
-  var platforms: [Hermes_Board_V1_Platform] = []
+  var platforms: [Hermes_Board_V1_Platform] {
+    get {_storage._platforms}
+    set {_uniqueStorage()._platforms = newValue}
+  }
 
-  var labels: [String] = []
+  var labels: [String] {
+    get {_storage._labels}
+    set {_uniqueStorage()._labels = newValue}
+  }
 
-  var blocked: Bool = false
+  var blocked: Bool {
+    get {_storage._blocked}
+    set {_uniqueStorage()._blocked = newValue}
+  }
 
-  var stale: Bool = false
+  var stale: Bool {
+    get {_storage._stale}
+    set {_uniqueStorage()._stale = newValue}
+  }
 
-  var acChecked: UInt32 = 0
+  var acChecked: UInt32 {
+    get {_storage._acChecked}
+    set {_uniqueStorage()._acChecked = newValue}
+  }
 
-  var acTotal: UInt32 = 0
+  var acTotal: UInt32 {
+    get {_storage._acTotal}
+    set {_uniqueStorage()._acTotal = newValue}
+  }
 
-  var version: UInt64 = 0
+  var version: UInt64 {
+    get {_storage._version}
+    set {_uniqueStorage()._version = newValue}
+  }
+
+  /// The owner's latest comment on it (H-211): a computer mirroring the board
+  /// closes its card questions asked before it.
+  var ownerCommentedAt: SwiftProtobuf.Google_Protobuf_Timestamp {
+    get {_storage._ownerCommentedAt ?? SwiftProtobuf.Google_Protobuf_Timestamp()}
+    set {_uniqueStorage()._ownerCommentedAt = newValue}
+  }
+  /// Returns true if `ownerCommentedAt` has been explicitly set.
+  var hasOwnerCommentedAt: Bool {_storage._ownerCommentedAt != nil}
+  /// Clears the value of `ownerCommentedAt`. Subsequent reads from it will return its default value.
+  mutating func clearOwnerCommentedAt() {_uniqueStorage()._ownerCommentedAt = nil}
 
   var unknownFields = SwiftProtobuf.UnknownStorage()
 
   init() {}
 
-  fileprivate var _size: Hermes_Board_V1_Size? = nil
-  fileprivate var _assignee: String? = nil
+  fileprivate var _storage = _StorageClass.defaultInstance
 }
 
 nonisolated struct Hermes_Board_V1_ItemLink: Sendable {
@@ -2030,103 +2079,174 @@ nonisolated extension Hermes_Board_V1_Item: SwiftProtobuf.Message, SwiftProtobuf
 
 nonisolated extension Hermes_Board_V1_ItemCard: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   static let protoMessageName: String = _protobuf_package + ".ItemCard"
-  static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}id\0\u{1}type\0\u{1}title\0\u{1}priority\0\u{1}size\0\u{1}rank\0\u{3}column_key\0\u{1}assignee\0\u{1}platforms\0\u{1}labels\0\u{1}blocked\0\u{1}stale\0\u{3}ac_checked\0\u{3}ac_total\0\u{1}version\0")
+  static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}id\0\u{1}type\0\u{1}title\0\u{1}priority\0\u{1}size\0\u{1}rank\0\u{3}column_key\0\u{1}assignee\0\u{1}platforms\0\u{1}labels\0\u{1}blocked\0\u{1}stale\0\u{3}ac_checked\0\u{3}ac_total\0\u{1}version\0\u{3}owner_commented_at\0")
+
+  fileprivate class _StorageClass {
+    var _id: String = String()
+    var _type: Hermes_Board_V1_ItemType = .unspecified
+    var _title: String = String()
+    var _priority: Hermes_Board_V1_Priority = .unspecified
+    var _size: Hermes_Board_V1_Size? = nil
+    var _rank: String = String()
+    var _columnKey: String = String()
+    var _assignee: String? = nil
+    var _platforms: [Hermes_Board_V1_Platform] = []
+    var _labels: [String] = []
+    var _blocked: Bool = false
+    var _stale: Bool = false
+    var _acChecked: UInt32 = 0
+    var _acTotal: UInt32 = 0
+    var _version: UInt64 = 0
+    var _ownerCommentedAt: SwiftProtobuf.Google_Protobuf_Timestamp? = nil
+
+      // This property is used as the initial default value for new instances of the type.
+      // The type itself is protecting the reference to its storage via CoW semantics.
+      // This will force a copy to be made of this reference when the first mutation occurs;
+      // hence, it is safe to mark this as `nonisolated(unsafe)`.
+      static nonisolated(unsafe) let defaultInstance = _StorageClass()
+
+    private init() {}
+
+    init(copying source: _StorageClass) {
+      _id = source._id
+      _type = source._type
+      _title = source._title
+      _priority = source._priority
+      _size = source._size
+      _rank = source._rank
+      _columnKey = source._columnKey
+      _assignee = source._assignee
+      _platforms = source._platforms
+      _labels = source._labels
+      _blocked = source._blocked
+      _stale = source._stale
+      _acChecked = source._acChecked
+      _acTotal = source._acTotal
+      _version = source._version
+      _ownerCommentedAt = source._ownerCommentedAt
+    }
+  }
+
+  fileprivate mutating func _uniqueStorage() -> _StorageClass {
+    if !isKnownUniquelyReferenced(&_storage) {
+      _storage = _StorageClass(copying: _storage)
+    }
+    return _storage
+  }
 
   mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
-    while let fieldNumber = try decoder.nextFieldNumber() {
-      // The use of inline closures is to circumvent an issue where the compiler
-      // allocates stack space for every case branch when no optimizations are
-      // enabled. https://github.com/apple/swift-protobuf/issues/1034
-      switch fieldNumber {
-      case 1: try { try decoder.decodeSingularStringField(value: &self.id) }()
-      case 2: try { try decoder.decodeSingularEnumField(value: &self.type) }()
-      case 3: try { try decoder.decodeSingularStringField(value: &self.title) }()
-      case 4: try { try decoder.decodeSingularEnumField(value: &self.priority) }()
-      case 5: try { try decoder.decodeSingularEnumField(value: &self._size) }()
-      case 6: try { try decoder.decodeSingularStringField(value: &self.rank) }()
-      case 7: try { try decoder.decodeSingularStringField(value: &self.columnKey) }()
-      case 8: try { try decoder.decodeSingularStringField(value: &self._assignee) }()
-      case 9: try { try decoder.decodeRepeatedEnumField(value: &self.platforms) }()
-      case 10: try { try decoder.decodeRepeatedStringField(value: &self.labels) }()
-      case 11: try { try decoder.decodeSingularBoolField(value: &self.blocked) }()
-      case 12: try { try decoder.decodeSingularBoolField(value: &self.stale) }()
-      case 13: try { try decoder.decodeSingularUInt32Field(value: &self.acChecked) }()
-      case 14: try { try decoder.decodeSingularUInt32Field(value: &self.acTotal) }()
-      case 15: try { try decoder.decodeSingularUInt64Field(value: &self.version) }()
-      default: break
+    _ = _uniqueStorage()
+    try withExtendedLifetime(_storage) { (_storage: _StorageClass) in
+      while let fieldNumber = try decoder.nextFieldNumber() {
+        // The use of inline closures is to circumvent an issue where the compiler
+        // allocates stack space for every case branch when no optimizations are
+        // enabled. https://github.com/apple/swift-protobuf/issues/1034
+        switch fieldNumber {
+        case 1: try { try decoder.decodeSingularStringField(value: &_storage._id) }()
+        case 2: try { try decoder.decodeSingularEnumField(value: &_storage._type) }()
+        case 3: try { try decoder.decodeSingularStringField(value: &_storage._title) }()
+        case 4: try { try decoder.decodeSingularEnumField(value: &_storage._priority) }()
+        case 5: try { try decoder.decodeSingularEnumField(value: &_storage._size) }()
+        case 6: try { try decoder.decodeSingularStringField(value: &_storage._rank) }()
+        case 7: try { try decoder.decodeSingularStringField(value: &_storage._columnKey) }()
+        case 8: try { try decoder.decodeSingularStringField(value: &_storage._assignee) }()
+        case 9: try { try decoder.decodeRepeatedEnumField(value: &_storage._platforms) }()
+        case 10: try { try decoder.decodeRepeatedStringField(value: &_storage._labels) }()
+        case 11: try { try decoder.decodeSingularBoolField(value: &_storage._blocked) }()
+        case 12: try { try decoder.decodeSingularBoolField(value: &_storage._stale) }()
+        case 13: try { try decoder.decodeSingularUInt32Field(value: &_storage._acChecked) }()
+        case 14: try { try decoder.decodeSingularUInt32Field(value: &_storage._acTotal) }()
+        case 15: try { try decoder.decodeSingularUInt64Field(value: &_storage._version) }()
+        case 16: try { try decoder.decodeSingularMessageField(value: &_storage._ownerCommentedAt) }()
+        default: break
+        }
       }
     }
   }
 
   func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
-    // The use of inline closures is to circumvent an issue where the compiler
-    // allocates stack space for every if/case branch local when no optimizations
-    // are enabled. https://github.com/apple/swift-protobuf/issues/1034 and
-    // https://github.com/apple/swift-protobuf/issues/1182
-    if !self.id.isEmpty {
-      try visitor.visitSingularStringField(value: self.id, fieldNumber: 1)
-    }
-    if self.type != .unspecified {
-      try visitor.visitSingularEnumField(value: self.type, fieldNumber: 2)
-    }
-    if !self.title.isEmpty {
-      try visitor.visitSingularStringField(value: self.title, fieldNumber: 3)
-    }
-    if self.priority != .unspecified {
-      try visitor.visitSingularEnumField(value: self.priority, fieldNumber: 4)
-    }
-    try { if let v = self._size {
-      try visitor.visitSingularEnumField(value: v, fieldNumber: 5)
-    } }()
-    if !self.rank.isEmpty {
-      try visitor.visitSingularStringField(value: self.rank, fieldNumber: 6)
-    }
-    if !self.columnKey.isEmpty {
-      try visitor.visitSingularStringField(value: self.columnKey, fieldNumber: 7)
-    }
-    try { if let v = self._assignee {
-      try visitor.visitSingularStringField(value: v, fieldNumber: 8)
-    } }()
-    if !self.platforms.isEmpty {
-      try visitor.visitPackedEnumField(value: self.platforms, fieldNumber: 9)
-    }
-    if !self.labels.isEmpty {
-      try visitor.visitRepeatedStringField(value: self.labels, fieldNumber: 10)
-    }
-    if self.blocked != false {
-      try visitor.visitSingularBoolField(value: self.blocked, fieldNumber: 11)
-    }
-    if self.stale != false {
-      try visitor.visitSingularBoolField(value: self.stale, fieldNumber: 12)
-    }
-    if self.acChecked != 0 {
-      try visitor.visitSingularUInt32Field(value: self.acChecked, fieldNumber: 13)
-    }
-    if self.acTotal != 0 {
-      try visitor.visitSingularUInt32Field(value: self.acTotal, fieldNumber: 14)
-    }
-    if self.version != 0 {
-      try visitor.visitSingularUInt64Field(value: self.version, fieldNumber: 15)
+    try withExtendedLifetime(_storage) { (_storage: _StorageClass) in
+      // The use of inline closures is to circumvent an issue where the compiler
+      // allocates stack space for every if/case branch local when no optimizations
+      // are enabled. https://github.com/apple/swift-protobuf/issues/1034 and
+      // https://github.com/apple/swift-protobuf/issues/1182
+      if !_storage._id.isEmpty {
+        try visitor.visitSingularStringField(value: _storage._id, fieldNumber: 1)
+      }
+      if _storage._type != .unspecified {
+        try visitor.visitSingularEnumField(value: _storage._type, fieldNumber: 2)
+      }
+      if !_storage._title.isEmpty {
+        try visitor.visitSingularStringField(value: _storage._title, fieldNumber: 3)
+      }
+      if _storage._priority != .unspecified {
+        try visitor.visitSingularEnumField(value: _storage._priority, fieldNumber: 4)
+      }
+      try { if let v = _storage._size {
+        try visitor.visitSingularEnumField(value: v, fieldNumber: 5)
+      } }()
+      if !_storage._rank.isEmpty {
+        try visitor.visitSingularStringField(value: _storage._rank, fieldNumber: 6)
+      }
+      if !_storage._columnKey.isEmpty {
+        try visitor.visitSingularStringField(value: _storage._columnKey, fieldNumber: 7)
+      }
+      try { if let v = _storage._assignee {
+        try visitor.visitSingularStringField(value: v, fieldNumber: 8)
+      } }()
+      if !_storage._platforms.isEmpty {
+        try visitor.visitPackedEnumField(value: _storage._platforms, fieldNumber: 9)
+      }
+      if !_storage._labels.isEmpty {
+        try visitor.visitRepeatedStringField(value: _storage._labels, fieldNumber: 10)
+      }
+      if _storage._blocked != false {
+        try visitor.visitSingularBoolField(value: _storage._blocked, fieldNumber: 11)
+      }
+      if _storage._stale != false {
+        try visitor.visitSingularBoolField(value: _storage._stale, fieldNumber: 12)
+      }
+      if _storage._acChecked != 0 {
+        try visitor.visitSingularUInt32Field(value: _storage._acChecked, fieldNumber: 13)
+      }
+      if _storage._acTotal != 0 {
+        try visitor.visitSingularUInt32Field(value: _storage._acTotal, fieldNumber: 14)
+      }
+      if _storage._version != 0 {
+        try visitor.visitSingularUInt64Field(value: _storage._version, fieldNumber: 15)
+      }
+      try { if let v = _storage._ownerCommentedAt {
+        try visitor.visitSingularMessageField(value: v, fieldNumber: 16)
+      } }()
     }
     try unknownFields.traverse(visitor: &visitor)
   }
 
   static func ==(lhs: Hermes_Board_V1_ItemCard, rhs: Hermes_Board_V1_ItemCard) -> Bool {
-    if lhs.id != rhs.id {return false}
-    if lhs.type != rhs.type {return false}
-    if lhs.title != rhs.title {return false}
-    if lhs.priority != rhs.priority {return false}
-    if lhs._size != rhs._size {return false}
-    if lhs.rank != rhs.rank {return false}
-    if lhs.columnKey != rhs.columnKey {return false}
-    if lhs._assignee != rhs._assignee {return false}
-    if lhs.platforms != rhs.platforms {return false}
-    if lhs.labels != rhs.labels {return false}
-    if lhs.blocked != rhs.blocked {return false}
-    if lhs.stale != rhs.stale {return false}
-    if lhs.acChecked != rhs.acChecked {return false}
-    if lhs.acTotal != rhs.acTotal {return false}
-    if lhs.version != rhs.version {return false}
+    if lhs._storage !== rhs._storage {
+      let storagesAreEqual: Bool = withExtendedLifetime((lhs._storage, rhs._storage)) { (_args: (_StorageClass, _StorageClass)) in
+        let _storage = _args.0
+        let rhs_storage = _args.1
+        if _storage._id != rhs_storage._id {return false}
+        if _storage._type != rhs_storage._type {return false}
+        if _storage._title != rhs_storage._title {return false}
+        if _storage._priority != rhs_storage._priority {return false}
+        if _storage._size != rhs_storage._size {return false}
+        if _storage._rank != rhs_storage._rank {return false}
+        if _storage._columnKey != rhs_storage._columnKey {return false}
+        if _storage._assignee != rhs_storage._assignee {return false}
+        if _storage._platforms != rhs_storage._platforms {return false}
+        if _storage._labels != rhs_storage._labels {return false}
+        if _storage._blocked != rhs_storage._blocked {return false}
+        if _storage._stale != rhs_storage._stale {return false}
+        if _storage._acChecked != rhs_storage._acChecked {return false}
+        if _storage._acTotal != rhs_storage._acTotal {return false}
+        if _storage._version != rhs_storage._version {return false}
+        if _storage._ownerCommentedAt != rhs_storage._ownerCommentedAt {return false}
+        return true
+      }
+      if !storagesAreEqual {return false}
+    }
     if lhs.unknownFields != rhs.unknownFields {return false}
     return true
   }

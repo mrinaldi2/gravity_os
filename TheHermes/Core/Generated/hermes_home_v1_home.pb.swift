@@ -623,6 +623,9 @@ nonisolated struct Hermes_Home_V1_AttentionRow: Sendable {
   /// decision only: P0..P3
   var priority: String = String()
 
+  /// owner_question on a card: the comment that asked (H-211)
+  var questionCommentID: String = String()
+
   var unknownFields = SwiftProtobuf.UnknownStorage()
 
   nonisolated enum OneOf_Target: Equatable, Sendable {
@@ -707,6 +710,9 @@ nonisolated struct Hermes_Home_V1_ReleaseBrief: Sendable {
 
   /// addition (H-144): items in Verify or later (H-137)
   var itemsReady: UInt32 = 0
+
+  /// addition (H-247): what it waits on from the owner
+  var ownerBlockerCount: UInt32 = 0
 
   var unknownFields = SwiftProtobuf.UnknownStorage()
 
@@ -1280,6 +1286,302 @@ nonisolated struct Hermes_Home_V1_OwnerThreadMarked: Sendable {
   var lastReadNum: Int64 = 0
 
   var unread: UInt32 = 0
+
+  var unknownFields = SwiftProtobuf.UnknownStorage()
+
+  init() {}
+}
+
+/// [release_install] what an iOS package offers for install on a phone.
+nonisolated struct Hermes_Home_V1_ReleaseInstallRequest: Sendable {
+  // SwiftProtobuf.Message conformance is added in an extension below. See the
+  // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
+  // methods supported on all messages.
+
+  var releaseID: String = String()
+
+  /// also ask the build site whether it answers
+  var checkSite: Bool = false
+
+  var unknownFields = SwiftProtobuf.UnknownStorage()
+
+  init() {}
+}
+
+nonisolated struct Hermes_Home_V1_ReleaseInstall: @unchecked Sendable {
+  // SwiftProtobuf.Message conformance is added in an extension below. See the
+  // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
+  // methods supported on all messages.
+
+  var releaseID: String {
+    get {_storage._releaseID}
+    set {_uniqueStorage()._releaseID = newValue}
+  }
+
+  var projectID: String {
+    get {_storage._projectID}
+    set {_uniqueStorage()._projectID = newValue}
+  }
+
+  /// what the owner sees, e.g. "0.6.1"
+  var version: String {
+    get {_storage._version}
+    set {_uniqueStorage()._version = newValue}
+  }
+
+  /// the iOS build's version, e.g. "12"; empty = no build
+  var build: String {
+    get {_storage._build}
+    set {_uniqueStorage()._build = newValue}
+  }
+
+  /// ReleaseStatus name
+  var state: String {
+    get {_storage._state}
+    set {_uniqueStorage()._state = newValue}
+  }
+
+  /// the state offers install actions (UX-043 §1)
+  var installable: Bool {
+    get {_storage._installable}
+    set {_uniqueStorage()._installable = newValue}
+  }
+
+  /// awaiting_owner: installed to test it
+  var forTesting: Bool {
+    get {_storage._forTesting}
+    set {_uniqueStorage()._forTesting = newValue}
+  }
+
+  /// HTTPS install page (…/index.html); empty = not published
+  var pageURL: String {
+    get {_storage._pageURL}
+    set {_uniqueStorage()._pageURL = newValue}
+  }
+
+  /// the itms-services link; empty = not published
+  var installURL: String {
+    get {_storage._installURL}
+    set {_uniqueStorage()._installURL = newValue}
+  }
+
+  /// unset = not checked
+  var site: Hermes_Home_V1_SiteCheck {
+    get {_storage._site ?? Hermes_Home_V1_SiteCheck()}
+    set {_uniqueStorage()._site = newValue}
+  }
+  /// Returns true if `site` has been explicitly set.
+  var hasSite: Bool {_storage._site != nil}
+  /// Clears the value of `site`. Subsequent reads from it will return its default value.
+  mutating func clearSite() {_uniqueStorage()._site = nil}
+
+  /// the computer whose build site serves it
+  var computer: String {
+    get {_storage._computer}
+    set {_uniqueStorage()._computer = newValue}
+  }
+
+  /// this computer may start the build site itself
+  var canStartSite: Bool {
+    get {_storage._canStartSite}
+    set {_uniqueStorage()._canStartSite = newValue}
+  }
+
+  /// paired and not revoked, last seen first
+  var devices: [Hermes_Home_V1_InstallDevice] {
+    get {_storage._devices}
+    set {_uniqueStorage()._devices = newValue}
+  }
+
+  /// "The Hermes"
+  var appTitle: String {
+    get {_storage._appTitle}
+    set {_uniqueStorage()._appTitle = newValue}
+  }
+
+  /// the owner's ruling; unset = not approved
+  var approvedAt: SwiftProtobuf.Google_Protobuf_Timestamp {
+    get {_storage._approvedAt ?? SwiftProtobuf.Google_Protobuf_Timestamp()}
+    set {_uniqueStorage()._approvedAt = newValue}
+  }
+  /// Returns true if `approvedAt` has been explicitly set.
+  var hasApprovedAt: Bool {_storage._approvedAt != nil}
+  /// Clears the value of `approvedAt`. Subsequent reads from it will return its default value.
+  mutating func clearApprovedAt() {_uniqueStorage()._approvedAt = nil}
+
+  var unknownFields = SwiftProtobuf.UnknownStorage()
+
+  init() {}
+
+  fileprivate var _storage = _StorageClass.defaultInstance
+}
+
+nonisolated struct Hermes_Home_V1_SiteCheck: Sendable {
+  // SwiftProtobuf.Message conformance is added in an extension below. See the
+  // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
+  // methods supported on all messages.
+
+  /// the install page answered 2xx over HTTPS
+  var serving: Bool = false
+
+  /// why not, for the log; the copy is the client's
+  var problem: String = String()
+
+  var checkedAt: SwiftProtobuf.Google_Protobuf_Timestamp {
+    get {_checkedAt ?? SwiftProtobuf.Google_Protobuf_Timestamp()}
+    set {_checkedAt = newValue}
+  }
+  /// Returns true if `checkedAt` has been explicitly set.
+  var hasCheckedAt: Bool {self._checkedAt != nil}
+  /// Clears the value of `checkedAt`. Subsequent reads from it will return its default value.
+  mutating func clearCheckedAt() {self._checkedAt = nil}
+
+  var unknownFields = SwiftProtobuf.UnknownStorage()
+
+  init() {}
+
+  fileprivate var _checkedAt: SwiftProtobuf.Google_Protobuf_Timestamp? = nil
+}
+
+nonisolated struct Hermes_Home_V1_InstallDevice: Sendable {
+  // SwiftProtobuf.Message conformance is added in an extension below. See the
+  // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
+  // methods supported on all messages.
+
+  var deviceID: String = String()
+
+  var name: String = String()
+
+  var lastSeenAt: SwiftProtobuf.Google_Protobuf_Timestamp {
+    get {_lastSeenAt ?? SwiftProtobuf.Google_Protobuf_Timestamp()}
+    set {_lastSeenAt = newValue}
+  }
+  /// Returns true if `lastSeenAt` has been explicitly set.
+  var hasLastSeenAt: Bool {self._lastSeenAt != nil}
+  /// Clears the value of `lastSeenAt`. Subsequent reads from it will return its default value.
+  mutating func clearLastSeenAt() {self._lastSeenAt = nil}
+
+  /// holds a live connection to this computer now
+  var connected: Bool = false
+
+  /// "0.6.1 (12)" as it last reported (H-230); empty = unknown
+  var appVersion: String = String()
+
+  /// when it last reported it (H-241); unset = never
+  var appVersionSeenAt: SwiftProtobuf.Google_Protobuf_Timestamp {
+    get {_appVersionSeenAt ?? SwiftProtobuf.Google_Protobuf_Timestamp()}
+    set {_appVersionSeenAt = newValue}
+  }
+  /// Returns true if `appVersionSeenAt` has been explicitly set.
+  var hasAppVersionSeenAt: Bool {self._appVersionSeenAt != nil}
+  /// Clears the value of `appVersionSeenAt`. Subsequent reads from it will return its default value.
+  mutating func clearAppVersionSeenAt() {self._appVersionSeenAt = nil}
+
+  var unknownFields = SwiftProtobuf.UnknownStorage()
+
+  init() {}
+
+  fileprivate var _lastSeenAt: SwiftProtobuf.Google_Protobuf_Timestamp? = nil
+  fileprivate var _appVersionSeenAt: SwiftProtobuf.Google_Protobuf_Timestamp? = nil
+}
+
+/// [install_offer] answers `release_send_to_device`; also pushed, with no
+/// `req_id`, to that device's connections only.
+nonisolated struct Hermes_Home_V1_ReleaseSendToDeviceRequest: Sendable {
+  // SwiftProtobuf.Message conformance is added in an extension below. See the
+  // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
+  // methods supported on all messages.
+
+  var releaseID: String = String()
+
+  var deviceID: String = String()
+
+  var unknownFields = SwiftProtobuf.UnknownStorage()
+
+  init() {}
+}
+
+nonisolated struct Hermes_Home_V1_InstallOffer: Sendable {
+  // SwiftProtobuf.Message conformance is added in an extension below. See the
+  // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
+  // methods supported on all messages.
+
+  var releaseID: String = String()
+
+  var projectID: String = String()
+
+  var deviceID: String = String()
+
+  var deviceName: String = String()
+
+  var version: String = String()
+
+  var build: String = String()
+
+  /// what a tap opens (itms-services)
+  var installURL: String = String()
+
+  /// the HTTPS page, for a device that can't open the link
+  var pageURL: String = String()
+
+  /// the notification's title
+  var title: String = String()
+
+  /// the notification's body
+  var body: String = String()
+
+  var forTesting: Bool = false
+
+  var sentAt: SwiftProtobuf.Google_Protobuf_Timestamp {
+    get {_sentAt ?? SwiftProtobuf.Google_Protobuf_Timestamp()}
+    set {_sentAt = newValue}
+  }
+  /// Returns true if `sentAt` has been explicitly set.
+  var hasSentAt: Bool {self._sentAt != nil}
+  /// Clears the value of `sentAt`. Subsequent reads from it will return its default value.
+  mutating func clearSentAt() {self._sentAt = nil}
+
+  /// the device was connected when it was sent
+  var delivered: Bool = false
+
+  var unknownFields = SwiftProtobuf.UnknownStorage()
+
+  init() {}
+
+  fileprivate var _sentAt: SwiftProtobuf.Google_Protobuf_Timestamp? = nil
+}
+
+/// [install_offers] this device's waiting offer, at most one: the latest
+/// sent, until it is dismissed or another replaces it.
+nonisolated struct Hermes_Home_V1_InstallOffersRequest: Sendable {
+  // SwiftProtobuf.Message conformance is added in an extension below. See the
+  // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
+  // methods supported on all messages.
+
+  var unknownFields = SwiftProtobuf.UnknownStorage()
+
+  init() {}
+}
+
+nonisolated struct Hermes_Home_V1_InstallOffers: Sendable {
+  // SwiftProtobuf.Message conformance is added in an extension below. See the
+  // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
+  // methods supported on all messages.
+
+  var offers: [Hermes_Home_V1_InstallOffer] = []
+
+  var unknownFields = SwiftProtobuf.UnknownStorage()
+
+  init() {}
+}
+
+/// [install_offers] Not now: the banner stays hidden until the next package.
+nonisolated struct Hermes_Home_V1_InstallOfferDismissRequest: Sendable {
+  // SwiftProtobuf.Message conformance is added in an extension below. See the
+  // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
+  // methods supported on all messages.
+
+  var releaseID: String = String()
 
   var unknownFields = SwiftProtobuf.UnknownStorage()
 
@@ -1958,7 +2260,7 @@ nonisolated extension Hermes_Home_V1_AttentionSummary: SwiftProtobuf.Message, Sw
 
 nonisolated extension Hermes_Home_V1_AttentionRow: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   static let protoMessageName: String = _protobuf_package + ".AttentionRow"
-  static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}id\0\u{1}kind\0\u{3}daemon_id\0\u{3}project_id\0\u{1}title\0\u{3}created_at\0\u{1}weight\0\u{4}\u{3}decision_id\0\u{3}release_id\0\u{3}action_id\0\u{3}request_id\0\u{1}bot\0\u{3}item_id\0\u{4}\u{5}relayed_count\0\u{1}priority\0")
+  static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}id\0\u{1}kind\0\u{3}daemon_id\0\u{3}project_id\0\u{1}title\0\u{3}created_at\0\u{1}weight\0\u{4}\u{3}decision_id\0\u{3}release_id\0\u{3}action_id\0\u{3}request_id\0\u{1}bot\0\u{3}item_id\0\u{4}\u{5}relayed_count\0\u{1}priority\0\u{3}question_comment_id\0")
 
   mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     while let fieldNumber = try decoder.nextFieldNumber() {
@@ -2028,6 +2330,7 @@ nonisolated extension Hermes_Home_V1_AttentionRow: SwiftProtobuf.Message, SwiftP
       }()
       case 20: try { try decoder.decodeSingularUInt32Field(value: &self.relayedCount) }()
       case 21: try { try decoder.decodeSingularStringField(value: &self.priority) }()
+      case 22: try { try decoder.decodeSingularStringField(value: &self.questionCommentID) }()
       default: break
       }
     }
@@ -2092,6 +2395,9 @@ nonisolated extension Hermes_Home_V1_AttentionRow: SwiftProtobuf.Message, SwiftP
     if !self.priority.isEmpty {
       try visitor.visitSingularStringField(value: self.priority, fieldNumber: 21)
     }
+    if !self.questionCommentID.isEmpty {
+      try visitor.visitSingularStringField(value: self.questionCommentID, fieldNumber: 22)
+    }
     try unknownFields.traverse(visitor: &visitor)
   }
 
@@ -2106,6 +2412,7 @@ nonisolated extension Hermes_Home_V1_AttentionRow: SwiftProtobuf.Message, SwiftP
     if lhs.target != rhs.target {return false}
     if lhs.relayedCount != rhs.relayedCount {return false}
     if lhs.priority != rhs.priority {return false}
+    if lhs.questionCommentID != rhs.questionCommentID {return false}
     if lhs.unknownFields != rhs.unknownFields {return false}
     return true
   }
@@ -2188,7 +2495,7 @@ nonisolated extension Hermes_Home_V1_BotRef: SwiftProtobuf.Message, SwiftProtobu
 
 nonisolated extension Hermes_Home_V1_ReleaseBrief: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   static let protoMessageName: String = _protobuf_package + ".ReleaseBrief"
-  static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}release_id\0\u{1}version\0\u{1}state\0\u{3}awaiting_owner\0\u{3}items_total\0\u{3}items_done\0\u{3}deployed_at\0\u{3}items_ready\0")
+  static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}release_id\0\u{1}version\0\u{1}state\0\u{3}awaiting_owner\0\u{3}items_total\0\u{3}items_done\0\u{3}deployed_at\0\u{3}items_ready\0\u{3}owner_blocker_count\0")
 
   mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     while let fieldNumber = try decoder.nextFieldNumber() {
@@ -2204,6 +2511,7 @@ nonisolated extension Hermes_Home_V1_ReleaseBrief: SwiftProtobuf.Message, SwiftP
       case 6: try { try decoder.decodeSingularUInt32Field(value: &self.itemsDone) }()
       case 7: try { try decoder.decodeSingularMessageField(value: &self._deployedAt) }()
       case 8: try { try decoder.decodeSingularUInt32Field(value: &self.itemsReady) }()
+      case 9: try { try decoder.decodeSingularUInt32Field(value: &self.ownerBlockerCount) }()
       default: break
       }
     }
@@ -2238,6 +2546,9 @@ nonisolated extension Hermes_Home_V1_ReleaseBrief: SwiftProtobuf.Message, SwiftP
     if self.itemsReady != 0 {
       try visitor.visitSingularUInt32Field(value: self.itemsReady, fieldNumber: 8)
     }
+    if self.ownerBlockerCount != 0 {
+      try visitor.visitSingularUInt32Field(value: self.ownerBlockerCount, fieldNumber: 9)
+    }
     try unknownFields.traverse(visitor: &visitor)
   }
 
@@ -2250,6 +2561,7 @@ nonisolated extension Hermes_Home_V1_ReleaseBrief: SwiftProtobuf.Message, SwiftP
     if lhs.itemsDone != rhs.itemsDone {return false}
     if lhs._deployedAt != rhs._deployedAt {return false}
     if lhs.itemsReady != rhs.itemsReady {return false}
+    if lhs.ownerBlockerCount != rhs.ownerBlockerCount {return false}
     if lhs.unknownFields != rhs.unknownFields {return false}
     return true
   }
@@ -3296,6 +3608,520 @@ nonisolated extension Hermes_Home_V1_OwnerThreadMarked: SwiftProtobuf.Message, S
     if lhs.botID != rhs.botID {return false}
     if lhs.lastReadNum != rhs.lastReadNum {return false}
     if lhs.unread != rhs.unread {return false}
+    if lhs.unknownFields != rhs.unknownFields {return false}
+    return true
+  }
+}
+
+nonisolated extension Hermes_Home_V1_ReleaseInstallRequest: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+  static let protoMessageName: String = _protobuf_package + ".ReleaseInstallRequest"
+  static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}release_id\0\u{3}check_site\0")
+
+  mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+    while let fieldNumber = try decoder.nextFieldNumber() {
+      // The use of inline closures is to circumvent an issue where the compiler
+      // allocates stack space for every case branch when no optimizations are
+      // enabled. https://github.com/apple/swift-protobuf/issues/1034
+      switch fieldNumber {
+      case 1: try { try decoder.decodeSingularStringField(value: &self.releaseID) }()
+      case 2: try { try decoder.decodeSingularBoolField(value: &self.checkSite) }()
+      default: break
+      }
+    }
+  }
+
+  func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+    if !self.releaseID.isEmpty {
+      try visitor.visitSingularStringField(value: self.releaseID, fieldNumber: 1)
+    }
+    if self.checkSite != false {
+      try visitor.visitSingularBoolField(value: self.checkSite, fieldNumber: 2)
+    }
+    try unknownFields.traverse(visitor: &visitor)
+  }
+
+  static func ==(lhs: Hermes_Home_V1_ReleaseInstallRequest, rhs: Hermes_Home_V1_ReleaseInstallRequest) -> Bool {
+    if lhs.releaseID != rhs.releaseID {return false}
+    if lhs.checkSite != rhs.checkSite {return false}
+    if lhs.unknownFields != rhs.unknownFields {return false}
+    return true
+  }
+}
+
+nonisolated extension Hermes_Home_V1_ReleaseInstall: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+  static let protoMessageName: String = _protobuf_package + ".ReleaseInstall"
+  static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}release_id\0\u{3}project_id\0\u{1}version\0\u{1}build\0\u{1}state\0\u{1}installable\0\u{3}for_testing\0\u{3}page_url\0\u{3}install_url\0\u{1}site\0\u{1}computer\0\u{3}can_start_site\0\u{1}devices\0\u{3}app_title\0\u{3}approved_at\0")
+
+  fileprivate class _StorageClass {
+    var _releaseID: String = String()
+    var _projectID: String = String()
+    var _version: String = String()
+    var _build: String = String()
+    var _state: String = String()
+    var _installable: Bool = false
+    var _forTesting: Bool = false
+    var _pageURL: String = String()
+    var _installURL: String = String()
+    var _site: Hermes_Home_V1_SiteCheck? = nil
+    var _computer: String = String()
+    var _canStartSite: Bool = false
+    var _devices: [Hermes_Home_V1_InstallDevice] = []
+    var _appTitle: String = String()
+    var _approvedAt: SwiftProtobuf.Google_Protobuf_Timestamp? = nil
+
+      // This property is used as the initial default value for new instances of the type.
+      // The type itself is protecting the reference to its storage via CoW semantics.
+      // This will force a copy to be made of this reference when the first mutation occurs;
+      // hence, it is safe to mark this as `nonisolated(unsafe)`.
+      static nonisolated(unsafe) let defaultInstance = _StorageClass()
+
+    private init() {}
+
+    init(copying source: _StorageClass) {
+      _releaseID = source._releaseID
+      _projectID = source._projectID
+      _version = source._version
+      _build = source._build
+      _state = source._state
+      _installable = source._installable
+      _forTesting = source._forTesting
+      _pageURL = source._pageURL
+      _installURL = source._installURL
+      _site = source._site
+      _computer = source._computer
+      _canStartSite = source._canStartSite
+      _devices = source._devices
+      _appTitle = source._appTitle
+      _approvedAt = source._approvedAt
+    }
+  }
+
+  fileprivate mutating func _uniqueStorage() -> _StorageClass {
+    if !isKnownUniquelyReferenced(&_storage) {
+      _storage = _StorageClass(copying: _storage)
+    }
+    return _storage
+  }
+
+  mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+    _ = _uniqueStorage()
+    try withExtendedLifetime(_storage) { (_storage: _StorageClass) in
+      while let fieldNumber = try decoder.nextFieldNumber() {
+        // The use of inline closures is to circumvent an issue where the compiler
+        // allocates stack space for every case branch when no optimizations are
+        // enabled. https://github.com/apple/swift-protobuf/issues/1034
+        switch fieldNumber {
+        case 1: try { try decoder.decodeSingularStringField(value: &_storage._releaseID) }()
+        case 2: try { try decoder.decodeSingularStringField(value: &_storage._projectID) }()
+        case 3: try { try decoder.decodeSingularStringField(value: &_storage._version) }()
+        case 4: try { try decoder.decodeSingularStringField(value: &_storage._build) }()
+        case 5: try { try decoder.decodeSingularStringField(value: &_storage._state) }()
+        case 6: try { try decoder.decodeSingularBoolField(value: &_storage._installable) }()
+        case 7: try { try decoder.decodeSingularBoolField(value: &_storage._forTesting) }()
+        case 8: try { try decoder.decodeSingularStringField(value: &_storage._pageURL) }()
+        case 9: try { try decoder.decodeSingularStringField(value: &_storage._installURL) }()
+        case 10: try { try decoder.decodeSingularMessageField(value: &_storage._site) }()
+        case 11: try { try decoder.decodeSingularStringField(value: &_storage._computer) }()
+        case 12: try { try decoder.decodeSingularBoolField(value: &_storage._canStartSite) }()
+        case 13: try { try decoder.decodeRepeatedMessageField(value: &_storage._devices) }()
+        case 14: try { try decoder.decodeSingularStringField(value: &_storage._appTitle) }()
+        case 15: try { try decoder.decodeSingularMessageField(value: &_storage._approvedAt) }()
+        default: break
+        }
+      }
+    }
+  }
+
+  func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+    try withExtendedLifetime(_storage) { (_storage: _StorageClass) in
+      // The use of inline closures is to circumvent an issue where the compiler
+      // allocates stack space for every if/case branch local when no optimizations
+      // are enabled. https://github.com/apple/swift-protobuf/issues/1034 and
+      // https://github.com/apple/swift-protobuf/issues/1182
+      if !_storage._releaseID.isEmpty {
+        try visitor.visitSingularStringField(value: _storage._releaseID, fieldNumber: 1)
+      }
+      if !_storage._projectID.isEmpty {
+        try visitor.visitSingularStringField(value: _storage._projectID, fieldNumber: 2)
+      }
+      if !_storage._version.isEmpty {
+        try visitor.visitSingularStringField(value: _storage._version, fieldNumber: 3)
+      }
+      if !_storage._build.isEmpty {
+        try visitor.visitSingularStringField(value: _storage._build, fieldNumber: 4)
+      }
+      if !_storage._state.isEmpty {
+        try visitor.visitSingularStringField(value: _storage._state, fieldNumber: 5)
+      }
+      if _storage._installable != false {
+        try visitor.visitSingularBoolField(value: _storage._installable, fieldNumber: 6)
+      }
+      if _storage._forTesting != false {
+        try visitor.visitSingularBoolField(value: _storage._forTesting, fieldNumber: 7)
+      }
+      if !_storage._pageURL.isEmpty {
+        try visitor.visitSingularStringField(value: _storage._pageURL, fieldNumber: 8)
+      }
+      if !_storage._installURL.isEmpty {
+        try visitor.visitSingularStringField(value: _storage._installURL, fieldNumber: 9)
+      }
+      try { if let v = _storage._site {
+        try visitor.visitSingularMessageField(value: v, fieldNumber: 10)
+      } }()
+      if !_storage._computer.isEmpty {
+        try visitor.visitSingularStringField(value: _storage._computer, fieldNumber: 11)
+      }
+      if _storage._canStartSite != false {
+        try visitor.visitSingularBoolField(value: _storage._canStartSite, fieldNumber: 12)
+      }
+      if !_storage._devices.isEmpty {
+        try visitor.visitRepeatedMessageField(value: _storage._devices, fieldNumber: 13)
+      }
+      if !_storage._appTitle.isEmpty {
+        try visitor.visitSingularStringField(value: _storage._appTitle, fieldNumber: 14)
+      }
+      try { if let v = _storage._approvedAt {
+        try visitor.visitSingularMessageField(value: v, fieldNumber: 15)
+      } }()
+    }
+    try unknownFields.traverse(visitor: &visitor)
+  }
+
+  static func ==(lhs: Hermes_Home_V1_ReleaseInstall, rhs: Hermes_Home_V1_ReleaseInstall) -> Bool {
+    if lhs._storage !== rhs._storage {
+      let storagesAreEqual: Bool = withExtendedLifetime((lhs._storage, rhs._storage)) { (_args: (_StorageClass, _StorageClass)) in
+        let _storage = _args.0
+        let rhs_storage = _args.1
+        if _storage._releaseID != rhs_storage._releaseID {return false}
+        if _storage._projectID != rhs_storage._projectID {return false}
+        if _storage._version != rhs_storage._version {return false}
+        if _storage._build != rhs_storage._build {return false}
+        if _storage._state != rhs_storage._state {return false}
+        if _storage._installable != rhs_storage._installable {return false}
+        if _storage._forTesting != rhs_storage._forTesting {return false}
+        if _storage._pageURL != rhs_storage._pageURL {return false}
+        if _storage._installURL != rhs_storage._installURL {return false}
+        if _storage._site != rhs_storage._site {return false}
+        if _storage._computer != rhs_storage._computer {return false}
+        if _storage._canStartSite != rhs_storage._canStartSite {return false}
+        if _storage._devices != rhs_storage._devices {return false}
+        if _storage._appTitle != rhs_storage._appTitle {return false}
+        if _storage._approvedAt != rhs_storage._approvedAt {return false}
+        return true
+      }
+      if !storagesAreEqual {return false}
+    }
+    if lhs.unknownFields != rhs.unknownFields {return false}
+    return true
+  }
+}
+
+nonisolated extension Hermes_Home_V1_SiteCheck: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+  static let protoMessageName: String = _protobuf_package + ".SiteCheck"
+  static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}serving\0\u{1}problem\0\u{3}checked_at\0")
+
+  mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+    while let fieldNumber = try decoder.nextFieldNumber() {
+      // The use of inline closures is to circumvent an issue where the compiler
+      // allocates stack space for every case branch when no optimizations are
+      // enabled. https://github.com/apple/swift-protobuf/issues/1034
+      switch fieldNumber {
+      case 1: try { try decoder.decodeSingularBoolField(value: &self.serving) }()
+      case 2: try { try decoder.decodeSingularStringField(value: &self.problem) }()
+      case 3: try { try decoder.decodeSingularMessageField(value: &self._checkedAt) }()
+      default: break
+      }
+    }
+  }
+
+  func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+    // The use of inline closures is to circumvent an issue where the compiler
+    // allocates stack space for every if/case branch local when no optimizations
+    // are enabled. https://github.com/apple/swift-protobuf/issues/1034 and
+    // https://github.com/apple/swift-protobuf/issues/1182
+    if self.serving != false {
+      try visitor.visitSingularBoolField(value: self.serving, fieldNumber: 1)
+    }
+    if !self.problem.isEmpty {
+      try visitor.visitSingularStringField(value: self.problem, fieldNumber: 2)
+    }
+    try { if let v = self._checkedAt {
+      try visitor.visitSingularMessageField(value: v, fieldNumber: 3)
+    } }()
+    try unknownFields.traverse(visitor: &visitor)
+  }
+
+  static func ==(lhs: Hermes_Home_V1_SiteCheck, rhs: Hermes_Home_V1_SiteCheck) -> Bool {
+    if lhs.serving != rhs.serving {return false}
+    if lhs.problem != rhs.problem {return false}
+    if lhs._checkedAt != rhs._checkedAt {return false}
+    if lhs.unknownFields != rhs.unknownFields {return false}
+    return true
+  }
+}
+
+nonisolated extension Hermes_Home_V1_InstallDevice: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+  static let protoMessageName: String = _protobuf_package + ".InstallDevice"
+  static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}device_id\0\u{1}name\0\u{3}last_seen_at\0\u{1}connected\0\u{3}app_version\0\u{3}app_version_seen_at\0")
+
+  mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+    while let fieldNumber = try decoder.nextFieldNumber() {
+      // The use of inline closures is to circumvent an issue where the compiler
+      // allocates stack space for every case branch when no optimizations are
+      // enabled. https://github.com/apple/swift-protobuf/issues/1034
+      switch fieldNumber {
+      case 1: try { try decoder.decodeSingularStringField(value: &self.deviceID) }()
+      case 2: try { try decoder.decodeSingularStringField(value: &self.name) }()
+      case 3: try { try decoder.decodeSingularMessageField(value: &self._lastSeenAt) }()
+      case 4: try { try decoder.decodeSingularBoolField(value: &self.connected) }()
+      case 5: try { try decoder.decodeSingularStringField(value: &self.appVersion) }()
+      case 6: try { try decoder.decodeSingularMessageField(value: &self._appVersionSeenAt) }()
+      default: break
+      }
+    }
+  }
+
+  func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+    // The use of inline closures is to circumvent an issue where the compiler
+    // allocates stack space for every if/case branch local when no optimizations
+    // are enabled. https://github.com/apple/swift-protobuf/issues/1034 and
+    // https://github.com/apple/swift-protobuf/issues/1182
+    if !self.deviceID.isEmpty {
+      try visitor.visitSingularStringField(value: self.deviceID, fieldNumber: 1)
+    }
+    if !self.name.isEmpty {
+      try visitor.visitSingularStringField(value: self.name, fieldNumber: 2)
+    }
+    try { if let v = self._lastSeenAt {
+      try visitor.visitSingularMessageField(value: v, fieldNumber: 3)
+    } }()
+    if self.connected != false {
+      try visitor.visitSingularBoolField(value: self.connected, fieldNumber: 4)
+    }
+    if !self.appVersion.isEmpty {
+      try visitor.visitSingularStringField(value: self.appVersion, fieldNumber: 5)
+    }
+    try { if let v = self._appVersionSeenAt {
+      try visitor.visitSingularMessageField(value: v, fieldNumber: 6)
+    } }()
+    try unknownFields.traverse(visitor: &visitor)
+  }
+
+  static func ==(lhs: Hermes_Home_V1_InstallDevice, rhs: Hermes_Home_V1_InstallDevice) -> Bool {
+    if lhs.deviceID != rhs.deviceID {return false}
+    if lhs.name != rhs.name {return false}
+    if lhs._lastSeenAt != rhs._lastSeenAt {return false}
+    if lhs.connected != rhs.connected {return false}
+    if lhs.appVersion != rhs.appVersion {return false}
+    if lhs._appVersionSeenAt != rhs._appVersionSeenAt {return false}
+    if lhs.unknownFields != rhs.unknownFields {return false}
+    return true
+  }
+}
+
+nonisolated extension Hermes_Home_V1_ReleaseSendToDeviceRequest: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+  static let protoMessageName: String = _protobuf_package + ".ReleaseSendToDeviceRequest"
+  static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}release_id\0\u{3}device_id\0")
+
+  mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+    while let fieldNumber = try decoder.nextFieldNumber() {
+      // The use of inline closures is to circumvent an issue where the compiler
+      // allocates stack space for every case branch when no optimizations are
+      // enabled. https://github.com/apple/swift-protobuf/issues/1034
+      switch fieldNumber {
+      case 1: try { try decoder.decodeSingularStringField(value: &self.releaseID) }()
+      case 2: try { try decoder.decodeSingularStringField(value: &self.deviceID) }()
+      default: break
+      }
+    }
+  }
+
+  func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+    if !self.releaseID.isEmpty {
+      try visitor.visitSingularStringField(value: self.releaseID, fieldNumber: 1)
+    }
+    if !self.deviceID.isEmpty {
+      try visitor.visitSingularStringField(value: self.deviceID, fieldNumber: 2)
+    }
+    try unknownFields.traverse(visitor: &visitor)
+  }
+
+  static func ==(lhs: Hermes_Home_V1_ReleaseSendToDeviceRequest, rhs: Hermes_Home_V1_ReleaseSendToDeviceRequest) -> Bool {
+    if lhs.releaseID != rhs.releaseID {return false}
+    if lhs.deviceID != rhs.deviceID {return false}
+    if lhs.unknownFields != rhs.unknownFields {return false}
+    return true
+  }
+}
+
+nonisolated extension Hermes_Home_V1_InstallOffer: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+  static let protoMessageName: String = _protobuf_package + ".InstallOffer"
+  static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}release_id\0\u{3}project_id\0\u{3}device_id\0\u{3}device_name\0\u{1}version\0\u{1}build\0\u{3}install_url\0\u{3}page_url\0\u{1}title\0\u{1}body\0\u{3}for_testing\0\u{3}sent_at\0\u{1}delivered\0")
+
+  mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+    while let fieldNumber = try decoder.nextFieldNumber() {
+      // The use of inline closures is to circumvent an issue where the compiler
+      // allocates stack space for every case branch when no optimizations are
+      // enabled. https://github.com/apple/swift-protobuf/issues/1034
+      switch fieldNumber {
+      case 1: try { try decoder.decodeSingularStringField(value: &self.releaseID) }()
+      case 2: try { try decoder.decodeSingularStringField(value: &self.projectID) }()
+      case 3: try { try decoder.decodeSingularStringField(value: &self.deviceID) }()
+      case 4: try { try decoder.decodeSingularStringField(value: &self.deviceName) }()
+      case 5: try { try decoder.decodeSingularStringField(value: &self.version) }()
+      case 6: try { try decoder.decodeSingularStringField(value: &self.build) }()
+      case 7: try { try decoder.decodeSingularStringField(value: &self.installURL) }()
+      case 8: try { try decoder.decodeSingularStringField(value: &self.pageURL) }()
+      case 9: try { try decoder.decodeSingularStringField(value: &self.title) }()
+      case 10: try { try decoder.decodeSingularStringField(value: &self.body) }()
+      case 11: try { try decoder.decodeSingularBoolField(value: &self.forTesting) }()
+      case 12: try { try decoder.decodeSingularMessageField(value: &self._sentAt) }()
+      case 13: try { try decoder.decodeSingularBoolField(value: &self.delivered) }()
+      default: break
+      }
+    }
+  }
+
+  func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+    // The use of inline closures is to circumvent an issue where the compiler
+    // allocates stack space for every if/case branch local when no optimizations
+    // are enabled. https://github.com/apple/swift-protobuf/issues/1034 and
+    // https://github.com/apple/swift-protobuf/issues/1182
+    if !self.releaseID.isEmpty {
+      try visitor.visitSingularStringField(value: self.releaseID, fieldNumber: 1)
+    }
+    if !self.projectID.isEmpty {
+      try visitor.visitSingularStringField(value: self.projectID, fieldNumber: 2)
+    }
+    if !self.deviceID.isEmpty {
+      try visitor.visitSingularStringField(value: self.deviceID, fieldNumber: 3)
+    }
+    if !self.deviceName.isEmpty {
+      try visitor.visitSingularStringField(value: self.deviceName, fieldNumber: 4)
+    }
+    if !self.version.isEmpty {
+      try visitor.visitSingularStringField(value: self.version, fieldNumber: 5)
+    }
+    if !self.build.isEmpty {
+      try visitor.visitSingularStringField(value: self.build, fieldNumber: 6)
+    }
+    if !self.installURL.isEmpty {
+      try visitor.visitSingularStringField(value: self.installURL, fieldNumber: 7)
+    }
+    if !self.pageURL.isEmpty {
+      try visitor.visitSingularStringField(value: self.pageURL, fieldNumber: 8)
+    }
+    if !self.title.isEmpty {
+      try visitor.visitSingularStringField(value: self.title, fieldNumber: 9)
+    }
+    if !self.body.isEmpty {
+      try visitor.visitSingularStringField(value: self.body, fieldNumber: 10)
+    }
+    if self.forTesting != false {
+      try visitor.visitSingularBoolField(value: self.forTesting, fieldNumber: 11)
+    }
+    try { if let v = self._sentAt {
+      try visitor.visitSingularMessageField(value: v, fieldNumber: 12)
+    } }()
+    if self.delivered != false {
+      try visitor.visitSingularBoolField(value: self.delivered, fieldNumber: 13)
+    }
+    try unknownFields.traverse(visitor: &visitor)
+  }
+
+  static func ==(lhs: Hermes_Home_V1_InstallOffer, rhs: Hermes_Home_V1_InstallOffer) -> Bool {
+    if lhs.releaseID != rhs.releaseID {return false}
+    if lhs.projectID != rhs.projectID {return false}
+    if lhs.deviceID != rhs.deviceID {return false}
+    if lhs.deviceName != rhs.deviceName {return false}
+    if lhs.version != rhs.version {return false}
+    if lhs.build != rhs.build {return false}
+    if lhs.installURL != rhs.installURL {return false}
+    if lhs.pageURL != rhs.pageURL {return false}
+    if lhs.title != rhs.title {return false}
+    if lhs.body != rhs.body {return false}
+    if lhs.forTesting != rhs.forTesting {return false}
+    if lhs._sentAt != rhs._sentAt {return false}
+    if lhs.delivered != rhs.delivered {return false}
+    if lhs.unknownFields != rhs.unknownFields {return false}
+    return true
+  }
+}
+
+nonisolated extension Hermes_Home_V1_InstallOffersRequest: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+  static let protoMessageName: String = _protobuf_package + ".InstallOffersRequest"
+  static let _protobuf_nameMap = SwiftProtobuf._NameMap()
+
+  mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+    // Load everything into unknown fields
+    while try decoder.nextFieldNumber() != nil {}
+  }
+
+  func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+    try unknownFields.traverse(visitor: &visitor)
+  }
+
+  static func ==(lhs: Hermes_Home_V1_InstallOffersRequest, rhs: Hermes_Home_V1_InstallOffersRequest) -> Bool {
+    if lhs.unknownFields != rhs.unknownFields {return false}
+    return true
+  }
+}
+
+nonisolated extension Hermes_Home_V1_InstallOffers: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+  static let protoMessageName: String = _protobuf_package + ".InstallOffers"
+  static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}offers\0")
+
+  mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+    while let fieldNumber = try decoder.nextFieldNumber() {
+      // The use of inline closures is to circumvent an issue where the compiler
+      // allocates stack space for every case branch when no optimizations are
+      // enabled. https://github.com/apple/swift-protobuf/issues/1034
+      switch fieldNumber {
+      case 1: try { try decoder.decodeRepeatedMessageField(value: &self.offers) }()
+      default: break
+      }
+    }
+  }
+
+  func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+    if !self.offers.isEmpty {
+      try visitor.visitRepeatedMessageField(value: self.offers, fieldNumber: 1)
+    }
+    try unknownFields.traverse(visitor: &visitor)
+  }
+
+  static func ==(lhs: Hermes_Home_V1_InstallOffers, rhs: Hermes_Home_V1_InstallOffers) -> Bool {
+    if lhs.offers != rhs.offers {return false}
+    if lhs.unknownFields != rhs.unknownFields {return false}
+    return true
+  }
+}
+
+nonisolated extension Hermes_Home_V1_InstallOfferDismissRequest: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+  static let protoMessageName: String = _protobuf_package + ".InstallOfferDismissRequest"
+  static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}release_id\0")
+
+  mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+    while let fieldNumber = try decoder.nextFieldNumber() {
+      // The use of inline closures is to circumvent an issue where the compiler
+      // allocates stack space for every case branch when no optimizations are
+      // enabled. https://github.com/apple/swift-protobuf/issues/1034
+      switch fieldNumber {
+      case 1: try { try decoder.decodeSingularStringField(value: &self.releaseID) }()
+      default: break
+      }
+    }
+  }
+
+  func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+    if !self.releaseID.isEmpty {
+      try visitor.visitSingularStringField(value: self.releaseID, fieldNumber: 1)
+    }
+    try unknownFields.traverse(visitor: &visitor)
+  }
+
+  static func ==(lhs: Hermes_Home_V1_InstallOfferDismissRequest, rhs: Hermes_Home_V1_InstallOfferDismissRequest) -> Bool {
+    if lhs.releaseID != rhs.releaseID {return false}
     if lhs.unknownFields != rhs.unknownFields {return false}
     return true
   }
