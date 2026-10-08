@@ -49,6 +49,8 @@ final class AppStore {
     var peers: [Peer] = []
 
     var projects: [Project] = []
+    /// A release waiting to be installed on this device (H-230): the banner.
+    var installOffer: InstallOffer?
     var bots: [Bot] = []
     var activity: [String: BotActivity] = [:]
     /// bot id → its DM thread.
@@ -167,6 +169,7 @@ final class AppStore {
         browserTabs = nil
         browserFrame = nil
         projects = []
+        installOffer = nil
         bots = []
         activity = [:]
         conversations = [:]
@@ -247,6 +250,7 @@ final class AppStore {
         }
         await refreshDecisions()
         await refreshPermissions()
+        await refreshInstallOffer()
     }
 
     /// Every prompt still waiting: on connecting, so none is missed while away.
@@ -318,6 +322,9 @@ final class AppStore {
             if frame.dict("message")?.dict("sender")?.str("kind") == "bot" { botMessageRevision += 1 }
         case "routine_run_update":
             busRevision += 1
+        // Sent to this device's connections only (H-229): the banner, no APNs.
+        case "install_offer":
+            installOffer = frame.dict("offer").map(InstallOffer.init)
         case "chat_turns":
             onChatTurns?(frame.str("bot_id"), frame.list("turns"))
             chatRevision[frame.str("bot_id"), default: 0] += 1

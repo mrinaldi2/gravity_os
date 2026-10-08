@@ -708,6 +708,7 @@ struct ReleasesPane: View {
 
     var body: some View {
         List {
+            if let store = home?.computer.store { InstallOfferBanner(store: store) }
             if let releases {
                 if releases.isEmpty { EmptyNote(text: "No releases yet", systemImage: "shippingbox") }
                 ForEach(releases) { release in
@@ -740,6 +741,8 @@ struct ReleaseView: View {
     let releaseId: String
     @State private var release: Release?
     @State private var failure: String?
+    /// What this package offers for install on this device (H-230).
+    @State private var install: ReleaseInstallInfo?
     /// The owner's choices before approving: items left out, and where they go.
     @State private var leftOut: [String: LeftOut] = [:]
     @State private var leavingOut: String?
@@ -777,6 +780,8 @@ struct ReleaseView: View {
                         Text(why).font(.footnote).foregroundStyle(Color.secondaryText)
                     }
                 }
+                // Install on this device, under the status and above the items (H-230).
+                if let install { InstallSection(info: install) }
                 if !release.tests.isEmpty {
                     Section {
                         ForEach(release.tests) { test in
@@ -943,6 +948,8 @@ struct ReleaseView: View {
 
     private func load() async {
         do { release = try await store.release(releaseId) } catch { failure = error.localizedDescription }
+        // A service before 0.17.5 has no release_install: no install section.
+        install = (try? await store.releaseInstall(releaseId)) ?? nil
     }
 }
 

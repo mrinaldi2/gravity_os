@@ -232,6 +232,8 @@ struct NeedsYouView: View {
         NavigationStack(path: $path) {
             ScrollViewReader { proxy in
             List {
+                // A release waiting to be installed here (H-230).
+                ForEach(fleet.computers) { computer in InstallOfferBanner(store: computer.store) }
                 // Terminal commands acting as the owner sit above everything, read-only (H-108).
                 ForEach(fleet.computers) { computer in
                     let terminal = computer.store.permissions.filter(\.isTerminal)

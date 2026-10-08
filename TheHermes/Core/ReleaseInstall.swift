@@ -1,0 +1,213 @@
+import Foundation
+
+// Installing an approved iOS release on this iPhone or iPad (H-230, UX-043 iOS
+// part; the daemon side is H-229, hermes.home.v1 ReleaseInstall* / InstallOffer*
+// as JSON with the proto field names).
+
+/// What a package offers for install on a phone (`release_install`).
+struct ReleaseInstallInfo: Equatable {
+    let releaseId: String
+    let version: String
+    /// The iOS build's version, e.g. "12"; empty = no build.
+    let build: String
+    let state: String
+    let installable: Bool
+    let forTesting: Bool
+    let pageURL: URL?
+    /// The itms-services link: the only thing the app ever opens (CE M1).
+    let installURL: URL?
+    let computer: String
+    /// Whether the build site answered when the daemon checked; nil = not checked.
+    let siteServing: Bool?
+
+    init(_ d: JSONDict) {
+        releaseId = d.str("release_id")
+        version = d.str("version")
+        build = d.str("build")
+        state = d.str("state")
+        installable = d.bool("installable")
+        forTesting = d.bool("for_testing")
+        pageURL = d.optStr("page_url").flatMap { $0.isEmpty ? nil : URL(string: $0) }
+        installURL = d.optStr("install_url").flatMap { $0.isEmpty ? nil : URL(string: $0) }
+        computer = d.str("computer")
+        siteServing = d.dict("site").map { $0.bool("serving") }
+    }
+}
+
+/// This device's waiting offer (`install_offers`, or the `install_offer` push).
+struct InstallOffer: Equatable {
+    let releaseId: String
+    let projectId: String
+    let version: String
+    let build: String
+    let installURL: URL?
+    let pageURL: URL?
+    let forTesting: Bool
+
+    init(_ d: JSONDict) {
+        releaseId = d.str("release_id")
+        projectId = d.str("project_id")
+        version = d.str("version")
+        build = d.str("build")
+        installURL = d.optStr("install_url").flatMap { $0.isEmpty ? nil : URL(string: $0) }
+        pageURL = d.optStr("page_url").flatMap { $0.isEmpty ? nil : URL(string: $0) }
+        forTesting = d.bool("for_testing")
+    }
+}
+
+/// What the release screen shows for install (UX-043 §1, §4).
+enum InstallState: Equatable {
+    /// Rejected, held, cancelled: nothing.
+    case hidden
+    case notPublished
+    /// The daemon found the build site not serving.
+    case siteOff(computer: String)
+    case ready(forTesting: Bool)
+    /// This device already runs that version and build.
+    case sameVersion
+    /// This device runs a newer version.
+    case newerInstalled(String)
+
+    static let shownStates: Set = ["awaiting_owner", "approved", "deploying", "deployed"]
+    static let unpublishedStates: Set = ["planned", "assembling", "built"]
+
+    static func of(_ info: ReleaseInstallInfo, installed: (version: String, build: String)) -> InstallState {
+        if unpublishedStates.contains(info.state) { return .notPublished }
+        guard shownStates.contains(info.state), info.installable else { return .hidden }
+        // Install info the daemon couldn't derive is empty: not published (CE M1).
+        guard info.installURL != nil, !info.build.isEmpty else { return .notPublished }
+        if info.siteServing == false { return .siteOff(computer: info.computer) }
+        switch AppVersion.compare(installed, (info.version, info.build)) {
+        case .orderedSame: return .sameVersion
+        case .orderedDescending: return .newerInstalled(installed.version)
+        case .orderedAscending: return .ready(forTesting: info.forTesting)
+        }
+    }
+}
+
+/// Versions as "0.6.1" plus a build number.
+enum AppVersion {
+    static func compare(_ a: (version: String, build: String), _ b: (version: String, build: String)) -> ComparisonResult {
+        let byVersion = a.version.compare(b.version, options: .numeric)
+        if byVersion != .orderedSame { return byVersion }
+        return a.build.compare(b.build, options: .numeric)
+    }
+}
+
+/// UX-043's words. `device` is "iPhone" or "iPad", the device's own type.
+enum InstallWords {
+    static func button(device: String, forTesting: Bool) -> String {
+        forTesting ? "Install on this \(device) to test" : "Install on this \(device)"
+    }
+
+    static let opensSafari = "Opens the install page in Safari. The Hermes closes while it updates."
+    static let profile = "If iOS says it can't install, this device may not be in the build's profile. Ask DevOps."
+
+    static func hint(_ version: String) -> String { "Opens Safari to install The Hermes \(version)." }
+
+    static func siteOff(computer: String) -> String {
+        "The build site on \(computer.isEmpty ? "its computer" : computer) isn't serving. Ask DevOps to start it, then try again."
+    }
+
+    static func notPublished(device: String) -> String {
+        "This package has no \(device) build to install yet. DevOps publishes it after building."
+    }
+
+    static func sameVersion(device: String, version: String, build: String) -> String {
+        "✓ This \(device) has The Hermes \(version) (\(build))."
+    }
+
+    static let reinstall = "Reinstall"
+
+    static func newer(device: String, version: String) -> String { "This \(device) has a newer version (\(version))." }
+
+    static func anyway(_ version: String) -> String { "Install \(version) anyway" }
+
+    static func unreachable(device: String) -> String {
+        "Can't reach the build site from this \(device). Turn on Tailscale, then try again."
+    }
+
+    static let tryAgain = "Try again"
+
+    static func banner(_ version: String) -> String { "The Hermes \(version) is ready to install" }
+
+    static let install = "Install"
+    static let notNow = "Not now"
+
+    static func updated(_ version: String) -> String { "Updated to The Hermes \(version)." }
+}
+
+/// Install on this device: check the page answers from here, then hand the
+/// itms-services link to iOS (UX-043 §3, §4). No Face ID: iOS asks itself.
+@MainActor
+enum InstallAction {
+    enum Outcome: Equatable {
+        case opened(URL)
+        /// The build site can't be reached from this device (Tailscale off).
+        case unreachable
+        case notPublished
+    }
+
+    static func install(_ info: ReleaseInstallInfo,
+                        reachable: (URL) async -> Bool = InstallAction.reachable,
+                        open: (URL) -> Void) async -> Outcome {
+        guard let url = info.installURL else { return .notPublished }
+        if let page = info.pageURL, !(await reachable(page)) { return .unreachable }
+        open(url)
+        return .opened(url)
+    }
+
+    static func install(_ offer: InstallOffer,
+                        reachable: (URL) async -> Bool = InstallAction.reachable,
+                        open: (URL) -> Void) async -> Outcome {
+        guard let url = offer.installURL else { return .notPublished }
+        if let page = offer.pageURL, !(await reachable(page)) { return .unreachable }
+        open(url)
+        return .opened(url)
+    }
+
+    /// The install page answers over HTTPS from this device.
+    nonisolated static func reachable(_ page: URL) async -> Bool {
+        var request = URLRequest(url: page, timeoutInterval: 4)
+        request.httpMethod = "HEAD"
+        guard let (_, response) = try? await URLSession.shared.data(for: request) else { return false }
+        return ((response as? HTTPURLResponse)?.statusCode ?? 0) / 100 == 2
+    }
+}
+
+/// "Updated to The Hermes 0.6.1.", once per new version (UX-043 §5).
+enum UpdateNotice {
+    static let key = "lastLaunchedVersion"
+
+    /// The toast to show at this launch, if the version changed since the last one.
+    /// A first launch says nothing.
+    static func atLaunch(_ defaults: UserDefaults = .standard, version: String = AppInfo.version,
+                         build: String = AppInfo.build) -> String? {
+        let label = "\(version) (\(build))"
+        let last = defaults.string(forKey: key)
+        defaults.set(label, forKey: key)
+        guard let last, last != label else { return nil }
+        return InstallWords.updated(version)
+    }
+}
+
+extension AppStore {
+    /// What this package offers for install here; nil on a service without it (before 0.17.5).
+    func releaseInstall(_ releaseId: String, checkSite: Bool = true) async throws -> ReleaseInstallInfo? {
+        let reply = try await client.request("release_install", ["release_id": releaseId, "check_site": checkSite])
+        return reply.dict("install").map(ReleaseInstallInfo.init)
+    }
+
+    /// This device's waiting offer, if any. A service without offers says nothing.
+    func refreshInstallOffer() async {
+        guard let reply = try? await client.request("install_offers") else { return }
+        installOffer = reply.list("offers").first.map(InstallOffer.init)
+    }
+
+    /// Not now: hidden until the next package.
+    func dismissInstallOffer() async {
+        guard let offer = installOffer else { return }
+        installOffer = nil
+        _ = try? await client.request("install_offer_dismiss", ["release_id": offer.releaseId])
+    }
+}

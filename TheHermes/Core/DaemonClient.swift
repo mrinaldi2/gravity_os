@@ -295,15 +295,24 @@ final class DaemonClient {
         failAll(DaemonError(code: "not_connected", message: "Connection closed."))
     }
 
+    /// The first frame. It carries this app's version and build on every
+    /// connection, so the computer knows what runs here after an update
+    /// (H-230; fills InstallDevice.app_version, feeds H-176). Older services ignore it.
+    static func hello(token: String, requestId: String,
+                      version: String = AppInfo.version, build: String = AppInfo.build) -> JSONDict {
+        [
+            "type": "hello", "req_id": requestId,
+            "protocol_version": protocolVersion,
+            "token": token, "client": clientId,
+            "features": features,
+            "contracts": contracts,
+            "app_version": version, "app_build": build,
+        ]
+    }
+
     private func run(_ socket: URLSessionWebSocketTask, generation current: Int, token: String) async {
         do {
-            let hello: JSONDict = [
-                "type": "hello", "req_id": newRequestId(),
-                "protocol_version": Self.protocolVersion,
-                "token": token, "client": Self.clientId,
-                "features": Self.features,
-                "contracts": Self.contracts,
-            ]
+            let hello = Self.hello(token: token, requestId: newRequestId())
             try await socket.send(.string(JSONText.encode(hello) ?? "{}"))
             let first = try await receive(socket)
             guard current == generation else { return }

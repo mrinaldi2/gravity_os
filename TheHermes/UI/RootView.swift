@@ -34,6 +34,7 @@ struct RootView: View {
             }
         }
         .overlay(alignment: .top) { noticeBanner }
+        .overlay(alignment: .top) { UpdatedToast() }
         // A release approval's Undo and outcome, wherever the owner is (UX-040).
         .overlay(alignment: .bottom) { RulingBar().padding(.bottom, 64) }
         // iPad keyboard (UX-023 §2.7): ⌘⇧N opens Needs you.
