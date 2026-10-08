@@ -471,8 +471,10 @@ final class LensStore {
     }
 
     func loadOlderChat(_ botId: String) async throws {
-        guard let first = chats[botId]?.first else { return try await loadChat(botId) }
-        _ = try await chatPage(botId, before: first.id, limit: Page.turns)
+        guard let list = chats[botId], let first = list.first else { return try await loadChat(botId) }
+        let limit = ChatPaging.earlierLimit(loaded: list.count)
+        guard limit > 0 else { return }
+        _ = try await chatPage(botId, before: first.id, limit: limit)
     }
 
     private func chatPage(_ botId: String, before: String?, limit: Int) async throws -> (turns: [ChatTurn], hasMore: Bool) {
@@ -503,7 +505,11 @@ final class LensStore {
             }
         }
         list.sort { $0.startedAt < $1.startedAt }
-        chats[botId] = list
+        // Live turns past the cap push the oldest out (H-228): the chat stays bounded.
+        let (kept, dropped) = ChatPaging.trimmed(list)
+        chats[botId] = kept
+        if dropped { chatHasMore[botId] = true }
+        list = kept
         let name = app.bot(botId)?.name
         latest[botId] = list.last?.lensTurn(botName: name)
         rebuildFeed()

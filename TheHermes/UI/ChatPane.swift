@@ -8,6 +8,9 @@ struct BotChatPane: View {
     let botId: String
     @Binding var searching: Bool
     @State private var search = ChatSearchState()
+    /// Which step groups the owner opened or closed, kept here rather than in the
+    /// rows: a turn moving from the drawn tail into the lazy stack keeps it (H-228).
+    @State private var expansions = StepExpansions()
     @State private var draft = ""
     @State private var pending: [PendingMessage] = []
     @State private var error: String?
@@ -33,14 +36,14 @@ struct BotChatPane: View {
                     VStack(alignment: .leading, spacing: 18) {
                         LazyVStack(alignment: .leading, spacing: 18) {
                             if canLoadEarlier {
-                                Button("Load earlier turns") {
+                                Button("Show earlier activity") {
                                     following = false
                                     Task { await loadOlder() }
                                 }
                                 .buttonStyle(.bordered)
                                 .frame(maxWidth: .infinity)
                             } else if hasMore {
-                                Text(ChatPaging.capped)
+                                Text(ChatPaging.capped(computer: store.computerName, bot: bot?.name ?? "the bot"))
                                     .font(.footnote)
                                     .foregroundStyle(Color.secondaryText)
                                     .frame(maxWidth: .infinity)
@@ -56,11 +59,11 @@ struct BotChatPane: View {
                                     .padding(.top, 40)
                             }
                             ForEach(turns.dropLast(Self.eagerTurns)) { turn in
-                                ChatTurnView(botId: botId, turn: turn, search: search)
+                                ChatTurnView(botId: botId, turn: turn, search: search, expansions: expansions)
                             }
                         }
                         ForEach(turns.suffix(Self.eagerTurns)) { turn in
-                            ChatTurnView(botId: botId, turn: turn, search: search)
+                            ChatTurnView(botId: botId, turn: turn, search: search, expansions: expansions)
                         }
                         ForEach(pending) { message in PendingBubble(message: message) }
                         Color.clear.frame(height: 1).id(Self.bottom)
@@ -91,15 +94,13 @@ struct BotChatPane: View {
                 .onChange(of: turns.last) { _, _ in
                     if following, !searching { withAnimation { proxy.scrollTo(Self.bottom, anchor: .bottom) } }
                 }
-                .onChange(of: pending.count) { _, _ in
-                    withAnimation { proxy.scrollTo(Self.bottom, anchor: .bottom) }
-                }
+                .onChange(of: pending.count) { _, _ in jumpToEnd(proxy) }
                 .onChange(of: search.focus) { _, focus in
                     if let focus { withAnimation { proxy.scrollTo(focus, anchor: .center) } }
                 }
                 .task {
                     await load()
-                    proxy.scrollTo(Self.bottom, anchor: .bottom)
+                    jumpToEnd(proxy)
                 }
             }
             ChatComposer(draft: $draft, botName: bot?.name ?? "the bot", blocked: blockedReason, send: send)
@@ -119,6 +120,18 @@ struct BotChatPane: View {
     private static let bottom = "chat-bottom"
     /// Drawn always, below the lazy stack, so the end has something to land on.
     private static let eagerTurns = 2
+
+    /// From far up, a jump through lazy rows lands short: their heights were only
+    /// estimated. Jump again as they are laid out (H-228).
+    private func jumpToEnd(_ proxy: ScrollViewProxy) {
+        proxy.scrollTo(Self.bottom, anchor: .bottom)
+        Task { @MainActor in
+            for delay in [100, 300, 600] {
+                try? await Task.sleep(for: .milliseconds(delay))
+                proxy.scrollTo(Self.bottom, anchor: .bottom)
+            }
+        }
+    }
 
     private var blockedReason: String? {
         if !store.canControl { return "This device can read but not write: it needs control access." }
@@ -160,16 +173,17 @@ struct BotChatPane: View {
     }
 }
 
-/// How far back the phone's chat goes (H-228): the newest page and up to
-/// `earlierPages` more, so a long chat can't grow without bound.
-enum ChatPaging {
-    static let earlierPages = 5
+/// Step groups the owner opened or closed, by group (H-228).
+@MainActor @Observable
+final class StepExpansions {
+    private var chosen: [String: Bool] = [:]
 
-    static func canLoadEarlier(loaded: Int, hasMore: Bool) -> Bool {
-        hasMore && loaded < Page.turns * (1 + earlierPages)
+    func isExpanded(_ key: String, default open: Bool) -> Bool { chosen[key] ?? open }
+    func set(_ key: String, _ open: Bool) { chosen[key] = open }
+
+    func binding(_ key: String, default open: Bool) -> Binding<Bool> {
+        Binding(get: { self.isExpanded(key, default: open) }, set: { self.set(key, $0) })
     }
-
-    static let capped = "Earlier turns are on the computer."
 }
 
 // MARK: A turn
@@ -180,6 +194,7 @@ struct ChatTurnView: View {
     let botId: String
     let turn: ChatTurn
     let search: ChatSearchState
+    var expansions: StepExpansions?
 
     private var events: [LensEvent] { turn.lensEvents }
 
@@ -195,6 +210,8 @@ struct ChatTurnView: View {
                         .id(ChatSearchState.anchor(turn.id, event.id))
                 case .steps(let steps):
                     StepGroup(botId: botId, steps: steps, expanded: turn.open || steps.count <= 4,
+                              isExpanded: expansions?.binding(ChatSearchState.anchor(turn.id, steps.first?.id ?? ""),
+                                                              default: turn.open || steps.count <= 4),
                               forceExpanded: search.active,
                               highlight: { search.color(turn.id, $0) },
                               anchorPrefix: ChatSearchState.anchor(turn.id, ""))

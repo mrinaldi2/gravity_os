@@ -30,7 +30,7 @@ final class H228Tests: XCTestCase {
     func testSendFromTheTopWithEarlierPagesLoadedShowsTheLine() {
         waitFor(app.buttons["Chat"])
         sleep(3) // the newest page loads
-        let more = app.buttons["Load earlier turns"]
+        let more = app.buttons["Show earlier activity"]
         var pages = 0
         while pages < 10 {
             for _ in 0..<60 where !(more.exists && more.isHittable) { drag(up: true) }
@@ -52,7 +52,8 @@ final class H228Tests: XCTestCase {
         app.buttons["Send"].tap()
         let sent = any(text)
         XCTAssertTrue(sent.waitForExistence(timeout: 10), "The transcript did not land on the sent line")
-        XCTAssertTrue(sent.isHittable, "The sent line is not on screen")
+        sleep(2)
         screenshot("H-228-after-send")
+        XCTAssertTrue(sent.isHittable, "The sent line is not on screen")
     }
 }

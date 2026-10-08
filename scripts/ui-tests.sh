@@ -11,6 +11,9 @@
 #   SIMULATOR       simulator name (default "iOS QA – iPhone": an iPhone 18 Pro,
 #                   created when missing and erased before each run; nobody else uses it)
 #   SCREENSHOT_DIR  where the tests also write their screenshots as PNG
+#   DEMO_DAEMON     the daemon binary (default ~/.thehermes/bin/hermesd when present)
+#   LONG_CHAT       set (e.g. 1): iOS Dev's chat gets LONG_CHAT_TURNS (default 120)
+#                   earlier turns (demo/long_chat.py), for H228Tests
 #   DEMO_OUT, DEMO_PORT, DEMO_LENS_PORT, DEMO_PEER_PORT
 #                   defaults /tmp/hermes-qa-demo, 49990, 49988, 49991; pick
 #                   others when another demo uses them (make_demo.py wipes its folder)
@@ -25,6 +28,9 @@ port=${DEMO_PORT:-49990}
 lens_port=${DEMO_LENS_PORT:-49988}
 peer_port=${DEMO_PEER_PORT:-49991}
 log="$out.log"
+# The daemon the demo runs: The Hermes's own when installed (make_demo.py else looks for gravityd).
+daemon_bin=${DEMO_DAEMON:-}
+if [ -z "$daemon_bin" ] && [ -x "$HOME/.thehermes/bin/hermesd" ]; then daemon_bin=$HOME/.thehermes/bin/hermesd; fi
 project=$(dirname "$(ls -d *.xcodeproj/project.pbxproj | head -1)")
 
 device=$(xcrun simctl list devices available | grep -F "    $simulator (" | head -1 | sed -E 's/.*\(([0-9A-F-]{36})\).*/\1/')
@@ -50,7 +56,7 @@ trap stop_demo EXIT INT TERM
 # The demo first, on a quiet machine; a second try when its daemon trips while starting.
 for attempt in 1 2; do
     python3 -u demo/make_demo.py --serve --out "$out" --port "$port" --lens-port "$lens_port" \
-        --peer-port "$peer_port" >"$log" 2>&1 &
+        --peer-port "$peer_port" ${daemon_bin:+--gravityd "$daemon_bin"} >"$log" 2>&1 &
     demo=$!
     tries=0
     until grep -q '^Serving' "$log"; do
@@ -70,6 +76,11 @@ sleep 3 # the demo's permission prompts reach the daemon just after it serves
 xcrun simctl shutdown "$device" 2>/dev/null || true
 xcrun simctl erase "$device"
 xcrun simctl boot "$device"
+
+# A long chat for H228Tests (H-228): earlier turns before iOS Dev's transcript.
+if [ -n "${LONG_CHAT:-}" ]; then
+    python3 demo/long_chat.py "$out" "Starting on the conflict banner" "${LONG_CHAT_TURNS:-120}"
+fi
 
 # Ids the routing tests open: the designer's question and iOS Dev.
 ids=$(python3 - "$out" "$port" <<'EOF'
@@ -95,7 +106,7 @@ run_tests() { # <result bundle> <xcodebuild args…>
     TEST_RUNNER_GRAV_TOKEN=$(cat "$out/gravity/secrets/client.token") \
     TEST_RUNNER_GRAV_PORT=$port TEST_RUNNER_LENS_PORT=$lens_port \
     TEST_RUNNER_DEMO_DECISION_ID=${ids% *} TEST_RUNNER_DEMO_BOT_ID=${ids#* } \
-    TEST_RUNNER_SCREENSHOT_DIR=${SCREENSHOT_DIR:-} \
+    TEST_RUNNER_SCREENSHOT_DIR=${SCREENSHOT_DIR:-} TEST_RUNNER_LONG_CHAT=${LONG_CHAT:-} \
     xcodebuild -project "$project" -scheme UITests -destination "id=$device" \
         -derivedDataPath build/ui-tests -resultBundlePath "$bundle" test "$@"
 }
