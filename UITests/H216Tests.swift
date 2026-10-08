@@ -9,10 +9,13 @@ final class H216Tests: XCTestCase {
     }
 
     /// The demo app, not running: a link launches it, with the demo arguments.
-    private func closedApp() throws -> XCUIApplication {
+    private static let unseen = "ZZ-404 isn't on any board this iPhone can see. It may be mistyped, "
+        + "or kept on a computer this iPhone isn't linked to."
+
+    private func closedApp(port: String? = nil) throws -> XCUIApplication {
         let token = try XCTUnwrap(DemoApp.token, "No demo token: run scripts/ui-tests.sh")
         let app = XCUIApplication()
-        app.launchArguments = ["-gravHost", "127.0.0.1", "-gravPort", DemoApp.environment["GRAV_PORT"] ?? "49790",
+        app.launchArguments = ["-gravHost", "127.0.0.1", "-gravPort", port ?? DemoApp.environment["GRAV_PORT"] ?? "49790",
                                "-lensPort", DemoApp.environment["LENS_PORT"] ?? "49788", "-gravToken", token,
                                "-noNotificationPrompt", "YES"]
         app.terminate()
@@ -24,10 +27,22 @@ final class H216Tests: XCTestCase {
         app.open(URL(string: "thehermes://item/ZZ-404")!)
         let alert = app.alerts["ZZ-404"]
         XCTAssertTrue(alert.waitForExistence(timeout: 30), "The link did nothing")
-        XCTAssertTrue(alert.staticTexts["ZZ-404 isn't on the board. It may have been deleted or mistyped."].exists)
+        XCTAssertTrue(alert.staticTexts[Self.unseen].exists)
         screenshot("H-216-cold-link-unknown")
         alert.buttons["OK"].tap()
         XCTAssertTrue(alert.waitForNonExistence(timeout: 5))
+    }
+
+    /// UX-044: with no computer answering, the link says "Opening…" after 3 s and gives up after 15 s.
+    func testColdLinkThatCannotLoadGivesUp() throws {
+        let app = try closedApp(port: "41209") // in my range, nothing listens there
+        app.open(URL(string: "thehermes://item/ZZ-404")!)
+        XCTAssertTrue(app.staticTexts["Opening ZZ-404…"].waitForExistence(timeout: 8), "No \"Opening…\" while it waits")
+        screenshot("H-216-cold-link-opening")
+        let alert = app.alerts["ZZ-404"]
+        XCTAssertTrue(alert.waitForExistence(timeout: 20), "The wait never gave up")
+        XCTAssertTrue(alert.staticTexts[Self.unseen].exists)
+        XCTAssertFalse(app.staticTexts["Opening ZZ-404…"].exists)
     }
 
     /// Needs the demo's control port (a project with a board and cards).

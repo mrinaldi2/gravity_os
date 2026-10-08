@@ -164,6 +164,12 @@ struct CardPreview: Equatable {
         }
     }
 
+    /// A link from outside whose prefix no board here uses, or that waited too
+    /// long for the projects (UX-044).
+    static func unseen(_ id: String, device: String = "iPhone") -> String {
+        "\(id) isn't on any board this \(device) can see. It may be mistyped, or kept on a computer this \(device) isn't linked to."
+    }
+
     /// "H-293: <title>" for VoiceOver; "H-293, card" before the title is known.
     var accessibilityName: String { title.map { "\(id): \($0)" } ?? "\(id), card" }
 

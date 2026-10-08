@@ -74,8 +74,41 @@ final class CardLinksTests: XCTestCase {
         XCTAssertNil(fleet.takeOpenCard())
         XCTAssertNil(fleet.openCard)
         XCTAssertEqual(fleet.missingCard, "ZZ-9")
-        XCTAssertEqual(CardPreview(id: "ZZ-9", state: .missing).notice,
-                       "ZZ-9 isn't on the board. It may have been deleted or mistyped.")
+        XCTAssertEqual(CardPreview.unseen("ZZ-9"),
+                       "ZZ-9 isn't on any board this iPhone can see. It may be mistyped, or kept on a computer this iPhone isn't linked to.")
+        // A known prefix keeps the board's own form.
+        XCTAssertEqual(CardPreview(id: "H-9", state: .missing).notice,
+                       "H-9 isn't on the board. It may have been deleted or mistyped.")
+    }
+
+    func testAWaitingLinkSaysOpeningThenGivesUp() async {
+        // UX-044: never hangs. "Opening…" after 3 s, given up after 15 s (scaled down here).
+        let fleet = Fleet()
+        fleet.cards.setForTests([:], settled: false)
+        fleet.openCard = "ZZ-404"
+        let watch = Task { await fleet.watchOpenCard(showAfter: .milliseconds(50), giveUpAfter: .milliseconds(150)) }
+        try? await Task.sleep(for: .milliseconds(20))
+        XCTAssertNil(fleet.openingCard, "not before showAfter")
+        try? await Task.sleep(for: .milliseconds(70))
+        XCTAssertEqual(fleet.openingCard, "ZZ-404")
+        await watch.value
+        XCTAssertNil(fleet.openCard)
+        XCTAssertNil(fleet.openingCard)
+        XCTAssertEqual(fleet.missingCard, "ZZ-404", "said as an unknown id is")
+    }
+
+    func testALinkThatOpensInTimeIsNotGivenUp() async {
+        let fleet = Fleet()
+        fleet.cards.setForTests([:], settled: false)
+        fleet.openCard = "H-216"
+        let watch = Task { await fleet.watchOpenCard(showAfter: .milliseconds(30), giveUpAfter: .milliseconds(100)) }
+        try? await Task.sleep(for: .milliseconds(60))
+        XCTAssertEqual(fleet.openingCard, "H-216")
+        fleet.cards.setForTests(["H": [.init(computerId: "mac", projectId: "p1", projectName: "The Hermes")]])
+        XCTAssertEqual(fleet.takeOpenCard()?.id, "H-216")
+        XCTAssertNil(fleet.openingCard, "the banner goes with the link")
+        await watch.value
+        XCTAssertNil(fleet.missingCard)
     }
 
     func testTheDirectoryIsNotSettledUntilEveryConnectedComputersProjectsLoad() async {

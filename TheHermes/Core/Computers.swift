@@ -169,9 +169,13 @@ final class Fleet {
     /// A card to open, from a link that came from outside the app. Kept until
     /// the projects say where it lives: on a cold start they load after the link
     /// arrives (H-216).
-    var openCard: String?
+    var openCard: String? {
+        didSet { if openCard != openingCard { openingCard = nil } }
+    }
     /// A card link from outside whose id no project uses, to say so.
     var missingCard: String?
+    /// "Opening ZZ-404…": the link has waited a while for the projects (UX-044).
+    private(set) var openingCard: String?
     /// A release approval waiting out its Undo, and how it ended (H-160 AC4).
     let rulings = RulingQueue()
     private(set) var selectedId: String?
@@ -195,6 +199,21 @@ final class Fleet {
         case .waiting:
             return nil
         }
+    }
+
+    /// A waiting link never hangs (UX-044): "Opening…" after `showAfter`, and
+    /// after `giveUpAfter` it is dropped and said, as an unknown id is.
+    func watchOpenCard(showAfter: Duration = .seconds(3), giveUpAfter: Duration = .seconds(15)) async {
+        guard let id = openCard else { return }
+        do {
+            try await Task.sleep(for: showAfter)
+            guard openCard == id else { return }
+            openingCard = id
+            try await Task.sleep(for: giveUpAfter - showAfter)
+        } catch { return }
+        guard openCard == id else { return }
+        openCard = nil
+        missingCard = id
     }
 
     private static let recordsKey = "computers"
