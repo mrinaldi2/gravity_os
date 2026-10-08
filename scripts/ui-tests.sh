@@ -14,6 +14,8 @@
 #   DEMO_DAEMON     the daemon binary the demo runs (default ~/.thehermes/bin/hermesd
 #                   when present, else make_demo.py looks for gravityd)
 #   DEMO_OUT        the demo's folder, wiped on each run (default build/ui-tests-demo)
+#   LONG_CHAT       1: give iOS Dev's demo transcript LONG_CHAT_TURNS (default 120) earlier
+#                   turns (demo/long_chat.py) for the long-chat tests (QA010LongChatTests, H228Tests)
 #   DEMO_PORT, DEMO_LENS_PORT, DEMO_PEER_PORT, DEMO_CONTROL_PORT
 #                   the demo's ports (default 41300, 41301, 41302, 41303); on the
 #                   control port tests ask the demo for the state they need
@@ -117,6 +119,11 @@ print(decision["id"], bot["id"])
 EOF
 )
 
+# A long chat for the long-chat tests: earlier turns in iOS Dev's demo transcript.
+if [ -n "${LONG_CHAT:-}" ] && [ -z "$no_demo" ]; then
+    python3 demo/long_chat.py "$out" "Starting on the conflict banner" "${LONG_CHAT_TURNS:-120}"
+fi
+
 # A freshly erased simulator ignores the tests' own appearance switch, hence the dark pass.
 dark="-only-testing:UITests/H003Tests/testPermissionCardContrastDark -only-testing:UITests/H003Tests/testDecisionDetailContrastDark"
 run_tests() { # <result bundle> <xcodebuild args…>
@@ -127,7 +134,7 @@ run_tests() { # <result bundle> <xcodebuild args…>
     TEST_RUNNER_SCRATCH_READONLY_TOKEN=${SCRATCH_READONLY_TOKEN:-} TEST_RUNNER_SCRATCH_CONTROL_PORT=${SCRATCH_CONTROL_PORT:-} TEST_RUNNER_SCRATCH_PROXY_PORT=${SCRATCH_PROXY_PORT:-} \
     TEST_RUNNER_GRAV_PORT=$port TEST_RUNNER_LENS_PORT=$lens_port \
     TEST_RUNNER_DEMO_DECISION_ID=${ids% *} TEST_RUNNER_DEMO_BOT_ID=${ids#* } \
-    TEST_RUNNER_DEMO_CONTROL_PORT=$control_port TEST_RUNNER_DEMO_SKIPPED="$(cat "$out/skipped" 2>/dev/null | tr '\n' ' ')" TEST_RUNNER_FIXTURES=$PWD/contract/fixtures TEST_RUNNER_SCREENSHOT_DIR=${SCREENSHOT_DIR:-} \
+    TEST_RUNNER_DEMO_CONTROL_PORT=$control_port TEST_RUNNER_LONG_CHAT=${LONG_CHAT:-} TEST_RUNNER_DEMO_SKIPPED="$(cat "$out/skipped" 2>/dev/null | tr '\n' ' ')" TEST_RUNNER_FIXTURES=$PWD/contract/fixtures TEST_RUNNER_SCREENSHOT_DIR=${SCREENSHOT_DIR:-} \
     xcodebuild -project "$project" -scheme UITests -destination "id=$device" \
         -derivedDataPath build/ui-tests -resultBundlePath "$bundle" test "$@"
 }

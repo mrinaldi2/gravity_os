@@ -2,8 +2,8 @@ import XCTest
 
 /// H-227: the bot transcript is a plain VStack now, not lazy. With many earlier pages
 /// loaded, the chat still scrolls, still sends, and its memory stays bounded.
-/// Needs a long demo transcript: LONG_CHAT=1 means iOS Dev's log was given extra
-/// earlier turns (the QA bot's long_chat.py) before the run.
+/// Needs a long demo transcript: `LONG_CHAT=1 scripts/ui-tests.sh` gives iOS Dev's log
+/// extra earlier turns (demo/long_chat.py) before the tests run.
 final class QA010LongChatTests: XCTestCase {
     var app: XCUIApplication!
 
@@ -27,14 +27,10 @@ final class QA010LongChatTests: XCTestCase {
         from.press(forDuration: 0.05, thenDragTo: to, withVelocity: .fast, thenHoldForDuration: 0)
     }
 
-    private func scrollTranscript(to element: XCUIElement, max: Int = 60) {
-        var tries = 0
-        while !(element.exists && element.isHittable), tries < max { drag(up: true); tries += 1 }
-    }
-
     /// Scrolls up to the top of what is loaded and taps "Load earlier turns" while it shows.
     private func loadAllPages(max: Int = 20) -> Int {
-        let more = app.buttons["Load earlier turns"]
+        // "Show earlier activity" since H-228's final strings ("Load earlier turns" before).
+        let more = app.buttons.matching(NSPredicate(format: "label == 'Show earlier activity' OR label == 'Load earlier turns'")).firstMatch
         var pages = 0
         while pages < max {
             for _ in 0..<60 where !(more.exists && more.isHittable) { drag(up: true) }
@@ -56,10 +52,10 @@ final class QA010LongChatTests: XCTestCase {
         XCTContext.runActivity(named: "Loaded \(pages) earlier pages in \(String(format: "%.1f", loadTime)) s") { _ in }
         print("QA-010 long chat: \(pages) earlier pages loaded in \(String(format: "%.1f", loadTime)) s")
         XCTAssertGreaterThanOrEqual(pages, 2, "Fewer earlier pages than the long transcript holds")
-        // The oldest turn is there and readable.
-        let oldest = any("Long chat turn 1:")
-        scrollTranscript(to: oldest)
-        XCTAssertTrue(oldest.exists, "The oldest turn is not in the transcript")
+        // H-228 keeps at most 5 earlier pages: the button stops offering more.
+        XCTAssertLessThanOrEqual(pages, 5, "More than 5 earlier pages loaded")
+        for _ in 0..<30 { drag(up: true) }
+        XCTAssertTrue(any("Long chat turn").exists, "The earlier turns are not in the transcript")
         screenshot("QA-010-long-chat-top")
 
         // Scrolling the full transcript: hitches and memory, three passes top to bottom and back.
