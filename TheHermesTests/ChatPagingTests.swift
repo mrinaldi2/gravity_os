@@ -37,6 +37,39 @@ final class ChatPagingTests: XCTestCase {
         XCTAssertTrue(expansions.isExpanded("t2#s1", default: true), "untouched groups keep their default")
     }
 
+    func testOnlyASentMessageJumpsToTheEnd() {
+        // M1: the bot picking a message up (the count goes down) leaves the owner where they are.
+        XCTAssertTrue(ChatScroll.jumpsOnPendingChange(from: 0, to: 1), "sent")
+        XCTAssertTrue(ChatScroll.jumpsOnPendingChange(from: 1, to: 2), "sent another")
+        XCTAssertFalse(ChatScroll.jumpsOnPendingChange(from: 1, to: 0), "picked up")
+        XCTAssertFalse(ChatScroll.jumpsOnPendingChange(from: 2, to: 2))
+        XCTAssertEqual(ChatScroll.repeats.last, .milliseconds(600), "the repeats end within a second")
+    }
+
+    @MainActor
+    func testTheOwnerScrollingStopsTheRepeats() async {
+        // M1: send, then scroll up within 600 ms: no later jump pulls the chat back.
+        let jumper = EndJumper()
+        var jumps = 0
+        jumper.jump { jumps += 1 }
+        XCTAssertEqual(jumps, 1, "at once")
+        try? await Task.sleep(for: .milliseconds(150))
+        let before = jumps
+        XCTAssertEqual(before, 2, "the 100 ms repeat")
+        jumper.ownerScrolled()
+        try? await Task.sleep(for: .milliseconds(900))
+        XCTAssertEqual(jumps, before, "no jump after the owner scrolled")
+    }
+
+    @MainActor
+    func testUntouchedTheRepeatsRunOut() async {
+        let jumper = EndJumper()
+        var jumps = 0
+        jumper.jump { jumps += 1 }
+        try? await Task.sleep(for: .milliseconds(1_200))
+        XCTAssertEqual(jumps, 1 + ChatScroll.repeats.count)
+    }
+
     func testTheCapSaysWhereTheRestIs() {
         XCTAssertEqual(ChatPaging.capped(computer: "Studio Mac", bot: "iOS Dev"),
                        "Earlier activity is on Studio Mac. Open iOS Dev in The Hermes app there to see all of it.")

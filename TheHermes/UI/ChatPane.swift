@@ -17,6 +17,8 @@ struct BotChatPane: View {
     @State private var loaded = false
     /// Off once the owner scrolls up to read; new turns then stay put.
     @State private var following = true
+    /// The repeated jumps to the end after a send; the owner's own scrolling stops them.
+    @State private var jumper = EndJumper()
 
     private var turns: [ChatTurn] { lens.chats[botId] ?? [] }
     private var hasMore: Bool { lens.chatHasMore[botId] ?? false }
@@ -75,6 +77,9 @@ struct BotChatPane: View {
                 .contentMargins(.top, 52, for: .scrollContent)
                 .scrollDismissesKeyboard(.interactively)
                 .modifier(TracksBottom(following: $following))
+                // The owner scrolls: no jump pulls them back (H-228 M1).
+                .modifier(OnOwnerScroll { jumper.ownerScrolled() })
+                .accessibilityIdentifier("chat-transcript")
                 // Search sits on the transcript, not in the navigation bar, so
                 // the bot's state there is never cut short.
                 .overlay(alignment: .topTrailing) {
@@ -94,7 +99,10 @@ struct BotChatPane: View {
                 .onChange(of: turns.last) { _, _ in
                     if following, !searching { withAnimation { proxy.scrollTo(Self.bottom, anchor: .bottom) } }
                 }
-                .onChange(of: pending.count) { _, _ in jumpToEnd(proxy) }
+                // Only a message sent: the bot picking one up shrinks the list (H-228 M1).
+                .onChange(of: pending.count) { old, new in
+                    if ChatScroll.jumpsOnPendingChange(from: old, to: new) { jumpToEnd(proxy) }
+                }
                 .onChange(of: search.focus) { _, focus in
                     if let focus { withAnimation { proxy.scrollTo(focus, anchor: .center) } }
                 }
@@ -124,13 +132,7 @@ struct BotChatPane: View {
     /// From far up, a jump through lazy rows lands short: their heights were only
     /// estimated. Jump again as they are laid out (H-228).
     private func jumpToEnd(_ proxy: ScrollViewProxy) {
-        proxy.scrollTo(Self.bottom, anchor: .bottom)
-        Task { @MainActor in
-            for delay in [100, 300, 600] {
-                try? await Task.sleep(for: .milliseconds(delay))
-                proxy.scrollTo(Self.bottom, anchor: .bottom)
-            }
-        }
+        jumper.jump { proxy.scrollTo(Self.bottom, anchor: .bottom) }
     }
 
     private var blockedReason: String? {
@@ -170,6 +172,54 @@ struct BotChatPane: View {
             message.state = .failed(error.localizedDescription)
         }
         if let index = pending.firstIndex(where: { $0.id == message.id }) { pending[index] = message }
+    }
+}
+
+/// When the chat jumps to its end (H-228).
+enum ChatScroll {
+    /// Lazy rows lay out after the first jump lands: go again at these delays.
+    static let repeats: [Duration] = [.milliseconds(100), .milliseconds(300), .milliseconds(600)]
+
+    /// A message sent adds one; the bot picking one up removes it, and that
+    /// must not move the owner (M1).
+    static func jumpsOnPendingChange(from old: Int, to new: Int) -> Bool { new > old }
+}
+
+/// Jumps to the end, then again at `ChatScroll.repeats` as lazy rows lay out,
+/// until the owner scrolls (M1).
+@MainActor
+final class EndJumper {
+    private var task: Task<Void, Never>?
+
+    func jump(_ scroll: @escaping @MainActor () -> Void) {
+        task?.cancel()
+        scroll()
+        task = Task { @MainActor in
+            for delay in ChatScroll.repeats {
+                try? await Task.sleep(for: delay)
+                if Task.isCancelled { return }
+                scroll()
+            }
+        }
+    }
+
+    func ownerScrolled() {
+        task?.cancel()
+        task = nil
+    }
+}
+
+/// Runs `action` when the owner starts scrolling: the scroll phase on iOS 18,
+/// a drag on iOS 17.
+private struct OnOwnerScroll: ViewModifier {
+    let action: () -> Void
+
+    func body(content: Content) -> some View {
+        if #available(iOS 18, *) {
+            content.onScrollPhaseChange { _, phase in if phase == .interacting { action() } }
+        } else {
+            content.simultaneousGesture(DragGesture(minimumDistance: 4).onChanged { _ in action() })
+        }
     }
 }
 

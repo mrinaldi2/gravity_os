@@ -56,4 +56,24 @@ final class H228Tests: XCTestCase {
         screenshot("H-228-after-send")
         XCTAssertTrue(sent.isHittable, "The sent line is not on screen")
     }
+
+    /// M1: the owner scrolls up right after Send: the repeated jumps to the end stop.
+    func testScrollingUpRightAfterSendStaysWhereTheOwnerScrolled() {
+        waitFor(app.buttons["Chat"])
+        sleep(3)
+        let field = app.descendants(matching: .any).matching(NSPredicate(format: "label == 'Message iOS Dev' OR placeholderValue == 'Message iOS Dev'")).firstMatch
+        waitFor(field).tap()
+        let text = "H-228 M1 \(Int(Date().timeIntervalSince1970))"
+        field.typeText(text)
+        app.buttons["Send"].tap()
+        // At once, inside the transcript: drag down to read earlier turns.
+        let transcript = app.scrollViews["chat-transcript"]
+        let from = transcript.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.1))
+        from.press(forDuration: 0.01, thenDragTo: from.withOffset(CGVector(dx: 0, dy: 400)),
+                   withVelocity: .fast, thenHoldForDuration: 0)
+        sleep(2) // past the last repeat
+        screenshot("H-228-M1-scrolled-after-send")
+        let sent = any(text)
+        XCTAssertFalse(sent.exists && sent.isHittable, "A jump pulled the chat back to the end")
+    }
 }
