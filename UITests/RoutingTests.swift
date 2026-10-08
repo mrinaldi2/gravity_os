@@ -12,19 +12,22 @@ final class RoutingTests: XCTestCase {
         allowSystemAlerts()
         waitFor(app.navigationBars["Decision"])
         waitFor(app.staticTexts["Which accent colour for the App Store screenshots?"])
-        XCTAssertTrue(app.tabBars.buttons["Decisions"].isSelected)
-        screenshot("QA-002-route-decision")
+        XCTAssertTrue(app.tabBars.buttons["Needs you"].isSelected)
+        screenshot("QA-004-route-decision")
     }
 
     func testWaitingNotificationOpensChat() throws {
         let bot = try XCTUnwrap(DemoApp.botId, "No DEMO_BOT_ID: run scripts/ui-tests.sh")
         let app = try DemoApp.launch(["-route", "waiting/\(bot)"])
         allowSystemAlerts()
-        let chat = waitFor(app.buttons["Chat"])
-        XCTAssertTrue(chat.isSelected, "The bot opened on another pane")
-        XCTAssertTrue(app.tabBars.buttons["Bots"].isSelected)
-        waitFor(app.staticTexts["iOS Dev"])
-        waitFor(app.textFields["Message iOS Dev"].exists ? app.textFields["Message iOS Dev"] : app.textViews["Message iOS Dev"])
-        screenshot("QA-002-route-waiting")
+        waitFor(app.pane("Reports"))
+        sleep(1)
+        screenshot("QA-004-route-waiting")
+        // The Chat pane: its composer, not Reports (the Chat tab is selected too, so its
+        // own selection can't tell them apart).
+        XCTAssertFalse(app.pane("Reports").isSelected, "The bot opened on Reports, not its chat")
+        let composer = app.descendants(matching: .any).matching(NSPredicate(format: "label == 'Message iOS Dev' OR placeholderValue == 'Message iOS Dev'")).firstMatch
+        XCTAssertTrue(composer.waitForExistence(timeout: 5), "No chat composer: the bot did not open on its chat")
+        XCTAssertTrue(app.tabBars.buttons["Chat"].isSelected)
     }
 }
