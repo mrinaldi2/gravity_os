@@ -184,6 +184,22 @@ final class ReleaseInstallTests: XCTestCase {
         XCTAssertEqual(bad.map { InstallState.of($0, installed: older) }, .notPublished)
     }
 
+    func testTheReleaseStubStandsInForThatReleaseOnly() async throws {
+        defer { UserDefaults.standard.removeObject(forKey: InstallStubs.releaseKey) }
+        let store = AppStore(defaults: ComputerDefaults(id: "test-release-stub"))
+        UserDefaults.standard.set("""
+        {"release": {"id": "rel-qa", "name": "0.6.2", "display_version": "0.6.2", "status": "approved", "version": 3,
+          "items": [{"item_id": "H-230", "verdict": "approve"}]}}
+        """, forKey: InstallStubs.releaseKey)
+        XCTAssertEqual(InstallStubs.releaseId, "rel-qa", "opened at launch")
+        let release = try await store.release("rel-qa")
+        XCTAssertEqual(release.version, "0.6.2")
+        XCTAssertEqual(release.status, "approved")
+        XCTAssertEqual(release.items.map(\.itemId), ["H-230"])
+        // Another id still asks the computer (not connected here: it throws).
+        do { _ = try await store.release("other"); XCTFail("only the stubbed id is stubbed") } catch {}
+    }
+
     func testTheOfferStubShowsTheBannerAsThePushWould() async {
         defer { UserDefaults.standard.removeObject(forKey: InstallStubs.offerKey) }
         let store = AppStore(defaults: ComputerDefaults(id: "test-offer-stub"))

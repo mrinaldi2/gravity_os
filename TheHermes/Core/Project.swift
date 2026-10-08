@@ -310,6 +310,9 @@ extension AppStore {
     }
 
     func release(_ id: String) async throws -> Release {
+        #if DEBUG
+        if let stub = InstallStubs.reply(InstallStubs.releaseKey)?.dict("release"), stub.str("id") == id { return Release(stub) }
+        #endif
         let reply = try await client.request("get_release", ["release_id": id])
         return Release(reply.dict("release") ?? [:])
     }
