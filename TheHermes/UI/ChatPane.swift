@@ -8,15 +8,21 @@ struct BotChatPane: View {
     let botId: String
     @Binding var searching: Bool
     @State private var search = ChatSearchState()
+    /// Which step groups the owner opened or closed, kept here rather than in the
+    /// rows: a turn moving from the drawn tail into the lazy stack keeps it (H-228).
+    @State private var expansions = StepExpansions()
     @State private var draft = ""
     @State private var pending: [PendingMessage] = []
     @State private var error: String?
     @State private var loaded = false
     /// Off once the owner scrolls up to read; new turns then stay put.
     @State private var following = true
+    /// The repeated jumps to the end after a send; the owner's own scrolling stops them.
+    @State private var jumper = EndJumper()
 
     private var turns: [ChatTurn] { lens.chats[botId] ?? [] }
     private var hasMore: Bool { lens.chatHasMore[botId] ?? false }
+    private var canLoadEarlier: Bool { ChatPaging.canLoadEarlier(loaded: turns.count, hasMore: hasMore) }
     private var bot: Bot? { store.bot(botId) }
 
     var body: some View {
@@ -26,30 +32,40 @@ struct BotChatPane: View {
             }
             ScrollViewReader { proxy in
                 ScrollView {
-                    // Not lazy (H-227): sent from far up with the keyboard up, the jump to
-                    // the bottom left a lazy stack with nothing laid out, so the transcript
-                    // went blank. A page is Page.turns turns; older ones load on request.
+                    // Older turns are lazy (H-228): laid out, a turn costs ~1.9 MB. The newest
+                    // turns, pending messages and the end marker are not: a jump to the end
+                    // from far up left a fully lazy stack with nothing drawn (H-227).
                     VStack(alignment: .leading, spacing: 18) {
-                        if hasMore {
-                            Button("Load earlier turns") {
-                                following = false
-                                Task { await loadOlder() }
-                            }
-                            .buttonStyle(.bordered)
-                            .frame(maxWidth: .infinity)
-                        }
-                        if let error {
-                            Text(error).font(.footnote).foregroundStyle(Color.errorText)
-                        }
-                        if loaded, turns.isEmpty, pending.isEmpty {
-                            Text("Nothing here yet. Messages you send, and everything \(bot?.name ?? "the bot") does, show up here.")
-                                .font(.callout)
-                                .foregroundStyle(Color.secondaryText)
+                        LazyVStack(alignment: .leading, spacing: 18) {
+                            if canLoadEarlier {
+                                Button("Show earlier activity") {
+                                    following = false
+                                    Task { await loadOlder() }
+                                }
+                                .buttonStyle(.bordered)
                                 .frame(maxWidth: .infinity)
-                                .padding(.top, 40)
+                            } else if hasMore {
+                                Text(ChatPaging.capped(computer: store.computerName, bot: bot?.name ?? "the bot"))
+                                    .font(.footnote)
+                                    .foregroundStyle(Color.secondaryText)
+                                    .frame(maxWidth: .infinity)
+                            }
+                            if let error {
+                                Text(error).font(.footnote).foregroundStyle(Color.errorText)
+                            }
+                            if loaded, turns.isEmpty, pending.isEmpty {
+                                Text("Nothing here yet. Messages you send, and everything \(bot?.name ?? "the bot") does, show up here.")
+                                    .font(.callout)
+                                    .foregroundStyle(Color.secondaryText)
+                                    .frame(maxWidth: .infinity)
+                                    .padding(.top, 40)
+                            }
+                            ForEach(turns.dropLast(Self.eagerTurns)) { turn in
+                                ChatTurnView(botId: botId, turn: turn, search: search, expansions: expansions)
+                            }
                         }
-                        ForEach(turns) { turn in
-                            ChatTurnView(botId: botId, turn: turn, search: search)
+                        ForEach(turns.suffix(Self.eagerTurns)) { turn in
+                            ChatTurnView(botId: botId, turn: turn, search: search, expansions: expansions)
                         }
                         ForEach(pending) { message in PendingBubble(message: message) }
                         Color.clear.frame(height: 1).id(Self.bottom)
@@ -61,6 +77,9 @@ struct BotChatPane: View {
                 .contentMargins(.top, 52, for: .scrollContent)
                 .scrollDismissesKeyboard(.interactively)
                 .modifier(TracksBottom(following: $following))
+                // The owner scrolls: no jump pulls them back (H-228 M1).
+                .modifier(OnOwnerScroll { jumper.ownerScrolled() })
+                .accessibilityIdentifier("chat-transcript")
                 // Search sits on the transcript, not in the navigation bar, so
                 // the bot's state there is never cut short.
                 .overlay(alignment: .topTrailing) {
@@ -80,15 +99,16 @@ struct BotChatPane: View {
                 .onChange(of: turns.last) { _, _ in
                     if following, !searching { withAnimation { proxy.scrollTo(Self.bottom, anchor: .bottom) } }
                 }
-                .onChange(of: pending.count) { _, _ in
-                    withAnimation { proxy.scrollTo(Self.bottom, anchor: .bottom) }
+                // Only a message sent: the bot picking one up shrinks the list (H-228 M1).
+                .onChange(of: pending.count) { old, new in
+                    if ChatScroll.jumpsOnPendingChange(from: old, to: new) { jumpToEnd(proxy) }
                 }
                 .onChange(of: search.focus) { _, focus in
                     if let focus { withAnimation { proxy.scrollTo(focus, anchor: .center) } }
                 }
                 .task {
                     await load()
-                    proxy.scrollTo(Self.bottom, anchor: .bottom)
+                    jumpToEnd(proxy)
                 }
             }
             ChatComposer(draft: $draft, botName: bot?.name ?? "the bot", blocked: blockedReason, send: send)
@@ -106,6 +126,14 @@ struct BotChatPane: View {
     }
 
     private static let bottom = "chat-bottom"
+    /// Drawn always, below the lazy stack, so the end has something to land on.
+    private static let eagerTurns = 2
+
+    /// From far up, a jump through lazy rows lands short: their heights were only
+    /// estimated. Jump again as they are laid out (H-228).
+    private func jumpToEnd(_ proxy: ScrollViewProxy) {
+        jumper.jump { proxy.scrollTo(Self.bottom, anchor: .bottom) }
+    }
 
     private var blockedReason: String? {
         if !store.canControl { return "This device can read but not write: it needs control access." }
@@ -147,6 +175,67 @@ struct BotChatPane: View {
     }
 }
 
+/// When the chat jumps to its end (H-228).
+enum ChatScroll {
+    /// Lazy rows lay out after the first jump lands: go again at these delays.
+    static let repeats: [Duration] = [.milliseconds(100), .milliseconds(300), .milliseconds(600)]
+
+    /// A message sent adds one; the bot picking one up removes it, and that
+    /// must not move the owner (M1).
+    static func jumpsOnPendingChange(from old: Int, to new: Int) -> Bool { new > old }
+}
+
+/// Jumps to the end, then again at `ChatScroll.repeats` as lazy rows lay out,
+/// until the owner scrolls (M1).
+@MainActor
+final class EndJumper {
+    private var task: Task<Void, Never>?
+
+    func jump(_ scroll: @escaping @MainActor () -> Void) {
+        task?.cancel()
+        scroll()
+        task = Task { @MainActor in
+            for delay in ChatScroll.repeats {
+                try? await Task.sleep(for: delay)
+                if Task.isCancelled { return }
+                scroll()
+            }
+        }
+    }
+
+    func ownerScrolled() {
+        task?.cancel()
+        task = nil
+    }
+}
+
+/// Runs `action` when the owner starts scrolling: the scroll phase on iOS 18,
+/// a drag on iOS 17.
+private struct OnOwnerScroll: ViewModifier {
+    let action: () -> Void
+
+    func body(content: Content) -> some View {
+        if #available(iOS 18, *) {
+            content.onScrollPhaseChange { _, phase in if phase == .interacting { action() } }
+        } else {
+            content.simultaneousGesture(DragGesture(minimumDistance: 4).onChanged { _ in action() })
+        }
+    }
+}
+
+/// Step groups the owner opened or closed, by group (H-228).
+@MainActor @Observable
+final class StepExpansions {
+    private var chosen: [String: Bool] = [:]
+
+    func isExpanded(_ key: String, default open: Bool) -> Bool { chosen[key] ?? open }
+    func set(_ key: String, _ open: Bool) { chosen[key] = open }
+
+    func binding(_ key: String, default open: Bool) -> Binding<Bool> {
+        Binding(get: { self.isExpanded(key, default: open) }, set: { self.set(key, $0) })
+    }
+}
+
 // MARK: A turn
 
 /// One turn in the chat: who woke the bot, what it said and did, how it ended.
@@ -155,6 +244,7 @@ struct ChatTurnView: View {
     let botId: String
     let turn: ChatTurn
     let search: ChatSearchState
+    var expansions: StepExpansions?
 
     private var events: [LensEvent] { turn.lensEvents }
 
@@ -170,6 +260,8 @@ struct ChatTurnView: View {
                         .id(ChatSearchState.anchor(turn.id, event.id))
                 case .steps(let steps):
                     StepGroup(botId: botId, steps: steps, expanded: turn.open || steps.count <= 4,
+                              isExpanded: expansions?.binding(ChatSearchState.anchor(turn.id, steps.first?.id ?? ""),
+                                                              default: turn.open || steps.count <= 4),
                               forceExpanded: search.active,
                               highlight: { search.color(turn.id, $0) },
                               anchorPrefix: ChatSearchState.anchor(turn.id, ""))

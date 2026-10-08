@@ -136,6 +136,8 @@ struct StepGroup: View {
     let botId: String
     let steps: [LensEvent]
     @State var expanded: Bool
+    /// Kept by the owner of the list instead (H-228), so it outlives the row.
+    var isExpanded: Binding<Bool>? = nil
     /// Held open, e.g. while searching, so matches inside can be seen.
     var forceExpanded = false
     /// Marks the steps that match a search, and the one in view.
@@ -157,7 +159,8 @@ struct StepGroup: View {
     }
 
     var body: some View {
-        DisclosureGroup(isExpanded: Binding(get: { forceExpanded || expanded }, set: { expanded = $0 })) {
+        DisclosureGroup(isExpanded: Binding(get: { forceExpanded || (isExpanded?.wrappedValue ?? expanded) },
+                                            set: { if let isExpanded { isExpanded.wrappedValue = $0 } else { expanded = $0 } })) {
             ForEach(steps) { step in
                 NavigationLink(value: StepLink(botId: botId, event: step)) { StepRow(step: step) }
                     .disabled(step.hasDetail != true)

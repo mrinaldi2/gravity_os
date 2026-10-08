@@ -4,6 +4,31 @@ import Foundation
 // turns Gravity Lens used to make from the transcripts, now parsed by gravityd.
 // See docs/superpowers/specs/2026-09-16-chat-pane-design.md in Gravity.
 
+/// How far back the phone's chat goes (H-228): the newest page and up to
+/// `earlierPages` more. Live turns count too: past the cap the oldest go.
+enum ChatPaging {
+    static let earlierPages = 5
+    static var cap: Int { Page.turns * (1 + earlierPages) }
+
+    static func canLoadEarlier(loaded: Int, hasMore: Bool) -> Bool {
+        hasMore && loaded < cap
+    }
+
+    /// Older turns to ask for: a page, or what is left under the cap.
+    static func earlierLimit(loaded: Int) -> Int { max(0, min(Page.turns, cap - loaded)) }
+
+    /// The newest `cap` turns, and whether older ones were dropped.
+    static func trimmed<T>(_ turns: [T]) -> (turns: [T], dropped: Bool) {
+        turns.count > cap ? (Array(turns.suffix(cap)), true) : (turns, false)
+    }
+
+    /// At the cap (UX): where the rest is, without a link.
+    static func capped(computer: String, bot: String) -> String {
+        let place = computer.isEmpty ? "its computer" : computer
+        return "Earlier activity is on \(place). Open \(bot) in The Hermes app there to see all of it."
+    }
+}
+
 struct ChatTurn: Decodable, Identifiable, Equatable {
     let id: String
     let botId: String
