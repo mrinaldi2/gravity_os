@@ -47,9 +47,13 @@ final class ReleaseWaitingTests: XCTestCase {
         XCTAssertEqual(WaitingWords.title(b[3], bot: "UX Designer"), "◆ Decide: Which accent colour?")
         XCTAssertEqual(WaitingWords.title(b[4], bot: "Desktop Dev"), "? Desktop Dev asks: Ship the notes as they are?")
         XCTAssertEqual(WaitingWords.title(b[2], bot: "Desktop Dev"), "Desktop Dev wants to run Bash")
-        XCTAssertEqual(WaitingWords.title(b[1], bot: "DevOps"), "Clear the stale build cache")
+        XCTAssertEqual(WaitingWords.title(b[1], bot: "DevOps"), "▶ DevOps asks you to run a command on mac", "the reason isn't the title")
         // A Run card has no phone flow: the row says where to run it (decision on #233).
-        XCTAssertEqual(WaitingWords.meta(b[1], bot: "DevOps", computer: "Studio Mac"), "Run it on mac, in The Hermes app.")
+        let now = ISO8601DateFormatter().date(from: "2026-10-08T08:25:00Z")!
+        XCTAssertEqual(WaitingWords.meta(b[1], bot: "DevOps", computer: "Studio Mac", now: now),
+                       "on H-242 · 25m\nRun it on mac, in The Hermes app.", "card · age, then where to run it")
+        XCTAssertEqual(WaitingWords.age(now.addingTimeInterval(-3 * 3600), now: now), "3h")
+        XCTAssertEqual(WaitingWords.age(now.addingTimeInterval(-2 * 86400), now: now), "2d")
         XCTAssertTrue(WaitingWords.meta(b[3], bot: "UX Designer", computer: "Studio Mac").hasPrefix("UX Designer · Studio Mac · "),
                       "who · where · time")
         XCTAssertEqual(WaitingWords.header(5), "▲ Waiting for you · 5")
@@ -83,7 +87,16 @@ final class ReleaseWaitingTests: XCTestCase {
     func testNowNamesWhoItWaitsOn() {
         let waiting = release(["status": "approved", "owner_blockers": [
             blocker("run", "a-1", "Clear the cache", item: "H-244", computer: "mac", at: "2026-10-08T08:00:00Z")]])
-        XCTAssertEqual(ReleaseNow.line(waiting), .init(text: "Now: waiting for you, Run a command on mac (H-244).", waitsForYou: true))
+        XCTAssertEqual(ReleaseNow.line(waiting), .init(text: "Now: waiting for you to run a command on mac (H-244).", waitsForYou: true))
+        let first: (JSONDict) -> String = { ReleaseNow.line(self.release(["status": "approved", "owner_blockers": [$0]]), botName: { $0 == "dev" ? "Desktop Dev" : nil }).text }
+        XCTAssertEqual(first(blocker("decision", "d", "Which accent colour?", item: "H-241")),
+                       "Now: waiting for you to decide Which accent colour? (H-241).")
+        XCTAssertEqual(first(blocker("question", "c", "Ship it?", item: "H-240", bot: "dev")),
+                       "Now: waiting for you to answer Desktop Dev (H-240).")
+        XCTAssertEqual(first(blocker("permission", "p", "Bash", item: "H-243", bot: "dev")),
+                       "Now: waiting for you to review Bash (H-243).")
+        XCTAssertEqual(first(blocker("ruling", "r", "0.17.5", item: "H-247")),
+                       "Now: waiting for you to test 0.17.5 and rule on it.")
 
         let plan: [JSONDict] = [["item_id": "H-241", "column_name": "Doing", "ready": false],
                                 ["item_id": "H-243", "column_name": "Review", "ready": false],
