@@ -24,7 +24,8 @@ final class QA006DemoTests: XCTestCase {
     }
 
     private func send(_ app: XCUIApplication, _ text: String) {
-        let field = app.textViews.firstMatch.exists ? app.textViews.firstMatch : app.textFields.firstMatch
+        // The comment box, not the first TextView: card text is LinkedText, a TextView too.
+        let field = app.descendants(matching: .any).matching(NSPredicate(format: "label == 'Comment' OR placeholderValue BEGINSWITH 'Comment on'")).firstMatch
         app.scroll(to: field)
         waitFor(field).tap()
         field.typeText(text)
