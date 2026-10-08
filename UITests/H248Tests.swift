@@ -17,7 +17,10 @@ final class H248Tests: XCTestCase {
     func testTheSectionShowsAndADecisionOpens() {
         let app = launch()
         XCTAssertTrue(app.staticTexts["▲ Waiting for you · 4"].waitForExistence(timeout: 20), "No Waiting for you section")
-        XCTAssertTrue(app.staticTexts["Run it on mac, in The Hermes app."].exists, "the Run card says where to run it")
+        XCTAssertTrue(app.descendants(matching: .any).matching(NSPredicate(format: "label CONTAINS 'asks you to run a command on mac'")).firstMatch.exists,
+                      "the Run card's title")
+        XCTAssertTrue(app.descendants(matching: .any).matching(NSPredicate(format: "label CONTAINS 'Run it on mac, in The Hermes app.'")).firstMatch.exists,
+                      "the Run card says where to run it")
         XCTAssertTrue(app.buttons["+1 more"].exists, "more than 3: +n more")
         screenshot("H-248-waiting-for-you")
         app.buttons.containing(NSPredicate(format: "label CONTAINS 'Decide: Which accent colour?'")).firstMatch.tap()

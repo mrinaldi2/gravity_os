@@ -120,17 +120,30 @@ enum WaitingWords {
         case .ruling: "◐ Test \(blocker.title) and rule on it"
         case .decision: "◆ Decide: \(blocker.title)"
         case .question: "? \(bot ?? "A bot") asks: \(blocker.title)"
-        case .run: blocker.title
+        case .run: "▶ \(bot ?? "A bot") asks you to run a command on \(blocker.computer ?? "its computer")"
         case .permission: "\(bot ?? "A bot") wants to run \(blocker.title)"
         }
     }
 
-    /// "who · where · time"; a Run card says where to run it instead.
+    /// "who · where · time". A Run card: "on H-244 · 25m", then where to run it.
     static func meta(_ blocker: OwnerBlocker, bot: String?, computer: String, now: Date = Date()) -> String {
-        if blocker.kind == .run { return runOn(blocker.computer ?? computer) }
+        if blocker.kind == .run {
+            let first = [blocker.itemId.map { "on \($0)" }, blocker.createdAt.map { age($0, now: now) }]
+                .compactMap { $0 }.joined(separator: " · ")
+            let run = runOn(blocker.computer ?? computer)
+            return first.isEmpty ? run : "\(first)\n\(run)"
+        }
         let parts = [bot, blocker.computer ?? (computer.isEmpty ? nil : computer),
                      blocker.createdAt?.relative]
         return parts.compactMap { $0 }.joined(separator: " · ")
+    }
+
+    /// "25m", "3h", "2d": how long it has waited.
+    static func age(_ date: Date, now: Date = Date()) -> String {
+        let minutes = max(0, Int(now.timeIntervalSince(date) / 60))
+        if minutes < 60 { return "\(max(minutes, 1))m" }
+        if minutes < 24 * 60 { return "\(minutes / 60)h" }
+        return "\(minutes / (24 * 60))d"
     }
 
     static func runOn(_ computer: String) -> String {
@@ -163,8 +176,9 @@ enum ReleaseNow {
     static func line(_ release: Release, botName: (String) -> String? = { _ in nil }) -> Line {
         // Something waits for you: the first owner item.
         if let first = release.ownerBlockers?.first {
-            let item = first.itemId.map { " (\($0))" } ?? ""
-            return Line(text: "Now: waiting for you, \(ask(first, botName: botName))\(item).", waitsForYou: true)
+            // The ruling names the release itself: no card after it.
+            let item = first.kind == .ruling ? "" : (first.itemId.map { " (\($0))" } ?? "")
+            return Line(text: "Now: waiting for you to \(ask(first, botName: botName))\(item).", waitsForYou: true)
         }
         // Items not ready yet.
         let open = release.plan.filter { !$0.ready }
@@ -195,15 +209,15 @@ enum ReleaseNow {
         return Line(text: "Now: nothing is blocking it.", waitsForYou: false)
     }
 
-    /// The owner item as the line names it: "Run a command on mac".
+    /// What the owner is to do, as a lowercase verb phrase: "run a command on mac".
     static func ask(_ blocker: OwnerBlocker, botName: (String) -> String?) -> String {
-        let bot = blocker.botId.flatMap(botName) ?? "A bot"
+        let bot = blocker.botId.flatMap(botName) ?? "a bot"
         switch blocker.kind {
-        case .ruling: return "Test \(blocker.title) and rule on it"
-        case .run: return "Run a command on \(blocker.computer ?? "its computer")"
-        case .decision: return "Decide: \(blocker.title)"
-        case .question: return "\(bot) asks: \(blocker.title)"
-        case .permission: return "\(bot) wants to run \(blocker.title)"
+        case .ruling: return "test \(blocker.title) and rule on it"
+        case .run: return "run a command on \(blocker.computer ?? "its computer")"
+        case .decision: return "decide \(blocker.title)"
+        case .question: return "answer \(bot)"
+        case .permission: return "review \(blocker.title)"
         }
     }
 }
