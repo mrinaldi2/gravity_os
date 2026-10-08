@@ -103,11 +103,6 @@ fresh_simulator() {
     xcrun simctl spawn "$device" defaults write com.apple.suggestions SuggestionsAppLibraryEnabled -bool false 2>/dev/null || true
 }
 
-# A long chat for H228Tests (H-228): earlier turns before iOS Dev's transcript.
-if [ -n "${LONG_CHAT:-}" ]; then
-    python3 demo/long_chat.py "$out" "Starting on the conflict banner" "${LONG_CHAT_TURNS:-120}"
-fi
-
 # Ids the routing tests open: the designer's question and iOS Dev.
 ids=" "
 [ -z "$no_demo" ] && ids=$(python3 - "$out" "$port" <<'EOF'
