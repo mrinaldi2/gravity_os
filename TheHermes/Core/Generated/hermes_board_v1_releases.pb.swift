@@ -145,12 +145,24 @@ nonisolated struct Hermes_Board_V1_ReleasePlan: Sendable {
   /// Clears the value of `changelog`. Subsequent reads from it will return its default value.
   mutating func clearChangelog() {self._changelog = nil}
 
+  /// The release's REL work card, e.g. "H-244": the owner Run cards,
+  /// decisions and questions on it show on the release (H-247).
+  var workItem: String {
+    get {_workItem ?? String()}
+    set {_workItem = newValue}
+  }
+  /// Returns true if `workItem` has been explicitly set.
+  var hasWorkItem: Bool {self._workItem != nil}
+  /// Clears the value of `workItem`. Subsequent reads from it will return its default value.
+  mutating func clearWorkItem() {self._workItem = nil}
+
   var unknownFields = SwiftProtobuf.UnknownStorage()
 
   init() {}
 
   fileprivate var _displayVersion: String? = nil
   fileprivate var _changelog: String? = nil
+  fileprivate var _workItem: String? = nil
 }
 
 /// Lead or DevOps: add items to a release or take them out before it is
@@ -277,6 +289,16 @@ nonisolated struct Hermes_Board_V1_ReleaseUpdate: Sendable {
   /// Clears the value of `howToTest`. Subsequent reads from it will return its default value.
   mutating func clearHowToTest() {self._howToTest = nil}
 
+  /// The release's REL work card (H-247), at any stage before it closes.
+  var workItem: String {
+    get {_workItem ?? String()}
+    set {_workItem = newValue}
+  }
+  /// Returns true if `workItem` has been explicitly set.
+  var hasWorkItem: Bool {self._workItem != nil}
+  /// Clears the value of `workItem`. Subsequent reads from it will return its default value.
+  mutating func clearWorkItem() {self._workItem = nil}
+
   var unknownFields = SwiftProtobuf.UnknownStorage()
 
   init() {}
@@ -284,6 +306,7 @@ nonisolated struct Hermes_Board_V1_ReleaseUpdate: Sendable {
   fileprivate var _displayVersion: String? = nil
   fileprivate var _changelog: String? = nil
   fileprivate var _howToTest: Hermes_Board_V1_HowToTestList? = nil
+  fileprivate var _workItem: String? = nil
 }
 
 /// Tester: your computer's result for a package, against one of its builds for
@@ -708,10 +731,12 @@ nonisolated struct Hermes_Board_V1_MachineNameSet: Sendable {
   init() {}
 }
 
-/// DevOps: close an approved package that a later, deployed release contains
-/// (H-121): its commit is in the later one's history (or, recorded before
-/// commits were, the later one builds every platform it built). No
-/// deployment is invented; its items go to Done.
+/// DevOps or the lead: close a package the owner ruled to ship (approved, or
+/// stuck deploying or partly deployed) that a later, deployed release
+/// contains (H-121, H-191): its commit is in the later one's history (or,
+/// recorded before commits were, its release branch or tag), and the later
+/// one reached every computer it didn't. No deployment is invented; its items
+/// go to Done. A deploy that completes a package does this for older ones.
 nonisolated struct Hermes_Board_V1_ReleaseDeployedVia: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
@@ -851,7 +876,7 @@ nonisolated extension Hermes_Board_V1_ReleaseCreate: SwiftProtobuf.Message, Swif
 
 nonisolated extension Hermes_Board_V1_ReleasePlan: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   static let protoMessageName: String = _protobuf_package + ".ReleasePlan"
-  static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}project_id\0\u{1}name\0\u{3}display_version\0\u{1}items\0\u{1}changelog\0")
+  static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}project_id\0\u{1}name\0\u{3}display_version\0\u{1}items\0\u{1}changelog\0\u{3}work_item\0")
 
   mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     while let fieldNumber = try decoder.nextFieldNumber() {
@@ -864,6 +889,7 @@ nonisolated extension Hermes_Board_V1_ReleasePlan: SwiftProtobuf.Message, SwiftP
       case 3: try { try decoder.decodeSingularStringField(value: &self._displayVersion) }()
       case 4: try { try decoder.decodeRepeatedStringField(value: &self.items) }()
       case 5: try { try decoder.decodeSingularStringField(value: &self._changelog) }()
+      case 6: try { try decoder.decodeSingularStringField(value: &self._workItem) }()
       default: break
       }
     }
@@ -889,6 +915,9 @@ nonisolated extension Hermes_Board_V1_ReleasePlan: SwiftProtobuf.Message, SwiftP
     try { if let v = self._changelog {
       try visitor.visitSingularStringField(value: v, fieldNumber: 5)
     } }()
+    try { if let v = self._workItem {
+      try visitor.visitSingularStringField(value: v, fieldNumber: 6)
+    } }()
     try unknownFields.traverse(visitor: &visitor)
   }
 
@@ -898,6 +927,7 @@ nonisolated extension Hermes_Board_V1_ReleasePlan: SwiftProtobuf.Message, SwiftP
     if lhs._displayVersion != rhs._displayVersion {return false}
     if lhs.items != rhs.items {return false}
     if lhs._changelog != rhs._changelog {return false}
+    if lhs._workItem != rhs._workItem {return false}
     if lhs.unknownFields != rhs.unknownFields {return false}
     return true
   }
@@ -1058,7 +1088,7 @@ nonisolated extension Hermes_Board_V1_HowToTestList: SwiftProtobuf.Message, Swif
 
 nonisolated extension Hermes_Board_V1_ReleaseUpdate: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   static let protoMessageName: String = _protobuf_package + ".ReleaseUpdate"
-  static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}release_id\0\u{3}display_version\0\u{1}changelog\0\u{3}how_to_test\0")
+  static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}release_id\0\u{3}display_version\0\u{1}changelog\0\u{3}how_to_test\0\u{3}work_item\0")
 
   mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     while let fieldNumber = try decoder.nextFieldNumber() {
@@ -1070,6 +1100,7 @@ nonisolated extension Hermes_Board_V1_ReleaseUpdate: SwiftProtobuf.Message, Swif
       case 2: try { try decoder.decodeSingularStringField(value: &self._displayVersion) }()
       case 3: try { try decoder.decodeSingularStringField(value: &self._changelog) }()
       case 4: try { try decoder.decodeSingularMessageField(value: &self._howToTest) }()
+      case 5: try { try decoder.decodeSingularStringField(value: &self._workItem) }()
       default: break
       }
     }
@@ -1092,6 +1123,9 @@ nonisolated extension Hermes_Board_V1_ReleaseUpdate: SwiftProtobuf.Message, Swif
     try { if let v = self._howToTest {
       try visitor.visitSingularMessageField(value: v, fieldNumber: 4)
     } }()
+    try { if let v = self._workItem {
+      try visitor.visitSingularStringField(value: v, fieldNumber: 5)
+    } }()
     try unknownFields.traverse(visitor: &visitor)
   }
 
@@ -1100,6 +1134,7 @@ nonisolated extension Hermes_Board_V1_ReleaseUpdate: SwiftProtobuf.Message, Swif
     if lhs._displayVersion != rhs._displayVersion {return false}
     if lhs._changelog != rhs._changelog {return false}
     if lhs._howToTest != rhs._howToTest {return false}
+    if lhs._workItem != rhs._workItem {return false}
     if lhs.unknownFields != rhs.unknownFields {return false}
     return true
   }

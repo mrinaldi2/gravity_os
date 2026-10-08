@@ -944,11 +944,23 @@ nonisolated struct Hermes_Board_V1_ItemAddComment: Sendable {
   /// Clears the value of `replyTo`. Subsequent reads from it will return its default value.
   mutating func clearReplyTo() {self._replyTo = nil}
 
+  /// A bot's question for the owner (H-211): the board's home keeps it, so
+  /// the owner's answer on the card reaches the bot.
+  var asksOwner: Bool {
+    get {_asksOwner ?? false}
+    set {_asksOwner = newValue}
+  }
+  /// Returns true if `asksOwner` has been explicitly set.
+  var hasAsksOwner: Bool {self._asksOwner != nil}
+  /// Clears the value of `asksOwner`. Subsequent reads from it will return its default value.
+  mutating func clearAsksOwner() {self._asksOwner = nil}
+
   var unknownFields = SwiftProtobuf.UnknownStorage()
 
   init() {}
 
   fileprivate var _replyTo: String? = nil
+  fileprivate var _asksOwner: Bool? = nil
 }
 
 /// Link an item to a task, decision, artifact, branch, PR or other item.
@@ -1437,6 +1449,9 @@ nonisolated struct Hermes_Board_V1_EditResult: Sendable {
     set {outcome = .conflict(newValue)}
   }
 
+  /// The owner's comment: the bots it was delivered to, by id (H-201).
+  var told: [String] = []
+
   var unknownFields = SwiftProtobuf.UnknownStorage()
 
   nonisolated enum OneOf_Outcome: Equatable, Sendable {
@@ -1476,59 +1491,48 @@ nonisolated struct Hermes_Board_V1_BoardUnwatched: Sendable {
   init() {}
 }
 
-nonisolated struct Hermes_Board_V1_BoardEvent: @unchecked Sendable {
+nonisolated struct Hermes_Board_V1_BoardEvent: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
 
-  var projectID: String {
-    get {_storage._projectID}
-    set {_uniqueStorage()._projectID = newValue}
-  }
+  var projectID: String = String()
 
   /// Per project, rising by one per change. A push whose `seq` is not the
   /// last one plus one (a gap, or a lower number after the daemon restarted)
   /// means pushes were missed: refetch `board_get`.
-  var seq: UInt64 {
-    get {_storage._seq}
-    set {_uniqueStorage()._seq = newValue}
-  }
+  var seq: UInt64 = 0
 
-  var kind: Hermes_Board_V1_BoardEventKind {
-    get {_storage._kind}
-    set {_uniqueStorage()._kind = newValue}
-  }
+  var kind: Hermes_Board_V1_BoardEventKind = .unspecified
 
-  var itemID: String {
-    get {_storage._itemID}
-    set {_uniqueStorage()._itemID = newValue}
-  }
+  var itemID: String = String()
 
   /// The item's card after the change. Unset on an upsert or a move only when
   /// the daemon could not read it back: refetch the item.
   var card: Hermes_Board_V1_ItemCard {
-    get {_storage._card ?? Hermes_Board_V1_ItemCard()}
-    set {_uniqueStorage()._card = newValue}
+    get {_card ?? Hermes_Board_V1_ItemCard()}
+    set {_card = newValue}
   }
   /// Returns true if `card` has been explicitly set.
-  var hasCard: Bool {_storage._card != nil}
+  var hasCard: Bool {self._card != nil}
   /// Clears the value of `card`. Subsequent reads from it will return its default value.
-  mutating func clearCard() {_uniqueStorage()._card = nil}
+  mutating func clearCard() {self._card = nil}
 
   var fromColumn: String {
-    get {_storage._fromColumn ?? String()}
-    set {_uniqueStorage()._fromColumn = newValue}
+    get {_fromColumn ?? String()}
+    set {_fromColumn = newValue}
   }
   /// Returns true if `fromColumn` has been explicitly set.
-  var hasFromColumn: Bool {_storage._fromColumn != nil}
+  var hasFromColumn: Bool {self._fromColumn != nil}
   /// Clears the value of `fromColumn`. Subsequent reads from it will return its default value.
-  mutating func clearFromColumn() {_uniqueStorage()._fromColumn = nil}
+  mutating func clearFromColumn() {self._fromColumn = nil}
 
   var unknownFields = SwiftProtobuf.UnknownStorage()
 
   init() {}
 
-  fileprivate var _storage = _StorageClass.defaultInstance
+  fileprivate var _card: Hermes_Board_V1_ItemCard? = nil
+  fileprivate var _fromColumn: String? = nil
 }
 
 // MARK: - Code below here is support for the SwiftProtobuf runtime.
@@ -2801,7 +2805,7 @@ nonisolated extension Hermes_Board_V1_RoleSet: SwiftProtobuf.Message, SwiftProto
 
 nonisolated extension Hermes_Board_V1_ItemAddComment: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   static let protoMessageName: String = _protobuf_package + ".ItemAddComment"
-  static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}id\0\u{1}body\0\u{3}reply_to\0")
+  static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}id\0\u{1}body\0\u{3}reply_to\0\u{3}asks_owner\0")
 
   mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     while let fieldNumber = try decoder.nextFieldNumber() {
@@ -2812,6 +2816,7 @@ nonisolated extension Hermes_Board_V1_ItemAddComment: SwiftProtobuf.Message, Swi
       case 1: try { try decoder.decodeSingularStringField(value: &self.id) }()
       case 2: try { try decoder.decodeSingularStringField(value: &self.body) }()
       case 3: try { try decoder.decodeSingularStringField(value: &self._replyTo) }()
+      case 4: try { try decoder.decodeSingularBoolField(value: &self._asksOwner) }()
       default: break
       }
     }
@@ -2831,6 +2836,9 @@ nonisolated extension Hermes_Board_V1_ItemAddComment: SwiftProtobuf.Message, Swi
     try { if let v = self._replyTo {
       try visitor.visitSingularStringField(value: v, fieldNumber: 3)
     } }()
+    try { if let v = self._asksOwner {
+      try visitor.visitSingularBoolField(value: v, fieldNumber: 4)
+    } }()
     try unknownFields.traverse(visitor: &visitor)
   }
 
@@ -2838,6 +2846,7 @@ nonisolated extension Hermes_Board_V1_ItemAddComment: SwiftProtobuf.Message, Swi
     if lhs.id != rhs.id {return false}
     if lhs.body != rhs.body {return false}
     if lhs._replyTo != rhs._replyTo {return false}
+    if lhs._asksOwner != rhs._asksOwner {return false}
     if lhs.unknownFields != rhs.unknownFields {return false}
     return true
   }
@@ -3600,7 +3609,7 @@ nonisolated extension Hermes_Board_V1_MoveResult: SwiftProtobuf.Message, SwiftPr
 
 nonisolated extension Hermes_Board_V1_EditResult: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   static let protoMessageName: String = _protobuf_package + ".EditResult"
-  static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}done\0\u{1}refused\0\u{1}conflict\0")
+  static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}done\0\u{1}refused\0\u{1}conflict\0\u{1}told\0")
 
   mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     while let fieldNumber = try decoder.nextFieldNumber() {
@@ -3647,6 +3656,7 @@ nonisolated extension Hermes_Board_V1_EditResult: SwiftProtobuf.Message, SwiftPr
           self.outcome = .conflict(v)
         }
       }()
+      case 4: try { try decoder.decodeRepeatedStringField(value: &self.told) }()
       default: break
       }
     }
@@ -3672,11 +3682,15 @@ nonisolated extension Hermes_Board_V1_EditResult: SwiftProtobuf.Message, SwiftPr
     }()
     case nil: break
     }
+    if !self.told.isEmpty {
+      try visitor.visitRepeatedStringField(value: self.told, fieldNumber: 4)
+    }
     try unknownFields.traverse(visitor: &visitor)
   }
 
   static func ==(lhs: Hermes_Board_V1_EditResult, rhs: Hermes_Board_V1_EditResult) -> Bool {
     if lhs.outcome != rhs.outcome {return false}
+    if lhs.told != rhs.told {return false}
     if lhs.unknownFields != rhs.unknownFields {return false}
     return true
   }
@@ -3746,102 +3760,56 @@ nonisolated extension Hermes_Board_V1_BoardEvent: SwiftProtobuf.Message, SwiftPr
   static let protoMessageName: String = _protobuf_package + ".BoardEvent"
   static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}project_id\0\u{1}seq\0\u{1}kind\0\u{3}item_id\0\u{1}card\0\u{3}from_column\0")
 
-  fileprivate class _StorageClass {
-    var _projectID: String = String()
-    var _seq: UInt64 = 0
-    var _kind: Hermes_Board_V1_BoardEventKind = .unspecified
-    var _itemID: String = String()
-    var _card: Hermes_Board_V1_ItemCard? = nil
-    var _fromColumn: String? = nil
-
-      // This property is used as the initial default value for new instances of the type.
-      // The type itself is protecting the reference to its storage via CoW semantics.
-      // This will force a copy to be made of this reference when the first mutation occurs;
-      // hence, it is safe to mark this as `nonisolated(unsafe)`.
-      static nonisolated(unsafe) let defaultInstance = _StorageClass()
-
-    private init() {}
-
-    init(copying source: _StorageClass) {
-      _projectID = source._projectID
-      _seq = source._seq
-      _kind = source._kind
-      _itemID = source._itemID
-      _card = source._card
-      _fromColumn = source._fromColumn
-    }
-  }
-
-  fileprivate mutating func _uniqueStorage() -> _StorageClass {
-    if !isKnownUniquelyReferenced(&_storage) {
-      _storage = _StorageClass(copying: _storage)
-    }
-    return _storage
-  }
-
   mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
-    _ = _uniqueStorage()
-    try withExtendedLifetime(_storage) { (_storage: _StorageClass) in
-      while let fieldNumber = try decoder.nextFieldNumber() {
-        // The use of inline closures is to circumvent an issue where the compiler
-        // allocates stack space for every case branch when no optimizations are
-        // enabled. https://github.com/apple/swift-protobuf/issues/1034
-        switch fieldNumber {
-        case 1: try { try decoder.decodeSingularStringField(value: &_storage._projectID) }()
-        case 2: try { try decoder.decodeSingularUInt64Field(value: &_storage._seq) }()
-        case 3: try { try decoder.decodeSingularEnumField(value: &_storage._kind) }()
-        case 4: try { try decoder.decodeSingularStringField(value: &_storage._itemID) }()
-        case 5: try { try decoder.decodeSingularMessageField(value: &_storage._card) }()
-        case 6: try { try decoder.decodeSingularStringField(value: &_storage._fromColumn) }()
-        default: break
-        }
+    while let fieldNumber = try decoder.nextFieldNumber() {
+      // The use of inline closures is to circumvent an issue where the compiler
+      // allocates stack space for every case branch when no optimizations are
+      // enabled. https://github.com/apple/swift-protobuf/issues/1034
+      switch fieldNumber {
+      case 1: try { try decoder.decodeSingularStringField(value: &self.projectID) }()
+      case 2: try { try decoder.decodeSingularUInt64Field(value: &self.seq) }()
+      case 3: try { try decoder.decodeSingularEnumField(value: &self.kind) }()
+      case 4: try { try decoder.decodeSingularStringField(value: &self.itemID) }()
+      case 5: try { try decoder.decodeSingularMessageField(value: &self._card) }()
+      case 6: try { try decoder.decodeSingularStringField(value: &self._fromColumn) }()
+      default: break
       }
     }
   }
 
   func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
-    try withExtendedLifetime(_storage) { (_storage: _StorageClass) in
-      // The use of inline closures is to circumvent an issue where the compiler
-      // allocates stack space for every if/case branch local when no optimizations
-      // are enabled. https://github.com/apple/swift-protobuf/issues/1034 and
-      // https://github.com/apple/swift-protobuf/issues/1182
-      if !_storage._projectID.isEmpty {
-        try visitor.visitSingularStringField(value: _storage._projectID, fieldNumber: 1)
-      }
-      if _storage._seq != 0 {
-        try visitor.visitSingularUInt64Field(value: _storage._seq, fieldNumber: 2)
-      }
-      if _storage._kind != .unspecified {
-        try visitor.visitSingularEnumField(value: _storage._kind, fieldNumber: 3)
-      }
-      if !_storage._itemID.isEmpty {
-        try visitor.visitSingularStringField(value: _storage._itemID, fieldNumber: 4)
-      }
-      try { if let v = _storage._card {
-        try visitor.visitSingularMessageField(value: v, fieldNumber: 5)
-      } }()
-      try { if let v = _storage._fromColumn {
-        try visitor.visitSingularStringField(value: v, fieldNumber: 6)
-      } }()
+    // The use of inline closures is to circumvent an issue where the compiler
+    // allocates stack space for every if/case branch local when no optimizations
+    // are enabled. https://github.com/apple/swift-protobuf/issues/1034 and
+    // https://github.com/apple/swift-protobuf/issues/1182
+    if !self.projectID.isEmpty {
+      try visitor.visitSingularStringField(value: self.projectID, fieldNumber: 1)
     }
+    if self.seq != 0 {
+      try visitor.visitSingularUInt64Field(value: self.seq, fieldNumber: 2)
+    }
+    if self.kind != .unspecified {
+      try visitor.visitSingularEnumField(value: self.kind, fieldNumber: 3)
+    }
+    if !self.itemID.isEmpty {
+      try visitor.visitSingularStringField(value: self.itemID, fieldNumber: 4)
+    }
+    try { if let v = self._card {
+      try visitor.visitSingularMessageField(value: v, fieldNumber: 5)
+    } }()
+    try { if let v = self._fromColumn {
+      try visitor.visitSingularStringField(value: v, fieldNumber: 6)
+    } }()
     try unknownFields.traverse(visitor: &visitor)
   }
 
   static func ==(lhs: Hermes_Board_V1_BoardEvent, rhs: Hermes_Board_V1_BoardEvent) -> Bool {
-    if lhs._storage !== rhs._storage {
-      let storagesAreEqual: Bool = withExtendedLifetime((lhs._storage, rhs._storage)) { (_args: (_StorageClass, _StorageClass)) in
-        let _storage = _args.0
-        let rhs_storage = _args.1
-        if _storage._projectID != rhs_storage._projectID {return false}
-        if _storage._seq != rhs_storage._seq {return false}
-        if _storage._kind != rhs_storage._kind {return false}
-        if _storage._itemID != rhs_storage._itemID {return false}
-        if _storage._card != rhs_storage._card {return false}
-        if _storage._fromColumn != rhs_storage._fromColumn {return false}
-        return true
-      }
-      if !storagesAreEqual {return false}
-    }
+    if lhs.projectID != rhs.projectID {return false}
+    if lhs.seq != rhs.seq {return false}
+    if lhs.kind != rhs.kind {return false}
+    if lhs.itemID != rhs.itemID {return false}
+    if lhs._card != rhs._card {return false}
+    if lhs._fromColumn != rhs._fromColumn {return false}
     if lhs.unknownFields != rhs.unknownFields {return false}
     return true
   }

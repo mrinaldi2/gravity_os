@@ -15,6 +15,8 @@ enum NeedsDestination: Hashable {
     case decision(computerId: String, decisionId: String)
     case bot(computerId: String, botId: String, chat: Bool)
     case item(computerId: String, itemId: String)
+    /// The card with "Reply to <bot>" open on that comment (H-248, H-210).
+    case reply(computerId: String, itemId: String, commentId: String)
     case release(computerId: String, releaseId: String)
     case note(title: String, text: String)
 }
@@ -22,6 +24,8 @@ enum NeedsDestination: Hashable {
 extension ReleaseStatusWords {
     static func pill(_ release: Hermes_Home_V1_ReleaseBrief) -> (String, Tone) {
         let version = release.version.isEmpty ? "Release" : release.version
+        // Something only the owner can give it (H-248): that, before its state.
+        if release.ownerBlockerCount > 0 { return (WaitingWords.projectsPill(version), .needsYou) }
         switch release.state {
         case "awaiting_owner": return ("\(version) ready for you to test", .needsYou)
         case "deployed": return ("\(version) live", .ready)
@@ -374,6 +378,10 @@ struct NeedsDestinations: ViewModifier {
             case .item(let computerId, let itemId):
                 if let computer = fleet.computer(id: computerId) {
                     ItemView(itemId: itemId).computerEnvironment(computer)
+                }
+            case .reply(let computerId, let itemId, let commentId):
+                if let computer = fleet.computer(id: computerId) {
+                    ItemView(itemId: itemId, answering: commentId).computerEnvironment(computer)
                 }
             case .release(let computerId, let releaseId):
                 if let computer = fleet.computer(id: computerId) {

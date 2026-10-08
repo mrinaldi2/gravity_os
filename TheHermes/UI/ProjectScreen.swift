@@ -390,6 +390,9 @@ struct ItemView: View {
     @Environment(Fleet.self) private var fleet
     @Environment(AppStore.self) private var store
     let itemId: String
+    /// A comment to answer at once: "Reply to <bot>" opens on it (H-248).
+    var answering: String? = nil
+    @State private var openedReply = false
     @State private var detail: BoardItemDetail?
     @State private var draft = ""
     /// What this device posted (H-202): shown at once, then confirmed or failed.
@@ -561,6 +564,11 @@ struct ItemView: View {
             detail = fresh
             pending = CommentThread.stillPending(pending, comments: fresh.comments)
             failure = nil
+            if let answering, !openedReply,
+               let row = CommentThread.rows(comments: fresh.comments, history: fresh.history, pending: []).first(where: { $0.id == answering }) {
+                openedReply = true
+                replying = row
+            }
         } catch {
             if detail == nil { failure = error.localizedDescription }
         }
@@ -693,10 +701,14 @@ struct ReleaseRow: View {
 
     var body: some View {
         let (words, tone) = release.statusWords
-        ItemRow(title: release.version, subtitle: release.itemsTotal > 0 ? "\(release.itemsReady) of \(release.itemsTotal) items ready" : nil) {
-            IconTile(systemImage: "shippingbox", tone: tone)
-        } trailing: {
-            Pill(text: words.replacingOccurrences(of: release.version + " ", with: "").capitalizedFirst, tone: tone)
+        VStack(alignment: .leading, spacing: 6) {
+            ItemRow(title: release.version, subtitle: release.itemsTotal > 0 ? "\(release.itemsReady) of \(release.itemsTotal) items ready" : nil) {
+                IconTile(systemImage: "shippingbox", tone: tone)
+            } trailing: {
+                Pill(text: words.replacingOccurrences(of: release.version + " ", with: "").capitalizedFirst, tone: tone)
+            }
+            // What only the owner can give it (H-248).
+            WaitingPill(count: release.ownerBlockers?.count ?? 0).padding(.leading, 44)
         }
     }
 }
@@ -757,6 +769,13 @@ struct ReleaseView: View {
     /// The computer this release was read from.
     private var computerId: String { fleet.computers.first { $0.store === store }?.id ?? "" }
 
+    /// Where Review… on the ruling scrolls to (UX-040's release review).
+    private static let reviewAnchor = "release-review"
+    /// "Now: waiting for you, …" goes to its row.
+    private static let waitingAnchor = "waiting-for-you"
+    /// Released or stopped: no "Now:" line.
+    private static let settled: Set = ["deployed", "rejected", "cancelled", "rolled_back", "held"]
+
     /// The phone rules on a package waiting for the owner, when it may (H-160 AC4).
     private var reviewing: Bool {
         guard let release else { return false }
@@ -764,8 +783,16 @@ struct ReleaseView: View {
     }
 
     var body: some View {
+        ScrollViewReader { proxy in
         List {
             if let release {
+                // What only the owner can give it, at the top (H-248, UX-048).
+                if let blockers = release.ownerBlockers, !blockers.isEmpty {
+                    WaitingSection(blockers: blockers, computerId: computerId) {
+                        withAnimation { proxy.scrollTo(Self.reviewAnchor, anchor: .top) }
+                    }
+                    .id(Self.waitingAnchor)
+                }
                 Section {
                     let (words, tone) = release.statusWords
                     Pill(text: words, tone: tone)
@@ -792,17 +819,32 @@ struct ReleaseView: View {
                     }
                 }
                 Section {
+                    // Who it waits on now (UX-048 §3).
+                    if !Self.settled.contains(release.status) {
+                        let now = ReleaseNow.line(release) { store.bot($0)?.name }
+                        if now.waitsForYou {
+                            Button(now.text) { withAnimation { proxy.scrollTo(Self.waitingAnchor, anchor: .top) } }
+                                .font(.subheadline.weight(.medium))
+                        } else {
+                            Text(now.text).font(.subheadline.weight(.medium))
+                        }
+                    }
                     ForEach(release.items) { item in itemRow(release, item) }
                 } header: {
                     SectionTitle(release.showsProgress ? "Progress" : "Items", count: release.items.count)
                 } footer: {
                     if release.showsProgress {
                         Text(release.readinessLine).foregroundStyle(Color.secondaryText)
+                        // A service without owner_blockers can't say what waits for you (H-248).
+                        if release.ownerBlockers == nil {
+                            Button(WaitingWords.olderService) { fleet.home.needsFocus = "" }
+                                .font(.footnote)
+                        }
                     } else if reviewing, let line = ReleaseReview.leftOutLine(leftOut.count) {
                         Text(line).foregroundStyle(Color.secondaryText)
                     }
                 }
-                if reviewing { actions(release) }
+                if reviewing { actions(release).id(Self.reviewAnchor) }
                 if let failure {
                     Text(failure).font(.footnote).foregroundStyle(Color.errorText)
                 }
@@ -817,6 +859,8 @@ struct ReleaseView: View {
         .navigationBarTitleDisplayMode(.inline)
         .task { await load() }
         .reloadsOnReconnect { await load() }
+        // Its owner_blockers changed (H-248): read it again.
+        .onChange(of: store.releaseUpdated) { _, update in if update?.releaseId == releaseId { Task { await load() } } }
         // An approval for this package ended (here or elsewhere): show it as it is now.
         .task(id: fleet.rulings.outcome?.id) {
             guard let outcome = fleet.rulings.outcome, outcome.releaseId == releaseId else { return }
@@ -848,6 +892,7 @@ struct ReleaseView: View {
                     }
                 }
             }
+        }
         }
     }
 

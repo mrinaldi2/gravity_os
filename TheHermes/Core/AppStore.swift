@@ -51,6 +51,9 @@ final class AppStore {
     var projects: [Project] = []
     /// A release waiting to be installed on this device (H-230): the banner.
     var installOffer: InstallOffer?
+    /// The last release whose owner_blockers changed (`release_updated`, H-248);
+    /// a new value on every push, even for the same release.
+    var releaseUpdated: ReleaseUpdate?
     var bots: [Bot] = []
     var activity: [String: BotActivity] = [:]
     /// bot id → its DM thread.
@@ -325,6 +328,9 @@ final class AppStore {
         // Sent to this device's connections only (H-229): the banner, no APNs.
         case "install_offer":
             installOffer = frame.dict("offer").map(InstallOffer.init)
+        // A release's owner_blockers changed (H-248): its screen reads it again.
+        case "release_updated":
+            releaseUpdated = ReleaseUpdate(releaseId: frame.str("release_id"))
         case "chat_turns":
             onChatTurns?(frame.str("bot_id"), frame.list("turns"))
             chatRevision[frame.str("bot_id"), default: 0] += 1
