@@ -173,6 +173,15 @@ enum ReleaseNow {
 
     static let platformNames = ["desktop-mac": "Mac", "desktop-win": "Windows", "desktop-linux": "Linux", "ios": "iPhone"]
 
+    /// Released or stopped: no "Now:" line, and no pointer to Needs you.
+    static let settled: Set = ["deployed", "rejected", "cancelled", "rolled_back", "held"]
+
+    static func shows(_ release: Release) -> Bool { !settled.contains(release.status) }
+
+    /// A service without owner_blockers can't say what waits for you: point to
+    /// Needs you, under the "Now:" line (UX-048, QA-014).
+    static func pointsToNeedsYou(_ release: Release) -> Bool { release.ownerBlockers == nil && shows(release) }
+
     static func line(_ release: Release, botName: (String) -> String? = { _ in nil }) -> Line {
         // Something waits for you: the first owner item.
         if let first = release.ownerBlockers?.first {

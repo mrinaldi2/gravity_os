@@ -773,8 +773,6 @@ struct ReleaseView: View {
     private static let reviewAnchor = "release-review"
     /// "Now: waiting for you, …" goes to its row.
     private static let waitingAnchor = "waiting-for-you"
-    /// Released or stopped: no "Now:" line.
-    private static let settled: Set = ["deployed", "rejected", "cancelled", "rolled_back", "held"]
 
     /// The phone rules on a package waiting for the owner, when it may (H-160 AC4).
     private var reviewing: Bool {
@@ -820,7 +818,7 @@ struct ReleaseView: View {
                 }
                 Section {
                     // Who it waits on now (UX-048 §3).
-                    if !Self.settled.contains(release.status) {
+                    if ReleaseNow.shows(release) {
                         let now = ReleaseNow.line(release) { store.bot($0)?.name }
                         if now.waitsForYou {
                             Button(now.text) { withAnimation { proxy.scrollTo(Self.waitingAnchor, anchor: .top) } }
@@ -829,17 +827,19 @@ struct ReleaseView: View {
                             Text(now.text).font(.subheadline.weight(.medium))
                         }
                     }
+                    // A service without owner_blockers: point to Needs you (a row, not the
+                    // footer, which only showed while the package was still being built).
+                    if ReleaseNow.pointsToNeedsYou(release) {
+                        Button(WaitingWords.olderService) { fleet.home.needsFocus = "" }
+                            .font(.footnote)
+                            .accessibilityHint("Opens Needs you")
+                    }
                     ForEach(release.items) { item in itemRow(release, item) }
                 } header: {
                     SectionTitle(release.showsProgress ? "Progress" : "Items", count: release.items.count)
                 } footer: {
                     if release.showsProgress {
                         Text(release.readinessLine).foregroundStyle(Color.secondaryText)
-                        // A service without owner_blockers can't say what waits for you (H-248).
-                        if release.ownerBlockers == nil {
-                            Button(WaitingWords.olderService) { fleet.home.needsFocus = "" }
-                                .font(.footnote)
-                        }
                     } else if reviewing, let line = ReleaseReview.leftOutLine(leftOut.count) {
                         Text(line).foregroundStyle(Color.secondaryText)
                     }
