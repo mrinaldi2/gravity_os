@@ -52,8 +52,8 @@ final class ReleaseInstallTests: XCTestCase {
         XCTAssertEqual(InstallWords.hint("0.6.1"), "Opens Safari to install The Hermes 0.6.1.")
         XCTAssertEqual(InstallWords.siteOff(computer: "Studio Mac"),
                        "The build site on Studio Mac isn't serving. Ask DevOps to start it, then try again.")
-        XCTAssertEqual(InstallWords.notPublished(device: "iPhone"),
-                       "This package has no iPhone build to install yet. DevOps publishes it after building.")
+        XCTAssertEqual(InstallWords.notPublished,
+                       "This package has no iPhone or iPad build to install yet. DevOps publishes it after building.")
         XCTAssertEqual(InstallWords.sameVersion(device: "iPhone", version: "0.6.1", build: "12"),
                        "✓ This iPhone has The Hermes 0.6.1 (12).")
         XCTAssertEqual(InstallWords.reinstall, "Reinstall")
@@ -95,6 +95,45 @@ final class ReleaseInstallTests: XCTestCase {
         XCTAssertTrue(opened.isEmpty)
     }
 
+    // MARK: CE review: only a link that checks out is opened, only HTTPS is probed
+
+    func testOnlyAnItmsServicesLinkToTheSameHTTPSHostIsOpened() async {
+        let page = "https://mac.tail.ts.net:8443/releases/0.6.1/index.html"
+        let bad = [
+            "https://mac.tail.ts.net:8443/releases/0.6.1/manifest.plist",                                   // not itms-services
+            "itms-services://?action=download-manifest&url=http://mac.tail.ts.net:8443/m.plist",            // manifest over http
+            "itms-services://?action=download-manifest&url=https://evil.example.com/m.plist",               // another host
+            "itms-services://?action=download-manifest",                                                    // no url=
+        ]
+        for link in bad {
+            let package = info(installURL: link, pageURL: page)
+            XCTAssertEqual(InstallState.of(package, installed: older), .notPublished, link)
+            var opened: [URL] = []
+            var probed: [URL] = []
+            let outcome = await InstallAction.install(package, reachable: { probed.append($0); return true }) { opened.append($0) }
+            XCTAssertEqual(outcome, .notPublished, link)
+            XCTAssertTrue(opened.isEmpty, "nothing opened for \(link)")
+            XCTAssertTrue(probed.isEmpty, "nothing probed for \(link)")
+        }
+        XCTAssertTrue(InstallLink.isSafe(info().installURL, page: info().pageURL), "the daemon's real shape")
+        XCTAssertTrue(InstallLink.isSafe(URL(string: "itms-services://?action=download-manifest&url=https://MAC.tail.ts.net/m.plist"),
+                                         page: URL(string: "https://mac.tail.ts.net/index.html")), "hosts compare without case")
+        XCTAssertFalse(InstallLink.isSafe(info().installURL, page: nil), "no page to check against")
+    }
+
+    func testOnlyAnHTTPSPageIsProbed() async {
+        // An http page fails the link check, so nothing is probed or opened.
+        let package = info(pageURL: "http://mac.tail.ts.net:8443/releases/0.6.1/index.html")
+        XCTAssertEqual(InstallState.of(package, installed: older), .notPublished)
+        var probed: [URL] = []
+        let outcome = await InstallAction.install(package, reachable: { probed.append($0); return true }) { _ in }
+        XCTAssertEqual(outcome, .notPublished)
+        XCTAssertTrue(probed.isEmpty)
+        // And the probe itself never goes out over http.
+        let reached = await InstallAction.reachable(URL(string: "http://127.0.0.1:41209/index.html")!)
+        XCTAssertFalse(reached)
+    }
+
     // MARK: test 9: the offer banner shows, and Not now hides it
 
     func testAnOfferPushShowsTheBannerAndNotNowHidesIt() async {
@@ -113,7 +152,8 @@ final class ReleaseInstallTests: XCTestCase {
 
     func testTheBannersInstallOpensTheOffersLink() async {
         let offer = InstallOffer(["release_id": "r1", "version": "0.6.1", "build": "12",
-                                  "install_url": "itms-services://?action=download-manifest&url=https://mac/m.plist"])
+                                  "install_url": "itms-services://?action=download-manifest&url=https://mac/m.plist",
+                                  "page_url": "https://mac/index.html"])
         var opened: [URL] = []
         let outcome = await InstallAction.install(offer, reachable: { _ in true }) { opened.append($0) }
         XCTAssertEqual(opened.map(\.absoluteString), ["itms-services://?action=download-manifest&url=https://mac/m.plist"])

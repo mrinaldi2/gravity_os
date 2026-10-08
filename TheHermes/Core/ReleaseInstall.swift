@@ -74,14 +74,29 @@ enum InstallState: Equatable {
     static func of(_ info: ReleaseInstallInfo, installed: (version: String, build: String)) -> InstallState {
         if unpublishedStates.contains(info.state) { return .notPublished }
         guard shownStates.contains(info.state), info.installable else { return .hidden }
-        // Install info the daemon couldn't derive is empty: not published (CE M1).
-        guard info.installURL != nil, !info.build.isEmpty else { return .notPublished }
+        // Install info the daemon couldn't derive is empty, and a link that doesn't
+        // check out is never offered: not published (CE M1, CE review).
+        guard InstallLink.isSafe(info.installURL, page: info.pageURL), !info.build.isEmpty else { return .notPublished }
         if info.siteServing == false { return .siteOff(computer: info.computer) }
         switch AppVersion.compare(installed, (info.version, info.build)) {
         case .orderedSame: return .sameVersion
         case .orderedDescending: return .newerInstalled(installed.version)
         case .orderedAscending: return .ready(forTesting: info.forTesting)
         }
+    }
+}
+
+/// What the app agrees to open (CE review): an itms-services link whose
+/// manifest `url=` is HTTPS on the same host as the HTTPS install page.
+enum InstallLink {
+    static func isSafe(_ install: URL?, page: URL?) -> Bool {
+        guard let install, install.scheme?.lowercased() == "itms-services",
+              let page, page.scheme?.lowercased() == "https", let pageHost = page.host?.lowercased(),
+              let manifest = URLComponents(url: install, resolvingAgainstBaseURL: false)?
+                  .queryItems?.first(where: { $0.name == "url" })?.value.flatMap(URL.init(string:)),
+              manifest.scheme?.lowercased() == "https", manifest.host?.lowercased() == pageHost
+        else { return false }
+        return true
     }
 }
 
@@ -109,9 +124,8 @@ enum InstallWords {
         "The build site on \(computer.isEmpty ? "its computer" : computer) isn't serving. Ask DevOps to start it, then try again."
     }
 
-    static func notPublished(device: String) -> String {
-        "This package has no \(device) build to install yet. DevOps publishes it after building."
-    }
+    /// The same on every device (UX-047).
+    static let notPublished = "This package has no iPhone or iPad build to install yet. DevOps publishes it after building."
 
     static func sameVersion(device: String, version: String, build: String) -> String {
         "✓ This \(device) has The Hermes \(version) (\(build))."
@@ -151,8 +165,8 @@ enum InstallAction {
     static func install(_ info: ReleaseInstallInfo,
                         reachable: (URL) async -> Bool = InstallAction.reachable,
                         open: (URL) -> Void) async -> Outcome {
-        guard let url = info.installURL else { return .notPublished }
-        if let page = info.pageURL, !(await reachable(page)) { return .unreachable }
+        guard let url = info.installURL, let page = info.pageURL, InstallLink.isSafe(url, page: page) else { return .notPublished }
+        if !(await reachable(page)) { return .unreachable }
         open(url)
         return .opened(url)
     }
@@ -160,14 +174,16 @@ enum InstallAction {
     static func install(_ offer: InstallOffer,
                         reachable: (URL) async -> Bool = InstallAction.reachable,
                         open: (URL) -> Void) async -> Outcome {
-        guard let url = offer.installURL else { return .notPublished }
-        if let page = offer.pageURL, !(await reachable(page)) { return .unreachable }
+        guard let url = offer.installURL, let page = offer.pageURL, InstallLink.isSafe(url, page: page) else { return .notPublished }
+        if !(await reachable(page)) { return .unreachable }
         open(url)
         return .opened(url)
     }
 
     /// The install page answers over HTTPS from this device.
+    /// Only an HTTPS page is ever probed (CE review).
     nonisolated static func reachable(_ page: URL) async -> Bool {
+        guard page.scheme?.lowercased() == "https" else { return false }
         var request = URLRequest(url: page, timeoutInterval: 4)
         request.httpMethod = "HEAD"
         guard let (_, response) = try? await URLSession.shared.data(for: request) else { return false }

@@ -29,7 +29,7 @@ struct InstallSection: View {
         case .hidden:
             EmptyView()
         case .notPublished:
-            Text(InstallWords.notPublished(device: device)).foregroundStyle(Color.secondaryText)
+            Text(InstallWords.notPublished).foregroundStyle(Color.secondaryText)
         case .siteOff(let computer):
             installButton(info, forTesting: info.forTesting).disabled(true)
             Text(InstallWords.siteOff(computer: computer)).font(.footnote).foregroundStyle(Color.secondaryText)
