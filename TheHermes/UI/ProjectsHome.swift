@@ -112,11 +112,10 @@ struct ProjectsHomeView: View {
             }
             .needsDestinations()
             // A card link from outside (iPad: PadRootView opens it in the project column).
-            .onChange(of: fleet.openCard, initial: true) { _, id in
-                guard open == nil, let id, let home = fleet.cards.home(for: id) else { return }
-                fleet.openCard = nil
-                path.append(NeedsDestination.item(computerId: home.computerId, itemId: id))
-            }
+            // On a cold start the link arrives before the projects: try again as they load (H-216).
+            .onChange(of: fleet.openCard, initial: true) { openLinkedCard() }
+            .onChange(of: fleet.cards.homes) { openLinkedCard() }
+            .onChange(of: fleet.cards.settled) { openLinkedCard() }
             .onChange(of: openProject.wrappedValue, initial: true) { _, link in
                 guard let link else { return }
                 path = NavigationPath([link])
@@ -125,6 +124,11 @@ struct ProjectsHomeView: View {
         }
         // Card ids anywhere in this stack open the card here (H-204).
         .opensCardLinks { path.append($0) }
+    }
+
+    private func openLinkedCard() {
+        guard open == nil, let (id, home) = fleet.takeOpenCard() else { return }
+        path.append(NeedsDestination.item(computerId: home.computerId, itemId: id))
     }
 
     @ViewBuilder private func pinButton(_ card: HomeCard) -> some View {

@@ -18,7 +18,7 @@ struct RootView: View {
     /// Changes whenever a computer connects or drops, to refetch the home.
     /// Changes when a computer's projects change.
     private var projectsKey: String {
-        fleet.computers.map { "\($0.id)=\($0.store.status == .connected):\($0.store.projects.map(\.id).joined(separator: "+"))" }
+        fleet.computers.map { "\($0.id)=\($0.store.status == .connected)/\($0.store.projectsLoaded):\($0.store.projects.map(\.id).joined(separator: "+"))" }
             .joined(separator: ",")
     }
 
@@ -35,6 +35,7 @@ struct RootView: View {
         }
         .overlay(alignment: .top) { noticeBanner }
         .overlay(alignment: .top) { UpdatedToast() }
+        .overlay(alignment: .top) { openingBanner }
         // A release approval's Undo and outcome, wherever the owner is (UX-040).
         .overlay(alignment: .bottom) { RulingBar().padding(.bottom, 64) }
         // iPad keyboard (UX-023 §2.7): ⌘⇧N opens Needs you.
@@ -58,9 +59,20 @@ struct RootView: View {
         .task(id: projectsKey) { await fleet.cards.refresh(fleet.computers) }
         // thehermes://item/H-293 from outside (a notification): the card, on Projects.
         .onChange(of: fleet.openCard) { _, id in if id != nil { tab = .projects } }
+        .task(id: fleet.openCard) { await fleet.watchOpenCard() }
+        // A card link whose id no project uses (H-216).
+        .alert(fleet.missingCard ?? "", isPresented: Binding(get: { fleet.missingCard != nil },
+                                                             set: { if !$0 { fleet.missingCard = nil } })) {
+            Button("OK", role: .cancel) {}
+        } message: {
+            if let id = fleet.missingCard {
+                Text(CardPreview.unseen(id, device: UIDevice.current.userInterfaceIdiom == .pad ? "iPad" : "iPhone"))
+            }
+        }
         // "See all in Needs you" on a project's Overview.
         .onChange(of: fleet.home.needsFocus) { _, id in if id != nil { tab = .needs } }
         .animation(.snappy, value: fleet.notice?.1)
+        .animation(.snappy, value: fleet.openingCard)
         // Asked after pairing, with a word on why, before the system prompt.
         .task { explaining = await NotificationExplainer.shouldExplain() }
         .sheet(isPresented: $explaining) { NotificationExplainer() }
@@ -81,9 +93,9 @@ struct RootView: View {
                 openNeeds = .release(computerId: computer.id, releaseId: id)
             }
         }
-        // As a link from outside: -openCard H-293 (once its prefix is known).
-        .task(id: fleet.cards.prefixes.count) {
-            if let id = UserDefaults.standard.string(forKey: "openCard"), fleet.cards.home(for: id) != nil,
+        // As a link from outside: -openCard H-293, at launch like a cold-start link (H-216).
+        .task {
+            if let id = UserDefaults.standard.string(forKey: "openCard"),
                !UserDefaults.standard.bool(forKey: "openCardDone") {
                 UserDefaults.standard.set(true, forKey: "openCardDone")
                 fleet.openCard = id
@@ -144,6 +156,22 @@ struct RootView: View {
         case .bot(let id, let pane):
             tab = .chat
             openBot = BotLink(botId: id, pane: pane)
+        }
+    }
+
+    /// "Opening ZZ-404…" while a link from outside waits for the projects (UX-044).
+    @ViewBuilder private var openingBanner: some View {
+        if let id = fleet.openingCard {
+            Label {
+                Text("Opening \(id)…")
+            } icon: {
+                ProgressView().controlSize(.small)
+            }
+            .font(.subheadline.weight(.semibold))
+            .padding(.horizontal, 14)
+            .padding(.vertical, 10)
+            .background(.regularMaterial, in: Capsule())
+            .transition(.move(edge: .top).combined(with: .opacity))
         }
     }
 
