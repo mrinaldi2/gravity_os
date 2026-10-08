@@ -160,6 +160,43 @@ final class ReleaseInstallTests: XCTestCase {
         XCTAssertEqual(outcome, .opened(opened[0]))
     }
 
+    // MARK: Debug launch arguments for QA captures (no bypass of the link check)
+
+    func testTheInstallStubStandsInForTheDaemonAndIsStillChecked() async throws {
+        defer { UserDefaults.standard.removeObject(forKey: InstallStubs.installKey) }
+        let store = AppStore(defaults: ComputerDefaults(id: "test-install-stub"))
+        UserDefaults.standard.set("""
+        {"install": {"release_id": "r1", "version": "0.6.1", "build": "12", "state": "approved", "installable": true,
+          "page_url": "https://mac.tail.ts.net:8443/releases/0.6.1/index.html",
+          "install_url": "itms-services://?action=download-manifest&url=https://mac.tail.ts.net:8443/releases/0.6.1/manifest.plist",
+          "computer": "Studio Mac"}}
+        """, forKey: InstallStubs.installKey)
+        let good = try await store.releaseInstall("r1")
+        XCTAssertEqual(good.map { InstallState.of($0, installed: older) }, .ready(forTesting: false))
+
+        // A stubbed link that doesn't check out is still never offered.
+        UserDefaults.standard.set("""
+        {"install": {"release_id": "r1", "version": "0.6.1", "build": "12", "state": "approved", "installable": true,
+          "page_url": "https://mac.tail.ts.net/index.html",
+          "install_url": "itms-services://?action=download-manifest&url=https://evil.example.com/m.plist"}}
+        """, forKey: InstallStubs.installKey)
+        let bad = try await store.releaseInstall("r1")
+        XCTAssertEqual(bad.map { InstallState.of($0, installed: older) }, .notPublished)
+    }
+
+    func testTheOfferStubShowsTheBannerAsThePushWould() async {
+        defer { UserDefaults.standard.removeObject(forKey: InstallStubs.offerKey) }
+        let store = AppStore(defaults: ComputerDefaults(id: "test-offer-stub"))
+        UserDefaults.standard.set("""
+        {"offers": [{"release_id": "r1", "project_id": "p1", "version": "0.6.1", "build": "12",
+          "install_url": "itms-services://?action=download-manifest&url=https://mac/m.plist", "page_url": "https://mac/index.html"}]}
+        """, forKey: InstallStubs.offerKey)
+        await store.refreshInstallOffer()
+        XCTAssertEqual(store.installOffer?.version, "0.6.1")
+        await store.dismissInstallOffer()
+        XCTAssertNil(store.installOffer, "Not now still hides it")
+    }
+
     // MARK: §5: the version report, and the one-time toast
 
     func testEveryHelloReportsThisAppsVersionAndBuild() {

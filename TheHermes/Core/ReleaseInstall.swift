@@ -207,15 +207,43 @@ enum UpdateNotice {
     }
 }
 
+#if DEBUG
+/// QA captures (H-230): the demo can't seed an approved iOS package without
+/// owner proof, so Debug builds take the daemon's replies from launch arguments.
+/// Only the data is stubbed: InstallLink.isSafe still checks every URL.
+///   -installStub <json>       the `release_install` reply, {"install": {...}}
+///   -installOfferStub <json>  the `install_offers` reply, {"offers": [{...}]}, also
+///                             delivered as an `install_offer` push
+enum InstallStubs {
+    static let installKey = "installStub"
+    static let offerKey = "installOfferStub"
+
+    static func reply(_ key: String, _ defaults: UserDefaults = .standard) -> JSONDict? {
+        defaults.string(forKey: key).flatMap(JSONText.decode)
+    }
+}
+#endif
+
 extension AppStore {
     /// What this package offers for install here; nil on a service without it (before 0.17.5).
     func releaseInstall(_ releaseId: String, checkSite: Bool = true) async throws -> ReleaseInstallInfo? {
+        #if DEBUG
+        if let stub = InstallStubs.reply(InstallStubs.installKey) { return stub.dict("install").map(ReleaseInstallInfo.init) }
+        #endif
         let reply = try await client.request("release_install", ["release_id": releaseId, "check_site": checkSite])
         return reply.dict("install").map(ReleaseInstallInfo.init)
     }
 
     /// This device's waiting offer, if any. A service without offers says nothing.
     func refreshInstallOffer() async {
+        #if DEBUG
+        if let stub = InstallStubs.reply(InstallStubs.offerKey) {
+            installOffer = stub.list("offers").first.map(InstallOffer.init)
+            // And as the push a sent offer arrives as.
+            if let offer = stub.list("offers").first { pushReceived("install_offer", ["type": "install_offer", "offer": offer]) }
+            return
+        }
+        #endif
         guard let reply = try? await client.request("install_offers") else { return }
         installOffer = reply.list("offers").first.map(InstallOffer.init)
     }
@@ -224,6 +252,9 @@ extension AppStore {
     func dismissInstallOffer() async {
         guard let offer = installOffer else { return }
         installOffer = nil
+        #if DEBUG
+        if InstallStubs.reply(InstallStubs.offerKey) != nil { return }
+        #endif
         _ = try? await client.request("install_offer_dismiss", ["release_id": offer.releaseId])
     }
 }
