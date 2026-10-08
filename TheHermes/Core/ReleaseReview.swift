@@ -130,6 +130,12 @@ final class RulingQueue {
         let ok: Bool
         /// The package changed under the owner: reload it before ruling again.
         let changed: Bool
+        /// Undone before anything was sent.
+        var undone = false
+
+        /// The owner's Leave-out choices are spent: the ruling went, or the
+        /// package changed. Undo keeps them, to approve again (H-225).
+        var clearsChoices: Bool { (ok && !undone) || changed }
     }
 
     static let undoWindow: Duration = .seconds(5)
@@ -163,7 +169,8 @@ final class RulingQueue {
         guard let pending else { return }
         task?.cancel()
         self.pending = nil
-        outcome = Outcome(id: UUID(), releaseId: pending.releaseId, text: RulingWords.undone, ok: true, changed: false)
+        outcome = Outcome(id: UUID(), releaseId: pending.releaseId, text: RulingWords.undone, ok: true, changed: false,
+                          undone: true)
     }
 
     func dismissOutcome() { outcome = nil }

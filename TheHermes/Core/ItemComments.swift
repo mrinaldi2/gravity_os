@@ -148,6 +148,34 @@ enum CommentThread {
         }
     }
 
+    /// A "Couldn't post" can come after the board took the comment (a slow
+    /// answer): ours, same text and parent, made since the first try. Clocks
+    /// differ between phone and computer, hence the slack (H-225).
+    static func landed(_ comment: PendingComment, in comments: [Hermes_Board_V1_ItemComment],
+                       slack: TimeInterval = 120) -> Bool {
+        comments.contains { board in
+            isOwner(board.author) && board.body == comment.body
+                && (board.hasReplyTo ? board.replyTo : nil) == comment.replyTo
+                && (!board.hasAt || board.at.date >= comment.at.addingTimeInterval(-slack))
+        }
+    }
+
+    enum RetryResult: Equatable {
+        /// The board already had it: nothing sent.
+        case alreadyPosted
+        case posted
+    }
+
+    /// Retry re-reads the card first and posts only when the comment isn't
+    /// there, so a late failure never posts it twice (desktop H-201 S4).
+    static func retry(_ comment: PendingComment,
+                      reread: () async throws -> [Hermes_Board_V1_ItemComment],
+                      post: () async throws -> Void) async throws -> RetryResult {
+        if landed(comment, in: try await reread()) { return .alreadyPosted }
+        try await post()
+        return .posted
+    }
+
     /// How long "✓ Posted" stays on a comment the board has echoed.
     static let postedFor: TimeInterval = 4
 
