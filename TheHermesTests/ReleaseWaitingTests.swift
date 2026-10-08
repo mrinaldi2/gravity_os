@@ -33,6 +33,21 @@ final class ReleaseWaitingTests: XCTestCase {
         XCTAssertNil(blockers[0].botId, "a ruling has no bot")
     }
 
+    func testAnOlderServicePointsToNeedsYou() {
+        // QA-014: on any open release, not only while it's being built.
+        var old = payload
+        old["owner_blockers"] = nil
+        for status in ["planned", "assembling", "built", "awaiting_owner", "approved", "deploying"] {
+            old["status"] = status
+            XCTAssertTrue(ReleaseNow.pointsToNeedsYou(Release(old)), status)
+        }
+        for status in ["deployed", "rejected", "cancelled", "rolled_back", "held"] {
+            old["status"] = status
+            XCTAssertFalse(ReleaseNow.pointsToNeedsYou(Release(old)), "\(status): settled")
+        }
+        XCTAssertFalse(ReleaseNow.pointsToNeedsYou(Release(payload)), "a newer service says what waits itself")
+    }
+
     func testAnOlderServiceHasNoField() {
         var old = payload
         old["owner_blockers"] = nil
