@@ -23,6 +23,11 @@ final class QA006DemoTests: XCTestCase {
         sleep(2)
     }
 
+    /// A comment's words: LinkedText shows them as value, plain text as label.
+    private func text(_ app: XCUIApplication, _ words: String) -> XCUIElement {
+        app.descendants(matching: .any).matching(NSPredicate(format: "label CONTAINS %@ OR value CONTAINS %@", words, words)).firstMatch
+    }
+
     private func send(_ app: XCUIApplication, _ text: String) {
         // The comment box, not the first TextView: card text is LinkedText, a TextView too.
         let field = app.descendants(matching: .any).matching(NSPredicate(format: "label == 'Comment' OR placeholderValue BEGINSWITH 'Comment on'")).firstMatch
@@ -44,11 +49,12 @@ final class QA006DemoTests: XCTestCase {
         send(app, first)
         waitFor(app.descendants(matching: .any).matching(NSPredicate(format: "label CONTAINS 'Sending'")).firstMatch, 5)
         screenshot("QA-006-h202-demo-sending")
-        let notPosted = app.descendants(matching: .any).matching(NSPredicate(format: "label CONTAINS 'Not posted'")).firstMatch
+        // "Couldn’t post" since 0.6 ("Not posted" before).
+        let notPosted = app.descendants(matching: .any).matching(NSPredicate(format: "label BEGINSWITH 'Couldn' OR label CONTAINS 'Not posted'")).firstMatch
         waitFor(notPosted, 45)
         XCTAssertTrue(app.buttons["Retry"].exists, "No Retry")
         XCTAssertTrue(app.buttons["Discard"].exists, "No Discard")
-        XCTAssertTrue(app.staticTexts.containing(NSPredicate(format: "label CONTAINS %@", first)).firstMatch.exists, "The text was not kept")
+        XCTAssertTrue(text(app, first).exists, "The text was not kept")
         screenshot("QA-006-h202-not-posted")
 
         // Back, and Retry posts it.
@@ -67,7 +73,7 @@ final class QA006DemoTests: XCTestCase {
         send(app, second)
         waitFor(notPosted, 45)
         app.buttons["Discard"].firstMatch.tap()
-        XCTAssertTrue(app.staticTexts.containing(NSPredicate(format: "label CONTAINS %@", second)).firstMatch.waitForNonExistence(timeout: 5),
+        XCTAssertTrue(text(app, second).waitForNonExistence(timeout: 5),
                       "Discard left the comment")
         screenshot("QA-006-h202-discarded")
         try DemoControl.post("/thaw")
