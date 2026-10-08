@@ -63,4 +63,23 @@ final class QA013InstallTests: XCTestCase {
         XCTAssertTrue(banner.waitForNonExistence(timeout: 8), "Not now left the banner")
         screenshot("QA-013-07-STUB-not-now")
     }
+
+    /// UX-047 #8: "Updated to The Hermes 0.6.1." once after an update (145df7e: it waits
+    /// until the UI is drawn, then stays 4 s). The relaunch goes without the argument:
+    /// the argument domain would override the stored value.
+    func testUpdatedToastOnceAfterAnUpdate() throws {
+        if UIDevice.current.userInterfaceIdiom == .pad { throw XCTSkip("iPhone capture") }
+        let app = try DemoApp.launch(["-lastLaunchedVersion", "0.6.0 (11)".asArgumentString, "-noNotificationPrompt", "YES"])
+        let toast = any(app, "Updated to The Hermes 0.6.1.")
+        XCTAssertTrue(toast.waitForExistence(timeout: 10), "No 'Updated to The Hermes 0.6.1.' toast after an update")
+        screenshot("QA-013-08-updated-toast")
+        allowSystemAlerts()
+        XCTAssertTrue(toast.waitForNonExistence(timeout: 10), "The toast stayed")
+        app.terminate()
+
+        let again = try DemoApp.launch(["-noNotificationPrompt", "YES"])
+        allowSystemAlerts()
+        XCTAssertFalse(any(again, "Updated to The Hermes").waitForExistence(timeout: 8), "The toast showed again")
+        screenshot("QA-013-08-no-toast-on-relaunch")
+    }
 }
