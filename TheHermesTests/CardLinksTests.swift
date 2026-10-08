@@ -50,6 +50,41 @@ final class CardLinksTests: XCTestCase {
         XCTAssertNil(directory.home(for: "Z-3"))
     }
 
+    func testALinkWaitsForTheProjectsThenOpensOrSaysNotFound() {
+        // H-216: on a cold start the link arrives before the projects.
+        let fleet = Fleet()
+        let home = CardDirectory.Home(computerId: "mac", projectId: "p1", projectName: "The Hermes")
+        fleet.cards.setForTests([:], settled: false)
+        fleet.openCard = "H-216"
+        XCTAssertEqual(fleet.cards.resolve("H-216"), .waiting)
+        XCTAssertNil(fleet.takeOpenCard())
+        XCTAssertEqual(fleet.openCard, "H-216", "kept until the projects load")
+        XCTAssertNil(fleet.missingCard)
+
+        fleet.cards.setForTests(["H": [home]], settled: true)
+        let taken = fleet.takeOpenCard()
+        XCTAssertEqual(taken?.id, "H-216")
+        XCTAssertEqual(taken?.home, home)
+        XCTAssertNil(fleet.openCard, "taken once")
+        XCTAssertNil(fleet.takeOpenCard())
+
+        // A prefix no project uses, once they have all loaded: dropped, and said.
+        fleet.openCard = "ZZ-9"
+        XCTAssertEqual(fleet.cards.resolve("ZZ-9"), .unknown)
+        XCTAssertNil(fleet.takeOpenCard())
+        XCTAssertNil(fleet.openCard)
+        XCTAssertEqual(fleet.missingCard, "ZZ-9")
+        XCTAssertEqual(CardPreview(id: "ZZ-9", state: .missing).notice,
+                       "ZZ-9 isn't on the board. It may have been deleted or mistyped.")
+    }
+
+    func testTheDirectoryIsNotSettledUntilEveryConnectedComputersProjectsLoad() async {
+        let directory = CardDirectory()
+        await directory.refresh([])
+        XCTAssertFalse(directory.settled, "no computer connected: nothing to tell yet")
+        XCTAssertEqual(directory.resolve("H-1"), .waiting)
+    }
+
     func testThePreviewSaysWhatTheCardIs() {
         var preview = CardPreview(id: "H-293", state: .found, project: "The Hermes")
         preview.type = "Bug"

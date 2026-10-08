@@ -49,6 +49,9 @@ final class AppStore {
     var peers: [Peer] = []
 
     var projects: [Project] = []
+    /// The service has answered list_projects since this connection began, so an
+    /// empty `projects` means none, not not-yet (H-216).
+    private(set) var projectsLoaded = false
     var bots: [Bot] = []
     var activity: [String: BotActivity] = [:]
     /// bot id → its DM thread.
@@ -167,6 +170,7 @@ final class AppStore {
         browserTabs = nil
         browserFrame = nil
         projects = []
+        projectsLoaded = false
         bots = []
         activity = [:]
         conversations = [:]
@@ -231,6 +235,7 @@ final class AppStore {
         async let conversationsReply = try? client.request("list_conversations")
         if let reply = await projectsReply {
             projects = reply.list("projects").map(Project.init).filter { $0.deletedAt == nil }
+            projectsLoaded = true
         }
         if let reply = await botsReply {
             bots = reply.list("bots").map(Bot.init).filter { $0.deletedAt == nil }

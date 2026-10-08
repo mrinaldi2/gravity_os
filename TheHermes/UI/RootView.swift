@@ -18,7 +18,7 @@ struct RootView: View {
     /// Changes whenever a computer connects or drops, to refetch the home.
     /// Changes when a computer's projects change.
     private var projectsKey: String {
-        fleet.computers.map { "\($0.id)=\($0.store.status == .connected):\($0.store.projects.map(\.id).joined(separator: "+"))" }
+        fleet.computers.map { "\($0.id)=\($0.store.status == .connected)/\($0.store.projectsLoaded):\($0.store.projects.map(\.id).joined(separator: "+"))" }
             .joined(separator: ",")
     }
 
@@ -57,6 +57,13 @@ struct RootView: View {
         .task(id: projectsKey) { await fleet.cards.refresh(fleet.computers) }
         // thehermes://item/H-293 from outside (a notification): the card, on Projects.
         .onChange(of: fleet.openCard) { _, id in if id != nil { tab = .projects } }
+        // A card link whose id no project uses (H-216).
+        .alert(fleet.missingCard ?? "", isPresented: Binding(get: { fleet.missingCard != nil },
+                                                             set: { if !$0 { fleet.missingCard = nil } })) {
+            Button("OK", role: .cancel) {}
+        } message: {
+            if let id = fleet.missingCard { Text(CardPreview(id: id, state: .missing).notice ?? "") }
+        }
         // "See all in Needs you" on a project's Overview.
         .onChange(of: fleet.home.needsFocus) { _, id in if id != nil { tab = .needs } }
         .animation(.snappy, value: fleet.notice?.1)
@@ -73,9 +80,9 @@ struct RootView: View {
             router.target = NotificationTarget(userInfo: ["computer": computer.id, "kind": parts[0], "id": parts[1],
                                                           "bot": parts.count > 2 ? parts[2] : ""])
         }
-        // As a link from outside: -openCard H-293 (once its prefix is known).
-        .task(id: fleet.cards.prefixes.count) {
-            if let id = UserDefaults.standard.string(forKey: "openCard"), fleet.cards.home(for: id) != nil,
+        // As a link from outside: -openCard H-293, at launch like a cold-start link (H-216).
+        .task {
+            if let id = UserDefaults.standard.string(forKey: "openCard"),
                !UserDefaults.standard.bool(forKey: "openCardDone") {
                 UserDefaults.standard.set(true, forKey: "openCardDone")
                 fleet.openCard = id

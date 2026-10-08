@@ -100,19 +100,10 @@ struct PadRootView: View {
             case .settings: selection = .settings
             }
         }
-        // A card link from outside: its project, with the card pushed (H-204).
-        .onChange(of: fleet.openCard, initial: true) { _, id in
-            guard let id, let home = fleet.cards.home(for: id) else { return }
-            fleet.openCard = nil
-            let card = NeedsDestination.item(computerId: home.computerId, itemId: id)
-            let project = Item.project(HomeProjectLink(computerId: home.computerId, projectId: home.projectId))
-            if selection == project {
-                projectPath = NavigationPath([card])
-            } else {
-                pendingCard = card
-                selection = project
-            }
-        }
+        // On a cold start the link arrives before the projects: try again as they load (H-216).
+        .onChange(of: fleet.openCard, initial: true) { openLinkedCard() }
+        .onChange(of: fleet.cards.homes) { openLinkedCard() }
+        .onChange(of: fleet.cards.settled) { openLinkedCard() }
         .onChange(of: selection) { _, item in
             projectPath = pendingCard.map { NavigationPath([$0]) } ?? NavigationPath()
             pendingCard = nil
@@ -122,6 +113,19 @@ struct PadRootView: View {
             case .settings: tab = .settings
             default: tab = .projects
             }
+        }
+    }
+
+    /// A card link from outside: its project, with the card pushed (H-204).
+    private func openLinkedCard() {
+        guard let (id, home) = fleet.takeOpenCard() else { return }
+        let card = NeedsDestination.item(computerId: home.computerId, itemId: id)
+        let project = Item.project(HomeProjectLink(computerId: home.computerId, projectId: home.projectId))
+        if selection == project {
+            projectPath = NavigationPath([card])
+        } else {
+            pendingCard = card
+            selection = project
         }
     }
 

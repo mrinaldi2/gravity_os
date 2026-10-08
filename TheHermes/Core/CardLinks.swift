@@ -220,6 +220,17 @@ final class CardDirectory {
     /// "H" → the projects using it (two only when projects share a prefix).
     private(set) var homes: [String: [Home]] = [:]
     var prefixes: Set<String> { Set(homes.keys) }
+    /// Every connected computer's projects were read when `homes` was learned, so
+    /// an id whose prefix isn't there is unknown, not early (H-216).
+    private(set) var settled = false
+
+    enum Resolution: Equatable {
+        case found(Home)
+        /// No project uses its prefix.
+        case unknown
+        /// The projects are still loading: ask again when they have.
+        case waiting
+    }
 
     @ObservationIgnored private var snapshots: [String: (BoardSnapshot, Date)] = [:]
     @ObservationIgnored private var previews: [String: (CardPreview, Date)] = [:]
@@ -231,7 +242,9 @@ final class CardDirectory {
     /// sends it (`item_prefix`), else from its board's settings.
     func refresh(_ computers: [Computer]) async {
         var found: [String: [Home]] = [:]
-        for computer in computers where computer.store.status == .connected {
+        let connected = computers.filter { $0.store.status == .connected }
+        let complete = !connected.isEmpty && connected.allSatisfy { $0.store.projectsLoaded }
+        for computer in connected {
             let store = computer.store
             for project in store.projects where project.deletedAt == nil {
                 var prefix = project.itemPrefix
@@ -243,6 +256,13 @@ final class CardDirectory {
             }
         }
         homes = found
+        settled = complete
+    }
+
+    /// Where a link from outside goes: its project, nowhere, or not yet.
+    func resolve(_ id: String) -> Resolution {
+        if let home = home(for: id) { return .found(home) }
+        return settled ? .unknown : .waiting
     }
 
     /// The project an id belongs to: the one on screen, else the bot's, else
@@ -254,7 +274,10 @@ final class CardDirectory {
     }
 
     #if DEBUG
-    func setForTests(_ homes: [String: [Home]]) { self.homes = homes }
+    func setForTests(_ homes: [String: [Home]], settled: Bool = true) {
+        self.homes = homes
+        self.settled = settled
+    }
     #endif
 
     func cached(_ id: String) -> CardPreview? {

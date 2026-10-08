@@ -166,8 +166,12 @@ final class Fleet {
     let home = HomeFeed()
     /// Card ids this phone knows, and their previews (H-204).
     let cards = CardDirectory()
-    /// A card to open, from a link that came from outside the app.
+    /// A card to open, from a link that came from outside the app. Kept until
+    /// the projects say where it lives: on a cold start they load after the link
+    /// arrives (H-216).
     var openCard: String?
+    /// A card link from outside whose id no project uses, to say so.
+    var missingCard: String?
     /// A release approval waiting out its Undo, and how it ended (H-160 AC4).
     let rulings = RulingQueue()
     private(set) var selectedId: String?
@@ -175,6 +179,23 @@ final class Fleet {
     @ObservationIgnored private var ephemeral = false
     @ObservationIgnored private let network = NWPathMonitor()
     @ObservationIgnored private var lastPath: NWPath?
+
+    /// The card `openCard` asks for, taken once its project is known; an id no
+    /// project uses is dropped into `missingCard`. Nil while the projects load.
+    func takeOpenCard() -> (id: String, home: CardDirectory.Home)? {
+        guard let id = openCard else { return nil }
+        switch cards.resolve(id) {
+        case .found(let home):
+            openCard = nil
+            return (id, home)
+        case .unknown:
+            openCard = nil
+            missingCard = id
+            return nil
+        case .waiting:
+            return nil
+        }
+    }
 
     private static let recordsKey = "computers"
     private static let selectedKey = "selectedComputer"
