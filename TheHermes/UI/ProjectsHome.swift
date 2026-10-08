@@ -24,6 +24,8 @@ enum NeedsDestination: Hashable {
 extension ReleaseStatusWords {
     static func pill(_ release: Hermes_Home_V1_ReleaseBrief) -> (String, Tone) {
         let version = release.version.isEmpty ? "Release" : release.version
+        // Something only the owner can give it (H-248): that, before its state.
+        if release.ownerBlockerCount > 0 { return (WaitingWords.projectsPill(version), .needsYou) }
         switch release.state {
         case "awaiting_owner": return ("\(version) ready for you to test", .needsYou)
         case "deployed": return ("\(version) live", .ready)

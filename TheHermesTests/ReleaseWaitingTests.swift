@@ -105,6 +105,17 @@ final class ReleaseWaitingTests: XCTestCase {
         XCTAssertEqual(WaitingWords.projectsPill("0.17.5"), "◐ 0.17.5 waits for you")
     }
 
+    func testTheProjectsCardPillSaysItWaitsForYou() {
+        var brief = Hermes_Home_V1_ReleaseBrief()
+        brief.version = "0.17.5"
+        brief.state = "approved"
+        XCTAssertEqual(ReleaseStatusWords.pill(brief).0, "0.17.5 approved", "nothing waits: its state")
+        brief.ownerBlockerCount = 2
+        let (text, tone) = ReleaseStatusWords.pill(brief)
+        XCTAssertEqual(text, "◐ 0.17.5 waits for you")
+        XCTAssertEqual(tone, .needsYou)
+    }
+
     func testAReleaseUpdatedPushRereadsThatRelease() {
         let store = AppStore(defaults: ComputerDefaults(id: "test-release-updated"))
         store.pushReceived("release_updated", ["type": "release_updated", "project_id": "p1", "release_id": "rel-1"])
