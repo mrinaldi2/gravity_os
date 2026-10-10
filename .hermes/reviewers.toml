@@ -1,0 +1,62 @@
+# .hermes/reviewers.toml — mrinaldi2/gravity_os (H-279 draft, Architect 2026-10-10)
+#
+# Same rules as gravity's: read from base; union of matched areas; no match
+# = architect; `.hermes/*.toml` always architect + ce + owner (hard-coded).
+
+# --- Security: pairing, owner proof, credentials, release install ----------
+[[area]]
+name = "security"
+roles = ["architect", "ce"]
+paths = [
+  "TheHermes/Core/Keychain.swift",
+  "TheHermes/Core/OwnerAuth.swift",
+  "TheHermes/Core/Pairing.swift",
+  "TheHermes/Core/DaemonClient.swift",
+  "TheHermes/Core/ReleaseInstall.swift",
+  "TheHermes/Core/ReleaseReview.swift",
+  "TheHermes/Core/RFB/RFBCrypto.swift",
+  "TheHermes/*.entitlements",
+  "TheHermes/Info.plist",
+  "Config/**",
+  "TheHermes.xcodeproj/project.pbxproj",
+  "companion/install.ps1",
+  "companion/launcher/**",
+  ".github/workflows/**",
+  "scripts/build-for-phone.sh",
+]
+
+# --- App logic and state (Core) ---------------------------------------------
+[[area]]
+name = "core"
+roles = ["architect"]
+paths = ["TheHermes/Core/**", "TheHermesTests/**"]
+
+# --- The wire contract: vendored protos + generated Swift (ADR-001) --------
+[[area]]
+name = "contract"
+roles = ["architect"]
+paths = ["contract/**", "TheHermes/Core/Generated/**", "scripts/contract/**"]
+
+# --- iOS UI ----------------------------------------------------------------
+[[area]]
+name = "ui"
+roles = ["ux"]
+paths = ["TheHermes/UI/**", "TheHermes/*.swift", "TheHermes/Assets.xcassets/**", "UITests/**", "docs/screenshots/**"]
+
+# --- Companion (Python, being absorbed into hermesd) -----------------------
+[[area]]
+name = "companion"
+roles = ["architect"]
+paths = ["companion/**", "demo/**", "tests/**"]
+
+# --- Docs ----------------------------------------------------------------
+[[area]]
+name = "docs"
+roles = ["architect"]
+paths = ["docs/**", "*.md"]
+
+# --- Scripts -------------------------------------------------------------
+[[area]]
+name = "tooling"
+roles = ["architect", "devops"]
+paths = ["scripts/**"]

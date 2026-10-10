@@ -1,0 +1,47 @@
+# .hermes/checks.toml — mrinaldi2/gravity_os (H-279 draft, Architect 2026-10-10)
+#
+# Same model as gravity's (read from base; exit status of `hermesd check run`;
+# routed by needs/machine). iOS builds and tests run on the iMac.
+#
+# Shared-computer rule: a check never uses `booted` or another bot's
+# simulator. `ios-unit` creates its own simulator, addresses it by UDID, and
+# deletes it on the way out, pass or fail.
+
+[[check]]
+name = "contract"
+# On the Mac: generate-swift.sh runs `npm ci` for its pinned buf, and the iMac
+# has no Node (Tester iMac dry run, exit 127). `needs` names only probed tools
+# (H-283 probes node, not npm; npm ships with node), so an unprobed name never
+# routes. Kept rather than dropped: it checks this repo's vendored protos and
+# committed Swift, which gravity's `contract` check doesn't see.
+machine = "mac"
+needs = ["node"]
+paths = ["contract/**", "TheHermes/Core/Generated/**", "scripts/contract/**", ".hermes/checks.toml"]
+run = "scripts/contract/generate-swift.sh --check"
+
+[[check]]
+name = "ios-build"
+machine = "imac"
+needs = ["xcodebuild"]
+paths = ["TheHermes/**", "TheHermes.xcodeproj/**", "Config/**", "contract/**", ".hermes/checks.toml"]
+run = "set -o pipefail; xcodebuild -project TheHermes.xcodeproj -scheme TheHermes -destination 'generic/platform=iOS Simulator' -derivedDataPath build CODE_SIGNING_ALLOWED=NO build | tail -20"
+
+[[check]]
+name = "ios-unit"
+machine = "imac"
+needs = ["xcodebuild"]
+paths = ["TheHermes/**", "TheHermesTests/**", "TheHermes.xcodeproj/**", "Config/**", "contract/**", ".hermes/checks.toml"]
+run = "set -o pipefail; rt=$(xcrun simctl list runtimes -j | python3 -c \"import json,sys;r=[x for x in json.load(sys.stdin)['runtimes'] if x['platform']=='iOS' and x['isAvailable']];print(r[-1]['identifier'])\"); udid=$(xcrun simctl create \"hermes-check-$$\" 'iPhone 16' \"$rt\"); trap 'xcrun simctl delete \"$udid\"' EXIT; xcodebuild test -project TheHermes.xcodeproj -scheme TheHermes -destination \"platform=iOS Simulator,id=$udid\" -derivedDataPath build CODE_SIGNING_ALLOWED=NO | grep -E 'Test Case|Executed|error:|TEST (SUCCEEDED|FAILED)'"
+
+[[check]]
+name = "companion"
+needs = ["python3"]
+paths = ["companion/**", "demo/**", "tests/**"]
+run = "python3 -m py_compile companion/gravity_lens.py companion/gravity_files.py companion/gravity_autostart.py demo/make_demo.py demo/fake_screen.py && python3 -m unittest discover tests -v"
+
+[[check]]
+name = "companion-windows"
+machine = "windows"
+needs = ["python3"]
+paths = ["companion/**", "tests/test_*.py"]
+run = "python -m unittest discover tests -p \"test_[flw]*.py\" -v"
